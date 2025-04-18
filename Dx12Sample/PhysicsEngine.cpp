@@ -1,10 +1,15 @@
 #include "PhysicsEngine.h"
 #include <algorithm>
+#include <string>
+#include <omp.h>
 
 void PhysicsEngine::onUpdate(float deltaTime) {
     // A. Integrate motion for all dynamic objects
-    for (auto& body : m_bodies) {
+    #pragma omp parallel for
+    for (int i = 0; i < m_bodies.size(); i++) {
+        auto body = m_bodies[i].get();
         if (!body->isStatic()) {
+            body->swapStates();
             body->onUpdate(deltaTime);
         }
     }
@@ -22,40 +27,43 @@ void PhysicsEngine::detectAndResolveCollisions() {
     auto candidates = broadPhase();
 
     // 2. Narrow phase (exact collision checks)
-    std::vector<CollisionManifold> collisions;
-    for (auto& pair : candidates) {
-        if (auto manifold = m_collisionSystem.checkCollision(pair.first, pair.second)) {
-			for (auto& contact : manifold->contacts) {
-				contact.normalImpulse = 0;
-                contact.tangentImpulse = 0;
-			}
-            collisions.push_back(*manifold);
+    std::vector<CollisionManifold> collisions(candidates.size());
+
+    #pragma omp parallel for
+    for (int i = 0; i < candidates.size(); i++) {
+		auto pair = &candidates[i];
+        if (auto manifold = m_collisionSystem.checkCollision(pair->first, pair->second)) {
+            collisions[i] = (*manifold);
         }
     }
 
     // (Optional) Warm-start: apply last frame's impulses stored in each manifold
     // so that the solver "remembers" previous corrections and converges faster.
 
-    for (int iter = 0; iter < m_velocityIterations; ++iter) {
-        for (auto& manifold : collisions) {
-            resolveCollisionVelocity(manifold);
-        }
+    #pragma omp parallel for
+    for (int i = 0; i < collisions.size(); i++) {
+		auto& manifold = collisions[i];
+		if (manifold.contacts.empty()) continue;
+        resolveCollisionVelocity(manifold);
     }
 
-    for (int iter = 0; iter < m_positionIterations; ++iter) {
-        for (auto& manifold : collisions) {
-            ContactPoint deepestContact;
-            float maxPenetration = 0.0f;
+    #pragma omp parallel for
+    for (int i = 0; i < collisions.size(); i++) {
 
-            for (const auto& contact : manifold.contacts) {
-                // Track deepest contact
-                if (contact.penetration > maxPenetration) {
-                    maxPenetration = contact.penetration;
-                    deepestContact = contact;
-                }
+        auto& manifold = collisions[i];
+
+        if (manifold.contacts.empty()) continue;
+        ContactPoint deepestContact;
+        float maxPenetration = 0.0f;
+
+        for (const auto& contact : manifold.contacts) {
+            // Track deepest contact
+            if (contact.penetration > maxPenetration) {
+                maxPenetration = contact.penetration;
+                deepestContact = contact;
             }
-            positionalCorrection(deepestContact, manifold.objectA, manifold.objectB);
         }
+        positionalCorrection(deepestContact, manifold.objectA, manifold.objectB);
     }
 }
 
@@ -107,8 +115,8 @@ void PhysicsEngine::resolveCollisionVelocity(const CollisionManifold& manifold) 
 
     for (const auto& contact : manifold.contacts) {
         // Get center of mass positions
-        XMVECTOR comA = a->getTransform().GetPosition();
-        XMVECTOR comB = b->getTransform().GetPosition();
+        XMVECTOR comA = a->getTransform().GetPosition(0);
+        XMVECTOR comB = b->getTransform().GetPosition(0);
 
         // Calculate vectors from COM to contact point
         XMVECTOR rA = XMVectorSubtract(contact.position, comA);
@@ -227,8 +235,8 @@ void PhysicsEngine::positionalCorrection(const ContactPoint& contact, PhysicsObj
     if (a->isStatic() && b->isStatic()) return;
 
     // Configuration
-    const float percent = 1.0f; // Can be changed to less but this means we need more iterations
-    const float slop = 0.001f;     // Permitted penetration
+    const float percent = 1.0f;     // Can be changed to less but this means we need more iterations
+    const float slop = 0.001f;      // Permitted penetration
 
     const float penetrationDepth = contact.penetration - slop;
     if (penetrationDepth <= 0.0f) return;
@@ -239,16 +247,16 @@ void PhysicsEngine::positionalCorrection(const ContactPoint& contact, PhysicsObj
     const float totalInvMass = invMassA + invMassB;
     if (totalInvMass <= 0.0f) return;
 
-    // Correction vector (DIRECTION FIXED HERE)
+    // Correction vector
     const XMVECTOR correction = XMVectorScale(
         contact.normal,
         (penetrationDepth * percent) / totalInvMass
     );
 
     if (!a->isStatic()) {
-        a->getTransform().Translate(XMVectorScale(correction, invMassA));
+        a->getTransform().Translate(XMVectorScale(correction, invMassA), 1);
     }
     if (!b->isStatic()) {
-        b->getTransform().Translate(XMVectorScale(correction, -invMassB));
+        b->getTransform().Translate(XMVectorScale(correction, -invMassB), 1);
     }
 }

@@ -49,29 +49,29 @@ void ConcreteScenarioA::onLoad(CommandList& commandList)
 	plane5->setStatic(true);
 	plane6->setStatic(true);
 
-	plane1->getTransform().SetPosition({ 0.0f, -10.0f, 0.0f, 1 });
-	plane1->getTransform().SetScale({ 20.0f, 1.0f, 20.0f, 1 });
-	plane1->getTransform().SetRotationEulerAngles({ 0.0f, 0.0f, 0.0f });
+	plane1->getTransform().SetPosition({ 0.0f, -10.0f, 0.0f, 1 }, 0, true);
+	plane1->getTransform().SetScale({ 20.0f, 1.0f, 20.0f, 1 }, 0, true);
+	plane1->getTransform().SetRotationEulerAngles({ 0.0f, 0.0f, 0.0f }, 0, true);
 
-	plane2->getTransform().SetPosition({ 0.0f, 10.0f, 0.0f, 1 });
-	plane2->getTransform().SetScale({ 20.0f, 1.0f, 20.0f, 1 });
-	plane2->getTransform().SetRotationEulerAngles({ DirectX::XMConvertToRadians(180), 0.0f, 0.0f });
+	plane2->getTransform().SetPosition({ 0.0f, 10.0f, 0.0f, 1 }, 0, true);
+	plane2->getTransform().SetScale({ 20.0f, 1.0f, 20.0f, 1 }, 0, true);
+	plane2->getTransform().SetRotationEulerAngles({ DirectX::XMConvertToRadians(180), 0.0f, 0.0f }, 0, true);
 
-	plane3->getTransform().SetPosition({ -10.0f, 0.0f, 0.0f, 1 });
-	plane3->getTransform().SetScale({ 20.0f, 1.0f, 20.0f, 1 });
-	plane3->getTransform().SetRotationEulerAngles({ 0, 0, DirectX::XMConvertToRadians(-90) });
+	plane3->getTransform().SetPosition({ -10.0f, 0.0f, 0.0f, 1 }, 0, true);
+	plane3->getTransform().SetScale({ 20.0f, 1.0f, 20.0f, 1 }, 0, true);
+	plane3->getTransform().SetRotationEulerAngles({ 0, 0, DirectX::XMConvertToRadians(-90) }, 0, true);
 
-	plane4->getTransform().SetPosition({ 10.0f, 0.0f, 0.0f, 1 });
-	plane4->getTransform().SetScale({ 20.0f, 1.0f, 20.0f, 1 });
-	plane4->getTransform().SetRotationEulerAngles({ 0, 0, DirectX::XMConvertToRadians(90) });
+	plane4->getTransform().SetPosition({ 10.0f, 0.0f, 0.0f, 1 }, 0, true);
+	plane4->getTransform().SetScale({ 20.0f, 1.0f, 20.0f, 1 }, 0, true);
+	plane4->getTransform().SetRotationEulerAngles({ 0, 0, DirectX::XMConvertToRadians(90) }, 0, true);
 
-	plane5->getTransform().SetPosition({ 0.0f, 0.0f, -10.0f, 1 });
-	plane5->getTransform().SetScale({ 20.0f, 1.0f, 20.0f, 1 });
-	plane5->getTransform().SetRotationEulerAngles({ DirectX::XMConvertToRadians(90), 0, 0 });
+	plane5->getTransform().SetPosition({ 0.0f, 0.0f, -10.0f, 1 }, 0, true);
+	plane5->getTransform().SetScale({ 20.0f, 1.0f, 20.0f, 1 }, 0, true);
+	plane5->getTransform().SetRotationEulerAngles({ DirectX::XMConvertToRadians(90), 0, 0 }, 0, true);
 
-	plane6->getTransform().SetPosition({ 0.0f, 0.0f, 10.0f, 1 });
-	plane6->getTransform().SetScale({ 20.0f, 1.0f, 20.0f, 1 });
-	plane6->getTransform().SetRotationEulerAngles({ DirectX::XMConvertToRadians(-90), 0, 0 });
+	plane6->getTransform().SetPosition({ 0.0f, 0.0f, 10.0f, 1 }, 0, true);
+	plane6->getTransform().SetScale({ 20.0f, 1.0f, 20.0f, 1 }, 0, true);
+	plane6->getTransform().SetRotationEulerAngles({ DirectX::XMConvertToRadians(-90), 0, 0 }, 0, true);
 
 	m_physicsObjects.push_back(plane1);
 	m_physicsObjects.push_back(plane2);
@@ -91,7 +91,7 @@ void ConcreteScenarioA::onLoad(CommandList& commandList)
 		0.5f, // static friction
 		1,
 	};
-	for (int i = 0; i < 100; i++)
+	for (int i = 0; i < 200; i++)
 	{
 		int randNum = 0;// rand() % 2;
 		if (randNum) {
@@ -105,7 +105,7 @@ void ConcreteScenarioA::onLoad(CommandList& commandList)
 			float z = std::clamp(d(gen), -9.0f, 7.0f);
 			box->onLoad(commandList);
 			box->setStatic(true);
-			box->getTransform().SetPosition({ x, y, z, 1 });
+			box->getTransform().SetPosition({ x, y, z, 1 }, 0, true);
 			m_physicsObjects.push_back(box);
 			m_physicsEngine.addBody(box);
 		}
@@ -119,7 +119,7 @@ void ConcreteScenarioA::onLoad(CommandList& commandList)
 			float y = std::clamp(d(gen), -9.0f, 9.0f);
 			float z = std::clamp(d(gen), -9.0f, 9.0f);
 			particle->onLoad(commandList);
-			particle->getTransform().SetPosition({ x, y, z, 1 });
+			particle->getTransform().SetPosition({ x, y, z, 1 }, 0, true);
 			particle->applyConstantForce({ 0.0f, -9.81f * particle->getMass(), 0.0f, 0.0f });
 			m_physicsObjects.push_back(particle);
 			m_physicsEngine.addBody(particle);
@@ -167,14 +167,14 @@ void ConcreteScenarioB::onLoad(CommandList& commandList)
 	plane->onLoad(commandList);
 	plane->setCollider(planeCollider);
 	plane->setStatic(true);
-	plane->getTransform().SetPosition({ 0.0f, -10.0f, 0.0f, 1 });
-	plane->getTransform().SetScale({ 10.0f, 1.0f, 10.0f, 1 });
+	plane->getTransform().SetPosition({ 0.0f, -10.0f, 0.0f, 1 }, 0, true);
+	plane->getTransform().SetScale({ 10.0f, 1.0f, 10.0f, 1 }, 0, true);
 	m_physicsObjects.push_back(plane);
 	m_physicsEngine.addBody(plane);
 
 	PhysicsMaterial material = {
-		0.5f, // static friction
-		0.5f,
+		0.2f, // static friction
+		0.2f,
 	};
 
 	auto particle = std::make_shared<PhysicsObject>(m_SphereMesh, m_customTexture);
@@ -183,10 +183,10 @@ void ConcreteScenarioB::onLoad(CommandList& commandList)
 	particle->setMaterial(material);
 	particle->setMass(.1f);
 	float x = -3;
-	float y = -0.48;
+	float y = -0.08;
 	float z = 0;
 	particle->onLoad(commandList);
-	particle->getTransform().SetPosition({ x, y, z, 1 });
+	particle->getTransform().SetPosition({ x, y, z, 1 }, 0, true);
 	//particle->applyConstantForce({ 0.0f, -9.81f * particle->getMass(), 0.0f, 0.0f });
 	m_physicsObjects.push_back(particle);
 	m_physicsEngine.addBody(particle);
@@ -196,17 +196,19 @@ void ConcreteScenarioB::onLoad(CommandList& commandList)
 	box->setCollider(boxCollider);
 	box->setMaterial(material);
 	x = 3;
-	y = -0.08;
+	y = -0.48;
 	z = 0;
 	box->onLoad(commandList);
-	box->getTransform().SetPosition({ x, y, z, 1 });
+	box->getTransform().SetPosition({ x, y, z, 1 }, 0, true);
+
 	box->setMass(1.0f);
 
 	m_physicsObjects.push_back(box);
 	m_physicsEngine.addBody(box);
 
 
-	m_physicsObjects[1]->setVelocity({3, 0, 0, 0});
+	m_physicsObjects[1]->setFutureVelocity({3, 0, 0, 0});
+	m_physicsObjects[1]->setCurrentVelocity({ 3, 0, 0, 0 });
 }
 
 void ConcreteScenarioB::onUpdate(const float& dt)

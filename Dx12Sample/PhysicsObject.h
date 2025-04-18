@@ -14,9 +14,6 @@ struct ContactPoint {
 	DirectX::XMVECTOR position;    // World-space contact
 	DirectX::XMVECTOR normal;      // From A to B
 	float penetration;             // Overlap distance
-
-	float normalImpulse = 0; // Will be accumulated
-	float tangentImpulse = 0; // Will be accumulated
 };
 
 class PhysicsObject;
@@ -58,7 +55,12 @@ public:
 	void applyImpulseAtPosition(const DirectX::XMVECTOR& impulse, const DirectX::XMVECTOR& contactPoint);
 	void resetConstantForces();
 
-	void setVelocity(const DirectX::XMVECTOR& velocity);
+	void setFutureVelocity(const DirectX::XMVECTOR& velocity);
+	void setFutureAngularVelocity(const DirectX::XMVECTOR& angularVelocity);
+
+	void setCurrentVelocity(const DirectX::XMVECTOR& velocity);
+	void setCurrentAngularVelocity(const DirectX::XMVECTOR& angularVelocity);
+
 	void setCollider(std::shared_ptr<Collider> collider);
 	void setMass(const float& mass);
 	void setStatic(const bool& isStatic);
@@ -75,6 +77,7 @@ public:
 	Collider* getCollider() const;
 	Transform& getTransform();
 
+	void swapStates();
 
 
 private:
@@ -82,6 +85,14 @@ private:
 	std::shared_ptr<Mesh> m_mesh;
 	std::shared_ptr<Texture> m_texture;
 	std::shared_ptr<Collider> m_collider;
+
+	struct State {
+		DirectX::XMVECTOR m_velocity =			{ 0, 0, 0, 0 };
+		DirectX::XMVECTOR m_angularVelocity =	{ 0, 0, 0, 0 };
+	};
+
+	State m_currentState;
+	State m_futureState;
 
 	// Physics properties
 	bool m_isStatic = false;
@@ -92,8 +103,6 @@ private:
 
 	// Forces and motion integration
 	DirectX::XMVECTOR m_constantForces = { 0.0f, 0.0f, 0.0f, 0.0f };
-	DirectX::XMVECTOR m_velocity = { 0.0f, 0.0f, 0.0f, 0.0f };
-	DirectX::XMVECTOR m_angularVelocity = { 0.0f, 0.0f, 0.0f, 0.0f };
 
 	DirectX::XMMATRIX m_inverseWorldInertiaTensor = DirectX::XMMatrixScaling(0.0f, 0.0f, 0.0f);
 

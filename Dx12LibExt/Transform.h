@@ -6,28 +6,30 @@
 
 class Transform final {
 private:
-    DirectX::XMVECTOR position;
-    DirectX::XMVECTOR rotationQuaternion = DirectX::XMQuaternionIdentity();
-    DirectX::XMVECTOR scale = { 1.0f, 1.0f, 1.0f };
+	struct State {
+        DirectX::XMVECTOR position = { 0, 0, 0, 0 };
+		DirectX::XMVECTOR rotationQuaternion = DirectX::XMQuaternionIdentity();;
+		DirectX::XMVECTOR scale = { 1.0f, 1.0f, 1.0f };;
 
-    DirectX::XMVECTOR lookDirection = { 0.0f, 0.0f, 1.0f, 0.0f };
-    DirectX::XMVECTOR upDirection = { 0.0f, 1.0f, 0.0f, 0.0f };
+        DirectX::XMVECTOR lookDirection = { 0.0f, 0.0f, 1.0f, 0.0f };
+        DirectX::XMVECTOR upDirection = { 0.0f, 1.0f, 0.0f, 0.0f };
+
+        DirectX::XMMATRIX worldMatrix;
+
+        bool positionScaleDirty = true;
+        bool rotationDirty = true;
+	} m_states[2];
 
     std::shared_ptr<Transform> parent = nullptr;
 
     bool isStatic = false;
 
-    DirectX::XMMATRIX worldMatrix;
-
     // Listeners for dirtifying changes
     std::vector<std::function<void()>> dirtyListeners;
 
-	bool positionScaleDirty = true;
-	bool rotationDirty = true;
-
-	void CalculateWorldMatrix();
-    void CalculateNewLookDirection();
-    void CleanDirty();
+	void CalculateWorldMatrix(const int& bufferIndex, const bool& bothBuffers);
+    void CalculateNewLookDirection(const int& bufferIndex, const bool& bothBuffers);
+    void CleanDirty(const int& bufferIndex, const bool& bothBuffers);
 
 public:
     Transform() = default;
@@ -38,47 +40,49 @@ public:
     bool IsStatic() const;
     void SetStatic(bool value);
 
-    DirectX::XMVECTOR GetPosition() const;
-    void SetPosition(const DirectX::XMFLOAT3& pos);
-    void SetPosition(const DirectX::XMVECTOR& pos);
+    void swapStates();
 
-    const DirectX::XMVECTOR& GetLocalPosition() const;
-    void SetLocalPosition(const DirectX::XMFLOAT3& pos);
-    void SetLocalPosition(const DirectX::XMVECTOR& pos);
+    DirectX::XMVECTOR GetPosition(const int& bufferIndex) const;
+    void SetPosition(const DirectX::XMFLOAT3& pos, const int& bufferIndex, const bool& bothBuffers = false);
+    void SetPosition(const DirectX::XMVECTOR& pos, const int& bufferIndex, const bool& bothBuffers = false);
 
-    DirectX::XMVECTOR GetScale() const;
-    void SetScale(const DirectX::XMFLOAT3& s);
-    void SetScale(const DirectX::XMVECTOR& s);
+    const DirectX::XMVECTOR& GetLocalPosition(const int& bufferIndex) const;
+    void SetLocalPosition(const DirectX::XMFLOAT3& pos, const int& bufferIndex, const bool& bothBuffers = false);
+    void SetLocalPosition(const DirectX::XMVECTOR& pos, const int& bufferIndex, const bool& bothBuffers = false);
 
-    const DirectX::XMVECTOR& GetLocalScale() const;
-    void SetLocalScale(const DirectX::XMFLOAT3& s);
-    void SetLocalScale(const DirectX::XMVECTOR& s);
+    DirectX::XMVECTOR GetScale(const int& bufferIndex) const;
+    void SetScale(const DirectX::XMFLOAT3& s, const int& bufferIndex, const bool& bothBuffers = false);
+    void SetScale(const DirectX::XMVECTOR& s, const int& bufferIndex, const bool& bothBuffers = false);
 
-    DirectX::XMVECTOR GetRotationQuaternion() const;
-    void SetRotationQuaternion(const DirectX::XMVECTOR& rot);
+    const DirectX::XMVECTOR& GetLocalScale(const int& bufferIndex) const;
+    void SetLocalScale(const DirectX::XMFLOAT3& s, const int& bufferIndex, const bool& bothBuffers = false);
+    void SetLocalScale(const DirectX::XMVECTOR& s, const int& bufferIndex, const bool& bothBuffers = false);
 
-    const DirectX::XMVECTOR& GetLocalRotationQuaternion() const;
-    void SetLocalRotationQuaternion(const DirectX::XMVECTOR& rot);
+    DirectX::XMVECTOR GetRotationQuaternion(const int& bufferIndex) const;
+    void SetRotationQuaternion(const DirectX::XMVECTOR& rot, const int& bufferIndex, const bool& bothBuffers = false);
 
-    [[nodiscard]] DirectX::XMFLOAT3 GetRotationEulerAngles() const;
-    void SetRotationEulerAngles(const DirectX::XMFLOAT3& rot);
+    const DirectX::XMVECTOR& GetLocalRotationQuaternion(const int& bufferIndex) const;
+    void SetLocalRotationQuaternion(const DirectX::XMVECTOR& rot, const int& bufferIndex, const bool& bothBuffers = false);
 
-    [[nodiscard]] DirectX::XMFLOAT3 GetLocalRotationEulerAngles() const;
-    void SetLocalRotationEulerAngles(const DirectX::XMFLOAT3& rot);
+    [[nodiscard]] DirectX::XMFLOAT3 GetRotationEulerAngles(const int& bufferIndex) const;
+    void SetRotationEulerAngles(const DirectX::XMFLOAT3& rot, const int& bufferIndex, const bool& bothBuffers = false);
 
-    const DirectX::XMVECTOR& GetLookDirection() const;
-    const DirectX::XMVECTOR& GetUpDirection() const;
+    [[nodiscard]] DirectX::XMFLOAT3 GetLocalRotationEulerAngles(const int& bufferIndex) const;
+    void SetLocalRotationEulerAngles(const DirectX::XMFLOAT3& rot, const int& bufferIndex, const bool& bothBuffers = false);
 
-    void Translate(const DirectX::XMFLOAT3& translation);
-    void Translate(const DirectX::XMVECTOR& translation);
+    const DirectX::XMVECTOR& GetLookDirection(const int& bufferIndex) const;
+    const DirectX::XMVECTOR& GetUpDirection(const int& bufferIndex) const;
 
-    void RotateEulerAngles(const DirectX::XMFLOAT3& rotation);
+    void Translate(const DirectX::XMFLOAT3& translation, const int& bufferIndex, const bool& bothBuffers = false);
+    void Translate(const DirectX::XMVECTOR& translation, const int& bufferIndex, const bool& bothBuffers = false);
 
-    void RotateQuaternion(const DirectX::XMVECTOR& rotation);
+    void RotateEulerAngles(const DirectX::XMFLOAT3& rotation, const int& bufferIndex, const bool& bothBuffers = false);
 
-    void LookAt(const DirectX::XMVECTOR& target, const DirectX::XMVECTOR& up = { 0.0f, 1.0f, 0.0f, 0.0f });
+    void RotateQuaternion(const DirectX::XMVECTOR& rotation, const int& bufferIndex, const bool& bothBuffers = false);
 
-    DirectX::XMMATRIX GetWorldMatrix();
+    void LookAt(const DirectX::XMVECTOR& target, const DirectX::XMVECTOR& up, const int& bufferIndex, const bool& bothBuffers = false);
+
+    DirectX::XMMATRIX GetWorldMatrix(const int& bufferIndex);
 
     void AddDirtyListener(const std::function<void()>& listener) {
         dirtyListeners.push_back(listener);

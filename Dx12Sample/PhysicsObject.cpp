@@ -10,13 +10,13 @@
 PhysicsObject::PhysicsObject(std::shared_ptr<Mesh> mesh, std::shared_ptr<Texture> texture) 
     : m_mesh(mesh),
     m_texture(texture),
-    m_transform(),
+    m_currentState(),
+	m_futureState(),
 	m_collider(nullptr),
 	m_mass(1.0f),
 	m_isStatic(false),
 	m_material(),
     m_constantForces({ 0.0f, 0.0f, 0.0f, 0.0f }),
-    m_velocity({ 0.0f, 0.0f, 0.0f, 0.0f }),
 	m_integrateMotion(&PhysicsObject::integrateSemiImplicitEuler)
 {
 };
@@ -46,7 +46,7 @@ void PhysicsObject::onUpdate(float deltaTime)
 
 void PhysicsObject::onRender(CommandList& commandList, const DirectX::XMMATRIX& viewMatrix, const DirectX::XMMATRIX& viewProjectionMatrix)
 {
-    const auto worldMatrix = m_transform.GetWorldMatrix();
+    const auto worldMatrix = m_transform.GetWorldMatrix(0);
 
     Mat matrices;
     PhysicsSimulation::ComputeMatrices(worldMatrix, viewMatrix, viewProjectionMatrix, matrices);
@@ -82,6 +82,12 @@ void PhysicsObject::setCollider(std::shared_ptr<Collider> collider)
 	m_collider = collider;
 }
 
+void PhysicsObject::swapStates()
+{
+	m_currentState = m_futureState;
+	m_transform.swapStates();
+}
+
 Transform& PhysicsObject::getTransform()
 {
 	return m_transform;
@@ -104,12 +110,12 @@ float PhysicsObject::getMass() const
 
 DirectX::XMVECTOR PhysicsObject::getVelocity() const
 {
-	return m_velocity;
+	return m_currentState.m_velocity;
 }
 
 DirectX::XMVECTOR PhysicsObject::getAngularVelocity() const
 {
-	return m_angularVelocity;
+	return m_currentState.m_angularVelocity;
 }
 
 DirectX::XMVECTOR PhysicsObject::getCenterOfMass() const
@@ -132,7 +138,7 @@ void PhysicsObject::updateInertiaTensor()
 	using namespace DirectX;
 	if (m_collider)
 	{
-        XMMATRIX rotation = XMMatrixRotationQuaternion(m_transform.GetRotationQuaternion());
+        XMMATRIX rotation = XMMatrixRotationQuaternion(m_transform.GetRotationQuaternion(0));
         m_inverseWorldInertiaTensor = XMMatrixMultiply(
             XMMatrixMultiply(rotation, m_collider->getInverseInertiaTensor(m_mass)),
             XMMatrixTranspose(rotation)
@@ -140,9 +146,24 @@ void PhysicsObject::updateInertiaTensor()
 	}
 }
 
-void PhysicsObject::setVelocity(const DirectX::XMVECTOR& velocity)
+void PhysicsObject::setFutureVelocity(const DirectX::XMVECTOR& velocity)
 {
-    m_velocity = velocity;
+    m_futureState.m_velocity = velocity;
+}
+
+void PhysicsObject::setFutureAngularVelocity(const DirectX::XMVECTOR& angularVelocity)
+{
+	m_futureState.m_angularVelocity = angularVelocity;
+}
+
+void PhysicsObject::setCurrentVelocity(const DirectX::XMVECTOR& velocity)
+{
+	m_currentState.m_velocity = velocity;
+}
+
+void PhysicsObject::setCurrentAngularVelocity(const DirectX::XMVECTOR& angularVelocity)
+{
+	m_currentState.m_angularVelocity = angularVelocity;
 }
 
 void PhysicsObject::setIntegrationType(const MotionIntegrationType& integrationType)
@@ -191,7 +212,7 @@ DirectX::XMVECTOR PhysicsObject::calculateForces(const DirectX::XMVECTOR& positi
 void PhysicsObject::applyImpulse(const DirectX::XMVECTOR& impulse)
 {
 	if (m_isStatic) return;
-	m_velocity = DirectX::XMVectorAdd(m_velocity, DirectX::XMVectorScale(impulse, 1.0f / m_mass));
+	m_futureState.m_velocity = DirectX::XMVectorAdd(m_futureState.m_velocity, DirectX::XMVectorScale(impulse, 1.0f / m_mass));
 }
 
 void PhysicsObject::applyImpulseAtPosition(const DirectX::XMVECTOR& impulse, const DirectX::XMVECTOR& contactPoint)
@@ -202,7 +223,7 @@ void PhysicsObject::applyImpulseAtPosition(const DirectX::XMVECTOR& impulse, con
 
     // 1. Convert center of mass to world space
     XMVECTOR worldCOM = XMVector3Transform(m_centerOfMass,
-        m_transform.GetWorldMatrix());
+        m_transform.GetWorldMatrix(0));
 
     // 2. Calculate torque arm in world space
     XMVECTOR r = XMVectorSubtract(contactPoint, worldCOM);
@@ -215,7 +236,7 @@ void PhysicsObject::applyImpulseAtPosition(const DirectX::XMVECTOR& impulse, con
 
     // 5. Apply angular impulse
     XMVECTOR angularImpulse = XMVector3Transform(torque, m_inverseWorldInertiaTensor);
-    m_angularVelocity = XMVectorAdd(m_angularVelocity, angularImpulse);
+    m_futureState.m_angularVelocity = XMVectorAdd(m_futureState.m_angularVelocity, angularImpulse);
 }
 
 void PhysicsObject::integrateMotion(const float& deltaTime)
@@ -231,53 +252,51 @@ void PhysicsObject::integrateAngularMotion(const float& deltaTime)
 
     // Convert angular velocity to quaternion derivative
     XMVECTOR angVelQuat = XMVectorSet(
-        XMVectorGetX(m_angularVelocity),
-        XMVectorGetY(m_angularVelocity),
-        XMVectorGetZ(m_angularVelocity),
+        XMVectorGetX(m_currentState.m_angularVelocity),
+        XMVectorGetY(m_currentState.m_angularVelocity),
+        XMVectorGetZ(m_currentState.m_angularVelocity),
         0.0f
     );
 
-    XMVECTOR orientation = m_transform.GetRotationQuaternion();
+    XMVECTOR orientation = m_transform.GetRotationQuaternion(0);
     XMVECTOR qDot = XMQuaternionMultiply(orientation, angVelQuat);
     qDot = XMVectorScale(qDot, 0.5f * deltaTime);
 
-    m_transform.SetRotationQuaternion(XMQuaternionNormalize(
-        XMVectorAdd(orientation, qDot)
-    ));
+    m_transform.SetRotationQuaternion(XMQuaternionNormalize(XMVectorAdd(orientation, qDot)), 1);
 }
 
 void PhysicsObject::integrateEuler(const float& deltaTime) {
     // Update position based on current velocity
-    DirectX::XMVECTOR currentPosition = m_transform.GetPosition();
-    currentPosition = DirectX::XMVectorAdd(currentPosition, DirectX::XMVectorScale(m_velocity, deltaTime));
-    m_transform.SetPosition(currentPosition);
+    DirectX::XMVECTOR currentPosition = m_transform.GetPosition(0);
+    currentPosition = DirectX::XMVectorAdd(currentPosition, DirectX::XMVectorScale(m_currentState.m_velocity, deltaTime));
+    m_transform.SetPosition(currentPosition, 1);
 
 	// Calculate acceleration based on forces
-	auto force = calculateForces(m_transform.GetPosition(), m_velocity);
+	auto force = calculateForces(m_transform.GetPosition(0), m_currentState.m_velocity);
 	auto acceleration = DirectX::XMVectorScale(force, 1.0f / m_mass);
 
 	// Update velocity based on acceleration
-	m_velocity = DirectX::XMVectorAdd(m_velocity, DirectX::XMVectorScale(acceleration, deltaTime));
+    m_futureState.m_velocity = DirectX::XMVectorAdd(m_futureState.m_velocity, DirectX::XMVectorScale(acceleration, deltaTime));
 }
 
 void PhysicsObject::integrateSemiImplicitEuler(const float& deltaTime) {
     // Calculate acceleration based on forces
-	auto force = calculateForces(m_transform.GetPosition(), m_velocity);
+	auto force = calculateForces(m_transform.GetPosition(0), m_currentState.m_velocity);
 	auto acceleration = DirectX::XMVectorScale(force, 1.0f / m_mass);
 
     // Update velocity based on acceleration
-    m_velocity = DirectX::XMVectorAdd(m_velocity, DirectX::XMVectorScale(acceleration, deltaTime));
+    m_futureState.m_velocity = DirectX::XMVectorAdd(m_futureState.m_velocity, DirectX::XMVectorScale(acceleration, deltaTime));
 
     // Update position based on current velocity
-    DirectX::XMVECTOR currentPosition = m_transform.GetPosition();
-    currentPosition = DirectX::XMVectorAdd(currentPosition, DirectX::XMVectorScale(m_velocity, deltaTime));
+    DirectX::XMVECTOR currentPosition = m_transform.GetPosition(0);
+    currentPosition = DirectX::XMVectorAdd(currentPosition, DirectX::XMVectorScale(m_futureState.m_velocity, deltaTime));
 
-    m_transform.SetPosition(currentPosition);
+    m_transform.SetPosition(currentPosition, 1);
 }
 
 void PhysicsObject::integrateRK4(const float& deltaTime) {
-    DirectX::XMVECTOR currentPosition = m_transform.GetPosition();
-    DirectX::XMVECTOR currentVelocity = m_velocity;
+    DirectX::XMVECTOR currentPosition = m_transform.GetPosition(0);
+    DirectX::XMVECTOR currentVelocity = m_currentState.m_velocity;
 
     // Lambda to compute acceleration at a given position/velocity state
     auto ComputeAcceleration = [this](const DirectX::XMVECTOR& pos, const DirectX::XMVECTOR& vel) {
@@ -325,15 +344,15 @@ void PhysicsObject::integrateRK4(const float& deltaTime) {
     );
 
     // Update final state
-    m_velocity = DirectX::XMVectorAdd(currentVelocity, velocityIncrement);
-    m_transform.SetPosition(DirectX::XMVectorAdd(currentPosition, positionIncrement));
+    m_futureState.m_velocity = DirectX::XMVectorAdd(currentVelocity, velocityIncrement);
+    m_transform.SetPosition(DirectX::XMVectorAdd(currentPosition, positionIncrement), 1);
 }
 
 
 void PhysicsObject::integrateVerlet(const float& deltaTime) {
     // 1. Get current state
-    DirectX::XMVECTOR currentPosition = m_transform.GetPosition();
-    DirectX::XMVECTOR currentVelocity = m_velocity;
+    DirectX::XMVECTOR currentPosition = m_transform.GetPosition(0);
+    DirectX::XMVECTOR currentVelocity = m_currentState.m_velocity;
 
     // 2. Calculate initial acceleration (a_t)
     DirectX::XMVECTOR currentForce = calculateForces(currentPosition, currentVelocity);
@@ -363,6 +382,6 @@ void PhysicsObject::integrateVerlet(const float& deltaTime) {
     );
 
     // 6. Commit new state
-    m_transform.SetPosition(newPosition);
-    m_velocity = newVelocity;
+    m_transform.SetPosition(newPosition, 1);
+    m_futureState.m_velocity = newVelocity;
 }

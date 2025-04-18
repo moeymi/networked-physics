@@ -5,8 +5,8 @@ std::optional<CollisionManifold> CollisionHandlers::SphereVsSphere(PhysicsObject
      const SphereCollider* sphereA = static_cast<SphereCollider*>(a->getCollider());
      const SphereCollider* sphereB = static_cast<SphereCollider*>(b->getCollider());
 
-     const DirectX::XMVECTOR posA = a->getTransform().GetPosition();
-     const DirectX::XMVECTOR posB = b->getTransform().GetPosition();
+     const DirectX::XMVECTOR posA = a->getTransform().GetPosition(1);
+     const DirectX::XMVECTOR posB = b->getTransform().GetPosition(1);
      const DirectX::XMVECTOR delta = DirectX::XMVectorSubtract(posA, posB);
 
      const float distance = DirectX::XMVectorGetX(DirectX::XMVector3Length(delta));
@@ -34,7 +34,7 @@ std::optional<CollisionManifold> CollisionHandlers::SphereVsBox(PhysicsObject* s
     const SphereCollider* sphere = static_cast<SphereCollider*>(sphereObj->getCollider());
     const BoxCollider* box = static_cast<BoxCollider*>(boxObj->getCollider());
 
-    const XMVECTOR sphereCenter = sphereObj->getTransform().GetPosition();
+    const XMVECTOR sphereCenter = sphereObj->getTransform().GetPosition(1);
     const float sphereRadius = sphere->getRadius();
     Transform& boxTransform = boxObj->getTransform();
 
@@ -53,7 +53,7 @@ std::optional<CollisionManifold> CollisionHandlers::SphereVsBox(PhysicsObject* s
     if (isInside) {
         // Calculate penetration using box's face normals
         const std::vector<XMVECTOR> faceNormals = box->getFaceNormals(&boxTransform);
-        const XMVECTOR boxCenter = boxTransform.GetPosition();
+        const XMVECTOR boxCenter = boxTransform.GetPosition(1);
         const XMVECTOR halfSize = box->getHalfSize();
 
         XMVECTOR maxNormal = XMVectorZero();

@@ -1,13 +1,11 @@
 #pragma once
 #include "CollisionSystem.h"
+#include <shared_mutex>
 
 class PhysicsEngine {
 private:
     std::vector<std::shared_ptr<PhysicsObject>> m_bodies;
     CollisionSystem m_collisionSystem;
-
-    int m_velocityIterations = 10;
-    int m_positionIterations = 3;
 
 public:
     void onUpdate(float deltaTime);
@@ -18,7 +16,7 @@ private:
 
     std::vector<std::pair<PhysicsObject*, PhysicsObject*>> broadPhase();
 
-    void resolveCollisionVelocity(CollisionManifold& manifold);
+    void resolveCollisionVelocity(const CollisionManifold& manifold);
 	void resolveCollisionPosition(const CollisionManifold& contact);
 	DirectX::XMVECTOR computeTangent(DirectX::XMVECTOR relVel, DirectX::XMVECTOR normal);
 

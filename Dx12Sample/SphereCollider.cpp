@@ -16,7 +16,7 @@ ColliderType SphereCollider::getType() const
 
 AABB SphereCollider::getWorldAABB(Transform* transform) const
 {
-	DirectX::XMVECTOR center = transform->GetPosition();
+	DirectX::XMVECTOR center = transform->GetPosition(1);
 	return AABB(
 		DirectX::XMVectorSubtract(center, DirectX::XMVectorReplicate(m_radius)), 
 		DirectX::XMVectorAdd(center, DirectX::XMVectorReplicate(m_radius))

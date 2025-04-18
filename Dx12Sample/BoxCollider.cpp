@@ -17,7 +17,7 @@ ColliderType BoxCollider::getType() const
 
 AABB BoxCollider::getWorldAABB(Transform* transform) const
 {
-	DirectX::XMVECTOR center = transform->GetPosition();
+	DirectX::XMVECTOR center = transform->GetPosition(1);
 	return AABB(
 		DirectX::XMVectorSubtract(center, m_halfSize),
 		DirectX::XMVectorAdd(center, m_halfSize)
@@ -54,7 +54,7 @@ DirectX::XMVECTOR BoxCollider::support(Transform* tf, const DirectX::XMVECTOR& d
     using namespace DirectX;
 
     // Transform direction to local space
-    XMMATRIX invWorld = XMMatrixInverse(nullptr, tf->GetWorldMatrix());
+    XMMATRIX invWorld = XMMatrixInverse(nullptr, tf->GetWorldMatrix(1));
     XMVECTOR localDir = XMVector3TransformNormal(direction, invWorld);
 
     // Calculate sign manually
@@ -68,7 +68,7 @@ DirectX::XMVECTOR BoxCollider::support(Transform* tf, const DirectX::XMVECTOR& d
     XMVECTOR localPoint = XMVectorMultiply(m_halfSize, sign);
 
     // Transform back to world space
-    return Math::LocalToWorld(tf, localPoint);
+    return Math::LocalToWorld(tf->GetWorldMatrix(1), localPoint);
 }
 
 
@@ -88,7 +88,7 @@ std::vector<DirectX::XMVECTOR> BoxCollider::getWorldVertices(Transform* tf) cons
                     z * XMVectorGetZ(half),
                     0.0f
                 );
-                vertices.push_back(Math::LocalToWorld(tf, localPoint));
+                vertices.push_back(Math::LocalToWorld(tf->GetWorldMatrix(1), localPoint));
             }
         }
     }
@@ -107,7 +107,7 @@ std::vector<DirectX::XMVECTOR> BoxCollider::getFaceNormals(Transform* tf) const 
 
     // Transform to world space
     std::vector<XMVECTOR> worldNormals;
-    XMMATRIX rotation = XMMatrixRotationQuaternion(tf->GetRotationQuaternion());
+    XMMATRIX rotation = XMMatrixRotationQuaternion(tf->GetRotationQuaternion(1));
     for (const auto& n : locals) {
         worldNormals.push_back(XMVector3TransformNormal(n, rotation));
     }
@@ -116,7 +116,7 @@ std::vector<DirectX::XMVECTOR> BoxCollider::getFaceNormals(Transform* tf) const 
 
 std::vector<DirectX::XMVECTOR> BoxCollider::getEdgeDirections(Transform* tf) const {
     using namespace DirectX;
-    XMMATRIX rotation = XMMatrixRotationQuaternion(tf->GetRotationQuaternion());
+    XMMATRIX rotation = XMMatrixRotationQuaternion(tf->GetRotationQuaternion(1));
     return {
         XMVector3TransformNormal(XMVectorSet(1, 0, 0, 0), rotation),
         XMVector3TransformNormal(XMVectorSet(0, 1, 0, 0), rotation),
@@ -128,20 +128,20 @@ std::vector<DirectX::XMVECTOR> BoxCollider::getEdgeDirections(Transform* tf) con
 DirectX::XMVECTOR BoxCollider::closestPoint(Transform* tf, const DirectX::XMVECTOR& point) const {
     using namespace DirectX;
 
-	XMVECTOR localPoint = Math::WorldToLocal(tf, point);
+	XMVECTOR localPoint = Math::WorldToLocal(tf->GetWorldMatrix(1), point);
 
     // Clamp to box extents
     XMVECTOR clamped = XMVectorClamp(localPoint, -m_halfSize, m_halfSize);
 
     // Transform back to world space
-    return Math::LocalToWorld(tf, clamped);
+    return Math::LocalToWorld(tf->GetWorldMatrix(1), clamped);
 }
 
 bool BoxCollider::containsPoint(Transform* tf, const DirectX::XMVECTOR& point) const {
     using namespace DirectX;
 
     // Transform point to local space
-    XMMATRIX invWorld = XMMatrixInverse(nullptr, tf->GetWorldMatrix());
+    XMMATRIX invWorld = XMMatrixInverse(nullptr, tf->GetWorldMatrix(1));
     XMVECTOR localPoint = XMVector3TransformCoord(point, invWorld);
 
     // Check if inside box bounds

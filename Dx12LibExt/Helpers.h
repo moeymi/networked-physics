@@ -356,17 +356,16 @@ namespace Math
         return orientation;
     }
 
-    inline DirectX::XMVECTOR LocalToWorld(Transform* tf, const DirectX::XMVECTOR& localPoint) {
+    inline DirectX::XMVECTOR LocalToWorld(const DirectX::XMMATRIX& mat, const DirectX::XMVECTOR& localPoint) {
         using namespace DirectX;
 
-        XMMATRIX worldMatrix = tf->GetWorldMatrix();
-        return XMVector3Transform(localPoint, worldMatrix);
+        return XMVector3Transform(localPoint, mat);
     }
 
-    inline DirectX::XMVECTOR WorldToLocal(Transform* tf, const DirectX::XMVECTOR& worldPoint) {
+    inline DirectX::XMVECTOR WorldToLocal(const DirectX::XMMATRIX& mat, const DirectX::XMVECTOR& worldPoint) {
 		using namespace DirectX;
 
-		XMMATRIX invWorldMatrix = XMMatrixInverse(nullptr, tf->GetWorldMatrix());
+		XMMATRIX invWorldMatrix = XMMatrixInverse(nullptr, mat);
 		return XMVector3Transform(worldPoint, invWorldMatrix);
 	}
 
