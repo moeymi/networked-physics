@@ -192,7 +192,7 @@ void ConcreteScenarioB::onLoad(CommandList& commandList)
 	m_physicsEngine.addBody(particle);
 
 	auto box = std::make_shared<PhysicsObject>(m_BoxMesh, m_defaultTexture);
-	auto boxCollider = std::make_shared<BoxCollider>(DirectX::XMVectorReplicate(.5f));
+	auto boxCollider = std::make_shared<SphereCollider>(0.5f);
 	box->setCollider(boxCollider);
 	box->setMaterial(material);
 	x = 3;

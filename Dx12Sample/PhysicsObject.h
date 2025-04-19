@@ -14,6 +14,12 @@ struct ContactPoint {
 	DirectX::XMVECTOR position;    // World-space contact
 	DirectX::XMVECTOR normal;      // From A to B
 	float penetration;             // Overlap distance
+
+	float accumulatedNormalImpulse = 0.0f;
+	float accumulatedFrictionImpulse = 0.0f;
+	float normalMass = 0.0f;
+	float tangentMass = 0.0f;
+	float bias = 0.0f;
 };
 
 class PhysicsObject;

@@ -1,13 +1,13 @@
 #include "CollisionHandlers.h"
 
 std::optional<CollisionManifold> CollisionHandlers::SphereVsSphere(PhysicsObject* a, PhysicsObject* b)
- {
+{
      const SphereCollider* sphereA = static_cast<SphereCollider*>(a->getCollider());
      const SphereCollider* sphereB = static_cast<SphereCollider*>(b->getCollider());
 
      const DirectX::XMVECTOR posA = a->getTransform().GetPosition(1);
      const DirectX::XMVECTOR posB = b->getTransform().GetPosition(1);
-     const DirectX::XMVECTOR delta = DirectX::XMVectorSubtract(posA, posB);
+     const DirectX::XMVECTOR delta = DirectX::XMVectorSubtract(posB, posA);
 
      const float distance = DirectX::XMVectorGetX(DirectX::XMVector3Length(delta));
      const float radiusSum = sphereA->getRadius() + sphereB->getRadius();
@@ -85,14 +85,16 @@ std::optional<CollisionManifold> CollisionHandlers::SphereVsBox(PhysicsObject* s
     }
     else {
         // External collision
+        const XMVECTOR delta = XMVectorSubtract(closestPoint, sphereCenter); // Sphere -> Box
         const XMVECTOR normal = XMVector3Normalize(delta);
+
         const float penetration = sphereRadius - distance;
 
         manifold.contacts.push_back({
-            closestPoint,
+            closestPoint, // Contact point might be better as closestPoint - normal * penetration
             normal,
             penetration
-        });
+            });
     }
 
     return manifold;

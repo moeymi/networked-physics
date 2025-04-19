@@ -5,7 +5,7 @@
 
 void PhysicsEngine::onUpdate(float deltaTime) {
     // A. Integrate motion for all dynamic objects
-    #pragma omp parallel for
+    //#pragma omp parallel for
     for (int i = 0; i < m_bodies.size(); i++) {
         auto body = m_bodies[i].get();
         if (!body->isStatic()) {
@@ -15,27 +15,54 @@ void PhysicsEngine::onUpdate(float deltaTime) {
     }
 
     // C. Detect and resolve collisions
-    detectAndResolveCollisions();
+    detectAndResolveCollisions(deltaTime);
 }
 
 void PhysicsEngine::addBody(std::shared_ptr<PhysicsObject> body) {
 	m_bodies.push_back(body);
 }
 
-void PhysicsEngine::detectAndResolveCollisions() {
+void PhysicsEngine::detectAndResolveCollisions(const float& deltaTime) {
     // 1. Broad phase (get potential pairs)
     auto candidates = broadPhase();
 
     // 2. Narrow phase (exact collision checks)
     std::vector<CollisionManifold> collisions(candidates.size());
 
-    #pragma omp parallel for
+    //#pragma omp parallel for
     for (int i = 0; i < candidates.size(); i++) {
 		auto pair = &candidates[i];
         if (auto manifold = m_collisionSystem.checkCollision(pair->first, pair->second)) {
             collisions[i] = (*manifold);
         }
     }
+
+    // --- PRE-STEP ---
+    // Compute each contact's effective masses,bias, and warm-start impulses
+    prestepCollisionManifolds(collisions, deltaTime);
+
+    // ITERATIVE VELOCITY SOLVE
+    for (int iter = 0; iter < m_velocityIterations; ++iter) {
+        for (int j = 0; j < (int)collisions.size(); ++j) {
+            auto& manifold = collisions[j];
+            if (manifold.contacts.empty()) continue;
+            // This now runs one "Gauss–Seidel" pass over all contacts:
+            resolveCollisionVelocity(manifold);
+        }
+    }
+
+    // ITERATIVE POSITION SOLVE (split-impulse style, e.g. 4 passes):
+    for (int i = 0; i < m_positionIterations; ++i) {
+        for (int j = 0; j < collisions.size(); ++j) {
+            auto& manifold = collisions[j];
+            if (manifold.contacts.empty()) continue;
+            for (auto& contact : manifold.contacts) {
+                positionalCorrection(contact, manifold.objectA, manifold.objectB);
+            }
+        }
+    }
+
+    /*
 
     // (Optional) Warm-start: apply last frame's impulses stored in each manifold
     // so that the solver "remembers" previous corrections and converges faster.
@@ -65,6 +92,7 @@ void PhysicsEngine::detectAndResolveCollisions() {
         }
         positionalCorrection(deepestContact, manifold.objectA, manifold.objectB);
     }
+    */
 }
 
 std::vector<std::pair<PhysicsObject*, PhysicsObject*>> PhysicsEngine::broadPhase() {
@@ -82,96 +110,159 @@ std::vector<std::pair<PhysicsObject*, PhysicsObject*>> PhysicsEngine::broadPhase
     return pairs;
 }
 
-void PhysicsEngine::resolveCollisionPosition(const CollisionManifold& manifold) {
+void PhysicsEngine::prestepCollisionManifolds(std::vector<CollisionManifold>& manifolds, const float& dt) {
     using namespace DirectX;
-    PhysicsObject* a = manifold.objectA;
-    PhysicsObject* b = manifold.objectB;
 
-    if (a->isStatic() && b->isStatic()) return;
+    for (auto& m : manifolds) {
+        PhysicsObject* A = m.objectA;
+        PhysicsObject* B = m.objectB;
 
-    ContactPoint deepestContact;
-    float maxPenetration = 0.0f;
+		// Skip empty manifolds
+		if (m.contacts.empty()) continue;
 
-    for (const auto& contact : manifold.contacts) {
-        // Track deepest contact
-        if (contact.penetration > maxPenetration) {
-            maxPenetration = contact.penetration;
-            deepestContact = contact;
+        // Skip static–static
+        if (A->isStatic() && B->isStatic()) continue;
+
+        // Precompute inverse mass and inertia
+        float invMassA = A->isStatic() ? 0.0f : 1.0f / A->getMass();
+        float invMassB = B->isStatic() ? 0.0f : 1.0f / B->getMass();
+        XMMATRIX invInertiaA = A->getInverseWorldInertiaTensor();
+        XMMATRIX invInertiaB = B->getInverseWorldInertiaTensor();
+
+        // COM positions
+        XMVECTOR comA = A->getTransform().GetPosition(0);
+        XMVECTOR comB = B->getTransform().GetPosition(0);
+
+        for (auto& c : m.contacts) {
+            // 1) Build rA, rB
+            XMVECTOR rA = XMVectorSubtract(c.position, comA);
+            XMVECTOR rB = XMVectorSubtract(c.position, comB);
+            XMVECTOR n = c.normal;
+
+            // 2) Effective mass along normal:
+            XMVECTOR raCrossN = XMVector3Cross(rA, n);
+            XMVECTOR rbCrossN = XMVector3Cross(rB, n);
+            float angularA = XMVectorGetX(
+                XMVector3Dot(XMVector3Transform(raCrossN, invInertiaA), raCrossN));
+            float angularB = XMVectorGetX(
+                XMVector3Dot(XMVector3Transform(rbCrossN, invInertiaB), rbCrossN));
+            float invMassSum = invMassA + invMassB + angularA + angularB;
+            c.normalMass = invMassSum > 0.0f ? 1.0f / invMassSum : 0.0f;
+
+            // 3) Effective mass along tangent:
+            //    we pick tangent from current relVel so friction lines up
+            XMVECTOR velA = XMVectorAdd(A->getVelocity(),
+                XMVector3Cross(A->getAngularVelocity(), rA));
+            XMVECTOR velB = XMVectorAdd(B->getVelocity(),
+                XMVector3Cross(B->getAngularVelocity(), rB));
+            XMVECTOR relVel = XMVectorSubtract(velB, velA);
+
+            // reuse your computeTangent()
+            XMVECTOR t = computeTangent(relVel, n);
+
+            XMVECTOR raCrossT = XMVector3Cross(rA, t);
+            XMVECTOR rbCrossT = XMVector3Cross(rB, t);
+            float angularTA = XMVectorGetX(
+                XMVector3Dot(XMVector3Transform(raCrossT, invInertiaA), raCrossT));
+            float angularTB = XMVectorGetX(
+                XMVector3Dot(XMVector3Transform(rbCrossT, invInertiaB), rbCrossT));
+            float invMassT = invMassA + invMassB + angularTA + angularTB;
+            c.tangentMass = invMassT > 0.0f ? 1.0f / invMassT : 0.0f;
+
+            // 4) Baumgarte bias to correct penetration over time
+            float penetrationErr = max(c.penetration - m_kPenetrationSlop, 0.0f);
+            c.bias = (m_kBaumgarte / dt) * penetrationErr;
+
+            // 5) Warm-start: apply last frame's accumulated impulses
+            //    P = N * normalImpulse + T * frictionImpulse
+            XMVECTOR Pn = XMVectorScale(n, c.accumulatedNormalImpulse);
+            XMVECTOR Pt = XMVectorScale(t, c.accumulatedFrictionImpulse);
+            XMVECTOR P = XMVectorAdd(Pn, Pt);
+
+            // apply(-P) to A, +P to B
+            A->applyImpulseAtPosition(XMVectorNegate(P), c.position);
+            B->applyImpulseAtPosition(P, c.position);
         }
-    }
-
-    // Second pass: Positional correction once per manifold
-    if (maxPenetration > 0.0f) {
-        positionalCorrection(deepestContact, a, b);
     }
 }
 
-void PhysicsEngine::resolveCollisionVelocity(const CollisionManifold& manifold) {
+void PhysicsEngine::resolveCollisionVelocity(CollisionManifold& manifold) {
     using namespace DirectX;
-    PhysicsObject* a = manifold.objectA;
-    PhysicsObject* b = manifold.objectB;
+    using namespace DirectX;
 
-    if (a->isStatic() && b->isStatic()) return;
+    auto* A = manifold.objectA;
+    auto* B = manifold.objectB;
+    if (A->isStatic() && B->isStatic()) return;
 
-    for (const auto& contact : manifold.contacts) {
-        // Get center of mass positions
-        XMVECTOR comA = a->getTransform().GetPosition(0);
-        XMVECTOR comB = b->getTransform().GetPosition(0);
+    // Precompute inverse masses & inertias per manifold
+    float invMassA = A->isStatic() ? 0.0f : 1.0f / A->getMass();
+    float invMassB = B->isStatic() ? 0.0f : 1.0f / B->getMass();
+    XMMATRIX invInertiaA = A->getInverseWorldInertiaTensor();
+    XMMATRIX invInertiaB = B->getInverseWorldInertiaTensor();
 
-        // Calculate vectors from COM to contact point
-        XMVECTOR rA = XMVectorSubtract(contact.position, comA);
-        XMVECTOR rB = XMVectorSubtract(contact.position, comB);
+    // Center-of-mass positions
+    XMVECTOR comA = A->getTransform().GetPosition(0);
+    XMVECTOR comB = B->getTransform().GetPosition(0);
 
-        // Calculate velocities at contact point including rotation
-        XMVECTOR velA = XMVectorAdd(a->getVelocity(),
-            XMVector3Cross(a->getAngularVelocity(), rA));
-        XMVECTOR velB = XMVectorAdd(b->getVelocity(),
-            XMVector3Cross(b->getAngularVelocity(), rB));
+    for (auto& c : manifold.contacts) {
+        const XMVECTOR& n = c.normal;
 
-        XMVECTOR relVel = XMVectorSubtract(velB, velA);
-        float contactVel = XMVectorGetX(XMVector3Dot(relVel, contact.normal));
+        // 1) Compute rA, rB
+        XMVECTOR rA = c.position - comA;
+        XMVECTOR rB = c.position - comB;
 
-        // Calculate tangent direction using PRE-impulse relVel
-        XMVECTOR tangent = XMVectorSubtract(relVel,
-            XMVectorScale(contact.normal, XMVectorGetX(XMVector3Dot(relVel, contact.normal))));
-        if (!XMVector3NearEqual(tangent, XMVectorZero(), XMVectorSplatEpsilon())) {
-            tangent = XMVector3Normalize(tangent);
-        }
+        // 2) Relative velocity at contact
+        XMVECTOR vA = A->getVelocity()
+            + XMVector3Cross(A->getAngularVelocity(), rA);
+        XMVECTOR vB = B->getVelocity()
+            + XMVector3Cross(B->getAngularVelocity(), rB);
+        XMVECTOR relVel = vB - vA;
 
-        // Calculate restitution
-        float restitution = (a->getMaterial().restitution +
-            b->getMaterial().restitution) / 2.0f;
+        // 3) NORMAL IMPULSE
+        float vn = XMVectorGetX(XMVector3Dot(relVel, n));
+        //    a) restitution bounce (only if closing fast enough)
+        float e = (A->getMaterial().restitution +
+            B->getMaterial().restitution) * 0.5f;
+        float bounceTerm = (vn < -m_kRestitutionThreshold) ? (-e * vn) : 0.0f;
+        float biasTerm = c.bias; // Position correction (precomputed)
+        //    b) total impulse scalar
+        float dPn = c.normalMass * (-vn + bounceTerm + biasTerm);
 
-        // Calculate effective mass (including rotational inertia)
-        float invMassA = a->isStatic() ? 0.0f : 1.0f / a->getMass();
-        float invMassB = b->isStatic() ? 0.0f : 1.0f / b->getMass();
+        //    c) clamp & accumulate
+        float oldPn = c.accumulatedNormalImpulse;
+        float newPn = max(oldPn + dPn, 0.0f);
+        dPn = newPn - oldPn;
+        c.accumulatedNormalImpulse = newPn;
 
-        XMVECTOR crossA = XMVector3Cross(rA, contact.normal);
-        XMVECTOR crossB = XMVector3Cross(rB, contact.normal);
+        //    d) apply normal impulse
+        XMVECTOR Pn = n * dPn;
+        A->applyImpulseAtPosition(-Pn, c.position);
+        B->applyImpulseAtPosition(Pn, c.position);
 
-        XMMATRIX invInertiaA = a->getInverseWorldInertiaTensor();
-        XMMATRIX invInertiaB = b->getInverseWorldInertiaTensor();
-
-        float angularEffectA = XMVectorGetX(XMVector3Dot(
-            XMVector3Transform(crossA, invInertiaA),
-            crossA));
-
-        float angularEffectB = XMVectorGetX(XMVector3Dot(
-            XMVector3Transform(crossB, invInertiaB),
-            crossB));
-
-        float denominator = invMassA + invMassB + angularEffectA + angularEffectB;
-        if (denominator <= 0.0f) continue;
-
-        float impulseScalar = -(1.0f + restitution) * contactVel / denominator;
-
-        // Apply impulses at contact point
-        XMVECTOR impulse = XMVectorScale(contact.normal, impulseScalar);
-        a->applyImpulseAtPosition(XMVectorScale(impulse, -1.0f), contact.position);
-        b->applyImpulseAtPosition(impulse, contact.position);
-
-        // Apply friction (optional)
-        applyFriction(contact, a, b, rA, rB, impulseScalar, relVel);
+        // 4) FRICTION IMPULSE
+        //    a) recompute relVel *after* normal impulse
+        vA = A->getVelocity()
+            + XMVector3Cross(A->getAngularVelocity(), rA);
+        vB = B->getVelocity()
+            + XMVector3Cross(B->getAngularVelocity(), rB);
+        relVel = vB - vA;
+        //    b) find tangent
+        XMVECTOR t = computeTangent(relVel, n);
+        //    c) magnitude
+        float vt = XMVectorGetX(XMVector3Dot(relVel, t));
+        float dPt = -vt * c.tangentMass;
+        //    d) clamp by Coulomb cone
+        float u = (A->getMaterial().friction +
+            B->getMaterial().friction) * 0.5f;
+        float maxPt = c.accumulatedNormalImpulse * u;
+        float oldPt = c.accumulatedFrictionImpulse;
+        float newPt = std::clamp(oldPt + dPt, -maxPt, +maxPt);
+        dPt = newPt - oldPt;
+        c.accumulatedFrictionImpulse = newPt;
+        //    e) apply friction impulse
+        XMVECTOR Pt = t * dPt;
+        A->applyImpulseAtPosition(-Pt, c.position);
+        B->applyImpulseAtPosition(Pt, c.position);
     }
 }
 
@@ -179,54 +270,6 @@ DirectX::XMVECTOR PhysicsEngine::computeTangent(DirectX::XMVECTOR relVel, Direct
     DirectX::XMVECTOR tangent = DirectX::XMVectorSubtract(relVel, DirectX::XMVectorScale(normal, DirectX::XMVectorGetX(DirectX::XMVector3Dot(relVel, normal))));
     if (DirectX::XMVector3NearEqual(tangent, DirectX::XMVectorZero(), DirectX::XMVectorSplatEpsilon())) return tangent;
     return DirectX::XMVector3Normalize(tangent);
-}
-
-void PhysicsEngine::applyFriction(const ContactPoint& contact,
-    PhysicsObject* a, PhysicsObject* b,
-    const DirectX::XMVECTOR& rA,
-    const DirectX::XMVECTOR& rB,
-    const float& normalImpulse,
-    const DirectX::XMVECTOR& preRelVel) { // Pass pre-normal-impulse relVel
-    using namespace DirectX;
-
-
-    // Calculate tangent direction from pre-normal-impulse relVel
-    XMVECTOR tangent = computeTangent(preRelVel, contact.normal);
-    if (XMVector3Equal(tangent, XMVectorZero())) return;
-
-    // Calculate effective mass for friction (unchanged)
-    float invMassA = a->isStatic() ? 0.0f : 1.0f / a->getMass();
-    float invMassB = b->isStatic() ? 0.0f : 1.0f / b->getMass();
-
-    XMVECTOR crossA = XMVector3Cross(rA, tangent);
-    XMVECTOR crossB = XMVector3Cross(rB, tangent);
-
-    XMMATRIX invInertiaA = a->getInverseWorldInertiaTensor();
-    XMMATRIX invInertiaB = b->getInverseWorldInertiaTensor();
-
-    float angularEffectA = XMVectorGetX(XMVector3Dot(
-        XMVector3Transform(crossA, invInertiaA),
-        crossA));
-
-    float angularEffectB = XMVectorGetX(XMVector3Dot(
-        XMVector3Transform(crossB, invInertiaB),
-        crossB));
-
-    float denominator = invMassA + invMassB + angularEffectA + angularEffectB;
-    if (denominator <= 0.0f) return;
-
-    // Calculate friction impulse using PRE-normal-impulse tangential velocity
-    float tangentRelVel = XMVectorGetX(XMVector3Dot(preRelVel, tangent));
-    float frictionImpulseMag = -tangentRelVel / denominator;
-    float friction = (a->getMaterial().friction + b->getMaterial().friction) / 2.0f;
-
-    float maxFriction = std::abs(normalImpulse) * friction;
-    frictionImpulseMag = std::clamp(frictionImpulseMag, -maxFriction, maxFriction);
-
-    // Apply friction impulses
-    XMVECTOR frictionImpulse = XMVectorScale(tangent, frictionImpulseMag);
-    a->applyImpulseAtPosition(XMVectorScale(frictionImpulse, -1.0f), contact.position);
-    b->applyImpulseAtPosition(frictionImpulse, contact.position);
 }
 
 void PhysicsEngine::positionalCorrection(const ContactPoint& contact, PhysicsObject* a, PhysicsObject* b) {
