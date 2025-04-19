@@ -8,7 +8,7 @@
 #include "CollisionHandlers.h"
 class CollisionSystem {
 private:
-    using CollisionHandler = std::function<std::optional<CollisionManifold>(PhysicsObject*, PhysicsObject*)>;
+    using CollisionHandler = std::function<std::optional<CollisionManifold>(PhysicsObject*, PhysicsObject*, const bool&)>;
 
     CollisionHandler m_handlers[static_cast<size_t>(ColliderType::Count)][static_cast<size_t>(ColliderType::Count)];
 

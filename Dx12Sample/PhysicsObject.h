@@ -15,11 +15,14 @@ struct ContactPoint {
 	DirectX::XMVECTOR normal;      // From A to B
 	float penetration;             // Overlap distance
 
-	float accumulatedNormalImpulse = 0.0f;
-	float accumulatedFrictionImpulse = 0.0f;
 	float normalMass = 0.0f;
 	float tangentMass = 0.0f;
 	float bias = 0.0f;
+
+	float accumulatedNormalImpulse = 0.0f;
+	float accumulatedFrictionImpulse = 0.0f;
+
+	DirectX::XMVECTOR tangent = DirectX::XMVectorZero();
 };
 
 class PhysicsObject;
@@ -61,11 +64,8 @@ public:
 	void applyImpulseAtPosition(const DirectX::XMVECTOR& impulse, const DirectX::XMVECTOR& contactPoint);
 	void resetConstantForces();
 
-	void setFutureVelocity(const DirectX::XMVECTOR& velocity);
-	void setFutureAngularVelocity(const DirectX::XMVECTOR& angularVelocity);
-
-	void setCurrentVelocity(const DirectX::XMVECTOR& velocity);
-	void setCurrentAngularVelocity(const DirectX::XMVECTOR& angularVelocity);
+	void setVelocity(const DirectX::XMVECTOR& velocity, const USHORT& bufferIndex);
+	void setAngularVelocity(const DirectX::XMVECTOR& angularVelocity, const USHORT& bufferIndex);
 
 	void setCollider(std::shared_ptr<Collider> collider);
 	void setMass(const float& mass);
@@ -75,9 +75,9 @@ public:
 	bool isStatic() const;
 	float getMass() const;
 	DirectX::XMVECTOR getCenterOfMass() const;
-	DirectX::XMVECTOR getVelocity() const;
-	DirectX::XMVECTOR getAngularVelocity() const;
-	DirectX::XMMATRIX getInverseWorldInertiaTensor() const;
+	DirectX::XMVECTOR getVelocity(const USHORT& bufferIndex) const;
+	DirectX::XMVECTOR getAngularVelocity(const USHORT& bufferIndex) const;
+	DirectX::XMMATRIX getInverseWorldInertiaTensor(const USHORT& bufferIndex) const;
 
 	PhysicsMaterial getMaterial() const;
 	Collider* getCollider() const;
@@ -95,13 +95,9 @@ private:
 	struct State {
 		DirectX::XMVECTOR m_velocity =			{ 0, 0, 0, 0 };
 		DirectX::XMVECTOR m_angularVelocity =	{ 0, 0, 0, 0 };
-	};
-
-	State m_currentState;
-	State m_futureState;
+	} m_states[2];
 
 	// Physics properties
-	bool m_isStatic = false;
 	float m_mass = 1.0f;
 	PhysicsMaterial m_material;
 

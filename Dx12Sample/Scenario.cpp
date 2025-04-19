@@ -42,13 +42,6 @@ void ConcreteScenarioA::onLoad(CommandList& commandList)
 	plane5->setCollider(planeCollider);
 	plane6->setCollider(planeCollider);
 
-	plane1->setStatic(true);
-	plane2->setStatic(true);
-	plane3->setStatic(true);
-	plane4->setStatic(true);
-	plane5->setStatic(true);
-	plane6->setStatic(true);
-
 	plane1->getTransform().SetPosition({ 0.0f, -10.0f, 0.0f, 1 }, 0, true);
 	plane1->getTransform().SetScale({ 20.0f, 1.0f, 20.0f, 1 }, 0, true);
 	plane1->getTransform().SetRotationEulerAngles({ 0.0f, 0.0f, 0.0f }, 0, true);
@@ -73,6 +66,13 @@ void ConcreteScenarioA::onLoad(CommandList& commandList)
 	plane6->getTransform().SetScale({ 20.0f, 1.0f, 20.0f, 1 }, 0, true);
 	plane6->getTransform().SetRotationEulerAngles({ DirectX::XMConvertToRadians(-90), 0, 0 }, 0, true);
 
+	plane1->setStatic(true);
+	plane2->setStatic(true);
+	plane3->setStatic(true);
+	plane4->setStatic(true);
+	plane5->setStatic(true);
+	plane6->setStatic(true);
+
 	m_physicsObjects.push_back(plane1);
 	m_physicsObjects.push_back(plane2);
 	m_physicsObjects.push_back(plane3);
@@ -89,9 +89,9 @@ void ConcreteScenarioA::onLoad(CommandList& commandList)
 
 	PhysicsMaterial material = {
 		0.5f, // static friction
-		1,
+		0.2,
 	};
-	for (int i = 0; i < 200; i++)
+	for (int i = 0; i < 50; i++)
 	{
 		int randNum = 0;// rand() % 2;
 		if (randNum) {
@@ -123,6 +123,8 @@ void ConcreteScenarioA::onLoad(CommandList& commandList)
 			particle->applyConstantForce({ 0.0f, -9.81f * particle->getMass(), 0.0f, 0.0f });
 			m_physicsObjects.push_back(particle);
 			m_physicsEngine.addBody(particle);
+			//particle->setVelocity({ 5, 0, 0, 0 }, 0);
+			//particle->setVelocity({ 5, 0, 0, 0 }, 1);
 		}
 	}
 }
@@ -166,9 +168,9 @@ void ConcreteScenarioB::onLoad(CommandList& commandList)
 	auto plane = std::make_shared<PhysicsObject>(m_PlaneMesh, m_defaultTexture);
 	plane->onLoad(commandList);
 	plane->setCollider(planeCollider);
-	plane->setStatic(true);
 	plane->getTransform().SetPosition({ 0.0f, -10.0f, 0.0f, 1 }, 0, true);
 	plane->getTransform().SetScale({ 10.0f, 1.0f, 10.0f, 1 }, 0, true);
+	plane->setStatic(true);
 	m_physicsObjects.push_back(plane);
 	m_physicsEngine.addBody(plane);
 
@@ -188,11 +190,9 @@ void ConcreteScenarioB::onLoad(CommandList& commandList)
 	particle->onLoad(commandList);
 	particle->getTransform().SetPosition({ x, y, z, 1 }, 0, true);
 	//particle->applyConstantForce({ 0.0f, -9.81f * particle->getMass(), 0.0f, 0.0f });
-	m_physicsObjects.push_back(particle);
-	m_physicsEngine.addBody(particle);
 
 	auto box = std::make_shared<PhysicsObject>(m_BoxMesh, m_defaultTexture);
-	auto boxCollider = std::make_shared<SphereCollider>(0.5f);
+	auto boxCollider = std::make_shared<SphereCollider>(.5f);
 	box->setCollider(boxCollider);
 	box->setMaterial(material);
 	x = 3;
@@ -203,12 +203,14 @@ void ConcreteScenarioB::onLoad(CommandList& commandList)
 
 	box->setMass(1.0f);
 
+	m_physicsObjects.push_back(particle);
+	m_physicsEngine.addBody(particle);
 	m_physicsObjects.push_back(box);
 	m_physicsEngine.addBody(box);
 
 
-	m_physicsObjects[1]->setFutureVelocity({3, 0, 0, 0});
-	m_physicsObjects[1]->setCurrentVelocity({ 3, 0, 0, 0 });
+	m_physicsObjects[1]->setVelocity({3, 0, 0, 0}, 0);
+	m_physicsObjects[1]->setVelocity({ 3, 0, 0, 0 }, 1);
 }
 
 void ConcreteScenarioB::onUpdate(const float& dt)

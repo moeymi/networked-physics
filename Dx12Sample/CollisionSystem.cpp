@@ -9,14 +9,17 @@ CollisionSystem::CollisionSystem()
 void CollisionSystem::registerHandler(ColliderType a, ColliderType b, CollisionHandler handler)
 {
     m_handlers[static_cast<size_t>(a)][static_cast<size_t>(b)] = handler;
-    m_handlers[static_cast<size_t>(b)][static_cast<size_t>(a)] = [handler](PhysicsObject* objB, PhysicsObject* objA) {
-		return handler(objA, objB); // Swap parameters
+    m_handlers[static_cast<size_t>(b)][static_cast<size_t>(a)] = [handler](PhysicsObject* objB, PhysicsObject* objA, const bool& flip) {
+		// Swap parameters for the reverse case
+		// This is a simple way to ensure that the handler is symmetric
+		// and can handle both orders of the objects.
+		return handler(objA, objB, true); // Swap parameters
 	};
 }
 
 std::optional<CollisionManifold> CollisionSystem::checkCollision(PhysicsObject* a, PhysicsObject* b)
 {
-	return m_handlers[static_cast<size_t>(a->getCollider()->getType())][static_cast<size_t>(b->getCollider()->getType())](a, b);
+	return m_handlers[static_cast<size_t>(a->getCollider()->getType())][static_cast<size_t>(b->getCollider()->getType())](a, b, false);
 }
 
 void CollisionSystem::initializeCollisionSystem()

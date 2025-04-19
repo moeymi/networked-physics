@@ -1,6 +1,6 @@
 #include "CollisionHandlers.h"
 
-std::optional<CollisionManifold> CollisionHandlers::SphereVsSphere(PhysicsObject* a, PhysicsObject* b)
+std::optional<CollisionManifold> CollisionHandlers::SphereVsSphere(PhysicsObject* a, PhysicsObject* b, const bool& flip)
 {
      const SphereCollider* sphereA = static_cast<SphereCollider*>(a->getCollider());
      const SphereCollider* sphereB = static_cast<SphereCollider*>(b->getCollider());
@@ -25,10 +25,18 @@ std::optional<CollisionManifold> CollisionHandlers::SphereVsSphere(PhysicsObject
          radiusSum - distance
          });
 
+     if(flip)
+	 {
+		 // Swap the objects in the manifold if flip is true
+		 std::swap(manifold.objectA, manifold.objectB);
+         for (auto& contact : manifold.contacts) {
+             contact.normal = DirectX::XMVectorNegate(contact.normal);
+         }
+	 }
      return manifold;
 }
 
-std::optional<CollisionManifold> CollisionHandlers::SphereVsBox(PhysicsObject* sphereObj, PhysicsObject* boxObj) {
+std::optional<CollisionManifold> CollisionHandlers::SphereVsBox(PhysicsObject* sphereObj, PhysicsObject* boxObj, const bool& flip) {
     using namespace DirectX;
 
     const SphereCollider* sphere = static_cast<SphereCollider*>(sphereObj->getCollider());
@@ -84,22 +92,27 @@ std::optional<CollisionManifold> CollisionHandlers::SphereVsBox(PhysicsObject* s
             });
     }
     else {
-        // External collision
-        const XMVECTOR delta = XMVectorSubtract(closestPoint, sphereCenter); // Sphere -> Box
-        const XMVECTOR normal = XMVector3Normalize(delta);
-
+		const XMVECTOR normal = XMVector3Normalize(XMVectorSubtract(closestPoint, sphereCenter));
         const float penetration = sphereRadius - distance;
 
         manifold.contacts.push_back({
             closestPoint, // Contact point might be better as closestPoint - normal * penetration
             normal,
             penetration
-            });
+        });
     }
 
+    if (flip)
+    {
+        // Swap the objects in the manifold if flip is true
+        std::swap(manifold.objectA, manifold.objectB);
+		for (auto& contact : manifold.contacts) {
+			contact.normal = XMVectorNegate(contact.normal);
+		}
+    }
     return manifold;
 }
 
-std::optional<CollisionManifold> CollisionHandlers::BoxVsBox(PhysicsObject* a, PhysicsObject* b) {
+std::optional<CollisionManifold> CollisionHandlers::BoxVsBox(PhysicsObject* a, PhysicsObject* b, const bool& flip) {
     return std::nullopt;
 }

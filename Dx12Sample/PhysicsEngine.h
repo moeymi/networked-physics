@@ -7,9 +7,11 @@ private:
     std::vector<std::shared_ptr<PhysicsObject>> m_bodies;
     CollisionSystem m_collisionSystem;
 
+    std::map<std::pair<PhysicsObject*, PhysicsObject*>, CollisionManifold> m_contactManifolds;
+
     static constexpr int m_velocityIterations = 8;
     static constexpr int m_positionIterations = 4;
-    static constexpr float m_kRestitutionThreshold = 1.0f;  // only bounce if closing speed > this
+    static constexpr float m_kRestitutionThreshold = .5f;  // only bounce if closing speed > this
 
     static constexpr float m_kPenetrationSlop = 0.001f;  // 1 mm of allowed overlap
     static constexpr float m_kBaumgarte = 0.2f;    // positional stabilization factor
@@ -23,9 +25,15 @@ private:
 
     std::vector<std::pair<PhysicsObject*, PhysicsObject*>> broadPhase();
 
-    void prestepCollisionManifolds(std::vector<CollisionManifold>& collisionManifolds, const float& dt);
-    void resolveCollisionVelocity(CollisionManifold& manifold);
+    // Adjusted prestep to take the map
+    void prestepCollisionManifolds(std::map<std::pair<PhysicsObject*, PhysicsObject*>, CollisionManifold>& contactManifolds, const float& dt);
 
-	DirectX::XMVECTOR computeTangent(DirectX::XMVECTOR relVel, DirectX::XMVECTOR normal);
-	void positionalCorrection(const ContactPoint& contact, PhysicsObject* a, PhysicsObject* b);
+    void resolveCollisionVelocity(CollisionManifold& manifold, const int& iteration);
+
+    DirectX::XMVECTOR computeTangent(DirectX::XMVECTOR relVel, DirectX::XMVECTOR normal);
+    void positionalCorrection(const ContactPoint& contact, PhysicsObject* a, PhysicsObject* b);
+
+    // Helper to create a canonical key for a pair of objects
+    std::pair<PhysicsObject*, PhysicsObject*> makePairKey(PhysicsObject* objA, PhysicsObject* objB);
+
 };
