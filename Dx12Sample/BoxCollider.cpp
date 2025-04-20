@@ -124,17 +124,23 @@ std::vector<DirectX::XMVECTOR> BoxCollider::getEdgeDirections(Transform* tf) con
     };
 }
 
-// Closest Point on Box to External Point
+// Closest Point on Box to External Point on the surface
 DirectX::XMVECTOR BoxCollider::closestPoint(Transform* tf, const DirectX::XMVECTOR& point) const {
     using namespace DirectX;
 
-	XMVECTOR localPoint = Math::WorldToLocal(tf->GetWorldMatrix(1), point);
+    XMVECTOR localPoint = Math::WorldToLocal(tf->GetWorldMatrix(1), point);
 
-    // Clamp to box extents
-    XMVECTOR clamped = XMVectorClamp(localPoint, -m_halfSize, m_halfSize);
+    // Define local box extents (min and max)
+    XMVECTOR localMin = -m_halfSize;
+    XMVECTOR localMax = m_halfSize;
+
+    // Calculate the closest point in local space by clamping each component
+    XMVECTOR localClosestPoint = localPoint;
+    localClosestPoint = XMVectorMax(localClosestPoint, localMin);
+    localClosestPoint = XMVectorMin(localClosestPoint, localMax);
 
     // Transform back to world space
-    return Math::LocalToWorld(tf->GetWorldMatrix(1), clamped);
+    return Math::LocalToWorld(tf->GetWorldMatrix(1), localClosestPoint);
 }
 
 bool BoxCollider::containsPoint(Transform* tf, const DirectX::XMVECTOR& point) const {

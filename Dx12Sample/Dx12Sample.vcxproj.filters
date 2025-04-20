@@ -22,6 +22,12 @@
     <Filter Include="Source Files\Colliders">
       <UniqueIdentifier>{24ac493d-6ddd-4d72-8242-aced0f9599ee}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Header Files\Scenarios">
+      <UniqueIdentifier>{fe9936ae-586e-49a8-873d-1dbf34d69397}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Scenarios">
+      <UniqueIdentifier>{6185cbe1-5ef8-4e16-8cf7-49e772119660}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Camera.cpp">
@@ -37,9 +43,6 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="PhysicsSimulation.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="Scenario.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="PhysicsObject.cpp">
@@ -66,6 +69,15 @@
     <ClCompile Include="CollisionHandlers.cpp">
       <Filter>Source Files\Colliders</Filter>
     </ClCompile>
+    <ClCompile Include="Scenario.cpp">
+      <Filter>Source Files\Scenarios</Filter>
+    </ClCompile>
+    <ClCompile Include="BallToBallScenario.cpp">
+      <Filter>Source Files\Scenarios</Filter>
+    </ClCompile>
+    <ClCompile Include="BallToWallScenario.cpp">
+      <Filter>Source Files\Scenarios</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Camera.h">
@@ -78,9 +90,6 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="PhysicsSimulation.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="Scenario.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="PhysicsObject.h">
@@ -100,6 +109,15 @@
     </ClInclude>
     <ClInclude Include="PhysicsEngine.h">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Scenario.h">
+      <Filter>Header Files\Scenarios</Filter>
+    </ClInclude>
+    <ClInclude Include="BallToBallScenario.h">
+      <Filter>Header Files\Scenarios</Filter>
+    </ClInclude>
+    <ClInclude Include="BallToWallScenario.h">
+      <Filter>Header Files\Scenarios</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

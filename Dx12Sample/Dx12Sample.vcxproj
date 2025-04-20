@@ -158,6 +158,8 @@
     </FxCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="BallToBallScenario.cpp" />
+    <ClCompile Include="BallToWallScenario.cpp" />
     <ClCompile Include="BoxCollider.cpp" />
     <ClCompile Include="Camera.cpp" />
     <ClCompile Include="Collider.cpp" />
@@ -174,6 +176,8 @@
     <ClCompile Include="SphereCollider.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="BallToBallScenario.h" />
+    <ClInclude Include="BallToWallScenario.h" />
     <ClInclude Include="BoxCollider.h" />
     <ClInclude Include="Camera.h" />
     <ClInclude Include="Collider.h" />

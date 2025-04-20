@@ -21,10 +21,12 @@ using namespace DirectX;
 #if defined(min)
 #undef min
 #endif
+#include "BallToBallScenario.h"
 
 #if defined(max)
 #undef max
 #endif
+#include "BallToWallScenario.h"
 
 // Clamp a value between a min and max range.
 template<typename T>
@@ -94,9 +96,11 @@ bool PhysicsSimulation::LoadContent()
     auto commandQueue = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY);
     auto commandList = commandQueue->GetCommandList();
 
+    m_Scenarios.push_back(std::make_unique<BallToWallScenario>());
+	m_Scenarios.push_back(std::make_unique<BallToBallScenario>());
 	m_Scenarios.push_back(std::make_unique<ConcreteScenarioA>());
-	m_Scenarios.push_back(std::make_unique<ConcreteScenarioB>());
-    m_CurrentScenario = 1u;
+    m_Scenarios.push_back(std::make_unique<ConcreteScenarioB>());
+    m_CurrentScenario = 0u;
 
     for (auto& scenario : m_Scenarios)
     {
