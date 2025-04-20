@@ -89,7 +89,8 @@ void ConcreteScenarioA::onLoad(CommandList& commandList)
 
 	PhysicsMaterial material = {
 		0.5f, // static friction
-		0.2,
+		0.5,
+		0.7
 	};
 	for (int i = 0; i < 50; i++)
 	{

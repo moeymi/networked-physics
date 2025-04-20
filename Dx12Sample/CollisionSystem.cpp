@@ -26,5 +26,6 @@ void CollisionSystem::initializeCollisionSystem()
 {
 	registerHandler(ColliderType::Sphere, ColliderType::Sphere, CollisionHandlers::SphereVsSphere);
 	registerHandler(ColliderType::Sphere, ColliderType::Box, CollisionHandlers::SphereVsBox);
+	registerHandler(ColliderType::Sphere, ColliderType::Capsule, CollisionHandlers::SphereVsCapsule);
 	registerHandler(ColliderType::Box, ColliderType::Box, CollisionHandlers::BoxVsBox);
 }

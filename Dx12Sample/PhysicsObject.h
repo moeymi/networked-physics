@@ -6,7 +6,8 @@
 class CommandList;
 
 struct PhysicsMaterial {
-	float friction = 0.0f;
+	float friction = 0.5f;
+	float angularFriction = 0.5f;
 	float restitution = 1.0f;
 };
 
@@ -17,24 +18,21 @@ struct ContactPoint {
 
 	float normalMass = 0.0f;
 	float tangentMass = 0.0f;
+	float angularMass = 0.0f;
 	float bias = 0.0f;
 
 	float accumulatedNormalImpulse = 0.0f;
 	float accumulatedFrictionImpulse = 0.0f;
+	float accumulatedAngularFrictionImpulse = 0.0f;
 
 	DirectX::XMVECTOR tangent = DirectX::XMVectorZero();
 };
 
 class PhysicsObject;
 struct CollisionManifold {
-	PhysicsObject* objectA;
-	PhysicsObject* objectB;
+	PhysicsObject* objectA = nullptr;
+	PhysicsObject* objectB = nullptr;
 	std::vector<ContactPoint> contacts;
-};
-
-enum ForceType {
-	Impulse,
-	Constant,
 };
 
 class PhysicsObject final
@@ -62,6 +60,7 @@ public:
 	void applyConstantForce(const DirectX::XMVECTOR& force);
 	void applyImpulse(const DirectX::XMVECTOR& impulse);
 	void applyImpulseAtPosition(const DirectX::XMVECTOR& impulse, const DirectX::XMVECTOR& contactPoint);
+	void applyAngularImpulse(const DirectX::XMVECTOR& impulse);
 	void resetConstantForces();
 
 	void setVelocity(const DirectX::XMVECTOR& velocity, const USHORT& bufferIndex);

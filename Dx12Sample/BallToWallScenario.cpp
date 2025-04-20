@@ -24,11 +24,9 @@ void BallToWallScenario::onLoad(CommandList& commandList)
 	particle1->setMaterial(material);
 	particle1->onLoad(commandList);
 	particle1->getTransform().SetPosition({ 0, 0, 2, 1 }, 0, true);
-	//particle1->setVelocity({ 3, 0, 0, 0 }, 0);
 	//particle1->setVelocity({ 3, 0, 0, 0 }, 1);
-	particle1->setAngularVelocity({ 0, 0, 15, 0 }, 0);
-	particle1->setAngularVelocity({ 0, 0, 15, 0 }, 1);
-	particle1->applyConstantForce({ 0.0f, -9.81f * particle1->getMass(), 0.0f, 0.0f });
+	particle1->setAngularVelocity({ 0, 0, 1, 0 }, 1);
+	//particle1->applyConstantForce({ 0.0f, -9.81f * particle1->getMass(), 0.0f, 0.0f });
 
 	auto wall = std::make_shared<PhysicsObject>(m_PlaneMesh, m_defaultTexture);
 	auto planeCollider = std::make_shared<BoxCollider>(DirectX::XMVectorSet(.5f, 0.01f, .5f, 0.0f));

@@ -226,6 +226,12 @@ void PhysicsObject::applyImpulseAtPosition(const DirectX::XMVECTOR& impulse, con
     m_states[1].m_angularVelocity = XMVectorAdd(m_states[1].m_angularVelocity, angularImpulse);
 }
 
+void PhysicsObject::applyAngularImpulse(const DirectX::XMVECTOR& impulse)
+{
+	if (m_transform.IsStatic()) return;
+	m_states[1].m_angularVelocity = DirectX::XMVectorAdd(m_states[1].m_angularVelocity, DirectX::XMVector3Transform(impulse, m_inverseWorldInertiaTensor));
+}
+
 void PhysicsObject::integrateMotion(const float& deltaTime)
 {
 	(this->*m_integrateMotion)(deltaTime);

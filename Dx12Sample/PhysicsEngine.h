@@ -21,17 +21,15 @@ public:
     void addBody(std::shared_ptr<PhysicsObject> body);
 
 private:
-    void detectAndResolveCollisions(const float& dt);
-
     std::vector<std::pair<PhysicsObject*, PhysicsObject*>> broadPhase();
 
-    // Adjusted prestep to take the map
+    void detectAndResolveCollisions(const float& dt);
     void prestepCollisionManifolds(std::map<std::pair<PhysicsObject*, PhysicsObject*>, CollisionManifold>& contactManifolds, const float& dt);
-
     void resolveCollisionVelocity(CollisionManifold& manifold, const int& iteration);
+    void positionalCorrection(const ContactPoint& contact, PhysicsObject* a, PhysicsObject* b);
+    void matchAndTransferImpulses(CollisionManifold& newManifold, const CollisionManifold& oldManifold);
 
     DirectX::XMVECTOR computeTangent(DirectX::XMVECTOR relVel, DirectX::XMVECTOR normal);
-    void positionalCorrection(const ContactPoint& contact, PhysicsObject* a, PhysicsObject* b);
 
     // Helper to create a canonical key for a pair of objects
     std::pair<PhysicsObject*, PhysicsObject*> makePairKey(PhysicsObject* objA, PhysicsObject* objB);

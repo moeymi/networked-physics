@@ -355,6 +355,252 @@ std::unique_ptr<Mesh> Mesh::CreateCylinder(CommandList& commandList, float diame
     return mesh;
 }
 
+std::unique_ptr<Mesh> Mesh::CreateCapsule(CommandList & commandList, float diameter, float height, size_t tessellation, bool rhcoords)
+{
+    VertexCollection vertices;
+    IndexCollection indices;
+
+    if (tessellation < 3)
+        throw std::out_of_range("tessellation parameter must be at least 3");
+
+    float radius = diameter / 2.0f;
+    float cylinderHeight = std::max(0.0f, height - diameter);
+    float halfCylinderHeight = cylinderHeight / 2.0f;
+
+    size_t verticalSegments = tessellation;
+    size_t horizontalSegments = tessellation * 2;
+    if (verticalSegments % 2 != 0) verticalSegments++;
+    size_t numHemisphereRings = verticalSegments / 2;
+
+    uint16_t currentVertex = 0;
+    const uint16_t stride = (uint16_t)(horizontalSegments + 1);
+
+    // === Vertex Generation (Identical to previous version) ===
+
+    // --- Top Hemisphere Vertices ---
+    XMVECTOR topCapCenter = XMVectorSet(0.0f, halfCylinderHeight, 0.0f, 0.0f);
+    XMVECTOR topPoleNormal = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+    XMVECTOR topPolePos = XMVectorAdd(topCapCenter, XMVectorScale(topPoleNormal, radius));
+    vertices.push_back(VertexPositionNormalTexture(topPolePos, topPoleNormal, XMVectorSet(0.5f, 0.0f, 0.0f, 0.0f))); // V=0
+    currentVertex++;
+    uint16_t topPoleIndex = 0;
+
+    for (size_t i = 1; i < numHemisphereRings; ++i) {
+        float latitude = XM_PIDIV2 - (float)i * XM_PI / verticalSegments;
+        float dy, dxz; XMScalarSinCos(&dy, &dxz, latitude);
+        float v = (float)i / verticalSegments;
+        for (size_t j = 0; j <= horizontalSegments; ++j) {
+            float longitude = (float)j * XM_2PI / horizontalSegments;
+            float dx, dz; XMScalarSinCos(&dz, &dx, longitude);
+            dx *= dxz; dz *= dxz;
+            XMVECTOR normal = XMVectorSet(dx, dy, dz, 0.0f);
+            XMVECTOR position = XMVectorAdd(topCapCenter, XMVectorScale(normal, radius));
+            float u = (float)j / horizontalSegments;
+            vertices.push_back(VertexPositionNormalTexture(position, normal, XMVectorSet(u, v, 0.0f, 0.0f)));
+            currentVertex++;
+        }
+    }
+    float baseLatitude = 0.0f; float base_dy, base_dxz; XMScalarSinCos(&base_dy, &base_dxz, baseLatitude);
+    float base_v = (float)numHemisphereRings / verticalSegments; // Should be 0.5f
+    for (size_t j = 0; j <= horizontalSegments; ++j) {
+        float longitude = (float)j * XM_2PI / horizontalSegments;
+        float dx, dz; XMScalarSinCos(&dz, &dx, longitude);
+        dx *= base_dxz; dz *= base_dxz;
+        XMVECTOR normal = XMVectorSet(dx, base_dy, dz, 0.0f);
+        XMVECTOR position = XMVectorAdd(topCapCenter, XMVectorScale(normal, radius));
+        float u = (float)j / horizontalSegments;
+        vertices.push_back(VertexPositionNormalTexture(position, normal, XMVectorSet(u, base_v, 0.0f, 0.0f)));
+        currentVertex++;
+    }
+    uint16_t topCapBaseIndexStart = currentVertex - stride;
+
+    // --- Cylinder Vertices ---
+    uint16_t cylinderTopRingStart = 0;
+    uint16_t cylinderBottomRingStart = 0;
+    if (cylinderHeight > 0.0f) {
+        cylinderTopRingStart = currentVertex;
+        float cylinderTopV = base_v;
+        for (size_t j = 0; j <= horizontalSegments; ++j) {
+            float longitude = (float)j * XM_2PI / horizontalSegments;
+            float dx, dz; XMScalarSinCos(&dz, &dx, longitude);
+            XMVECTOR normal = XMVectorSet(dx, 0.0f, dz, 0.0f);
+            XMVECTOR position = XMVectorSet(dx * radius, halfCylinderHeight, dz * radius, 0.0f);
+            float u = (float)j / horizontalSegments;
+            vertices.push_back(VertexPositionNormalTexture(position, normal, XMVectorSet(u, cylinderTopV, 0.0f, 0.0f)));
+            currentVertex++;
+        }
+        cylinderBottomRingStart = currentVertex;
+        float cylinderBottomV = base_v; // Keep V consistent at seam for simplicity
+        for (size_t j = 0; j <= horizontalSegments; ++j) {
+            float longitude = (float)j * XM_2PI / horizontalSegments;
+            float dx, dz; XMScalarSinCos(&dz, &dx, longitude);
+            XMVECTOR normal = XMVectorSet(dx, 0.0f, dz, 0.0f);
+            XMVECTOR position = XMVectorSet(dx * radius, -halfCylinderHeight, dz * radius, 0.0f);
+            float u = (float)j / horizontalSegments;
+            vertices.push_back(VertexPositionNormalTexture(position, normal, XMVectorSet(u, cylinderBottomV, 0.0f, 0.0f)));
+            currentVertex++;
+        }
+    }
+
+    // --- Bottom Hemisphere Vertices ---
+    XMVECTOR bottomCapCenter = XMVectorSet(0.0f, -halfCylinderHeight, 0.0f, 0.0f);
+    uint16_t bottomCapBaseIndexStart = currentVertex;
+    float bottom_base_v = base_v; // Starts at 0.5f
+    for (size_t j = 0; j <= horizontalSegments; ++j) {
+        float longitude = (float)j * XM_2PI / horizontalSegments;
+        float dx, dz; XMScalarSinCos(&dz, &dx, longitude);
+        XMVECTOR normal = XMVectorSet(dx, 0.0f, dz, 0.0f);
+        XMVECTOR position = XMVectorAdd(bottomCapCenter, XMVectorScale(normal, radius));
+        float u = (float)j / horizontalSegments;
+        vertices.push_back(VertexPositionNormalTexture(position, normal, XMVectorSet(u, bottom_base_v, 0.0f, 0.0f)));
+        currentVertex++;
+    }
+    for (size_t i = 1; i < numHemisphereRings; ++i) {
+        float latitude = -(float)i * XM_PI / verticalSegments;
+        float dy, dxz; XMScalarSinCos(&dy, &dxz, latitude);
+        float v = (float)(numHemisphereRings + i) / verticalSegments; // V from 0.5 towards 1.0
+        for (size_t j = 0; j <= horizontalSegments; ++j) {
+            float longitude = (float)j * XM_2PI / horizontalSegments;
+            float dx, dz; XMScalarSinCos(&dz, &dx, longitude);
+            dx *= dxz; dz *= dxz;
+            XMVECTOR normal = XMVectorSet(dx, dy, dz, 0.0f);
+            XMVECTOR position = XMVectorAdd(bottomCapCenter, XMVectorScale(normal, radius));
+            float u = (float)j / horizontalSegments;
+            vertices.push_back(VertexPositionNormalTexture(position, normal, XMVectorSet(u, v, 0.0f, 0.0f)));
+            currentVertex++;
+        }
+    }
+    XMVECTOR bottomPoleNormal = XMVectorSet(0.0f, -1.0f, 0.0f, 0.0f);
+    XMVECTOR bottomPolePos = XMVectorAdd(bottomCapCenter, XMVectorScale(bottomPoleNormal, radius));
+    vertices.push_back(VertexPositionNormalTexture(bottomPolePos, bottomPoleNormal, XMVectorSet(0.5f, 1.0f, 0.0f, 0.0f))); // V=1
+    uint16_t bottomPoleIndex = currentVertex;
+    currentVertex++;
+
+    // === Generate Indices (CORRECTED Top Hemisphere Winding) ===
+
+    // --- Top Hemisphere Indices ---
+    // Top cap triangle fan (Corrected Winding: pole, V(j), V(j+1))
+    uint16_t firstRingStart = 1; // Index of first vertex in the first ring below the pole
+    for (size_t j = 0; j < horizontalSegments; ++j)
+    {
+        indices.push_back(topPoleIndex);
+        indices.push_back(static_cast<uint16_t>(firstRingStart + j));     // Corrected
+        indices.push_back(static_cast<uint16_t>(firstRingStart + j + 1)); // Corrected
+    }
+
+    // Top hemisphere body quads (Corrected Winding)
+    uint16_t ringStart = firstRingStart;
+    for (size_t i = 0; i < numHemisphereRings - 1; ++i) // Up to the ring before the base
+    {
+        for (size_t j = 0; j < horizontalSegments; ++j)
+        {
+            uint16_t nextRingStart = ringStart + stride;
+
+            // Triangle 1: (i,j), (i+1,j), (i,j+1)
+            indices.push_back(ringStart + j);           // Corrected
+            indices.push_back(nextRingStart + j);       // Corrected
+            indices.push_back(ringStart + j + 1);       // Corrected
+
+            // Triangle 2: (i,j+1), (i+1,j), (i+1,j+1)
+            indices.push_back(ringStart + j + 1);       // Corrected
+            indices.push_back(nextRingStart + j);       // Corrected
+            indices.push_back(nextRingStart + j + 1);   // Corrected
+        }
+        ringStart += stride;
+    }
+    // Connect last ring to the hemisphere base ring (Corrected Winding)
+    for (size_t j = 0; j < horizontalSegments; ++j)
+    {
+        // Triangle 1: (last_ring, j), (base_ring, j), (last_ring, j+1)
+        indices.push_back(ringStart + j);               // Corrected
+        indices.push_back(topCapBaseIndexStart + j);    // Corrected
+        indices.push_back(ringStart + j + 1);           // Corrected
+
+        // Triangle 2: (last_ring, j+1), (base_ring, j), (base_ring, j+1)
+        indices.push_back(ringStart + j + 1);           // Corrected
+        indices.push_back(topCapBaseIndexStart + j);    // Corrected
+        indices.push_back(topCapBaseIndexStart + j + 1);// Corrected
+    }
+
+
+    // --- Cylinder Body Indices (Unchanged) ---
+    if (cylinderHeight > 0.0f)
+    {
+        for (size_t j = 0; j < horizontalSegments; ++j)
+        {
+            uint16_t top1 = cylinderTopRingStart + (uint16_t)j;
+            uint16_t top2 = cylinderTopRingStart + (uint16_t)j + 1;
+            uint16_t bottom1 = cylinderBottomRingStart + (uint16_t)j;
+            uint16_t bottom2 = cylinderBottomRingStart + (uint16_t)j + 1;
+
+            // Winding: TopLeft, BottomLeft, TopRight
+            indices.push_back(top1);
+            indices.push_back(bottom1);
+            indices.push_back(top2);
+
+            // Winding: TopRight, BottomLeft, BottomRight
+            indices.push_back(top2);
+            indices.push_back(bottom1);
+            indices.push_back(bottom2);
+        }
+    }
+
+    // --- Bottom Hemisphere Indices (Unchanged - Assumed correct) ---
+    // Connect bottom hemisphere base ring to the next ring down
+    ringStart = bottomCapBaseIndexStart; // Start of the base ring vertices for bottom cap
+    uint16_t nextRingStart = ringStart + stride;
+    for (size_t j = 0; j < horizontalSegments; ++j)
+    {
+        // Triangle 1: (base, j), (next, j), (base, j+1)
+        indices.push_back(ringStart + j);
+        indices.push_back(nextRingStart + j);
+        indices.push_back(ringStart + j + 1);
+
+        // Triangle 2: (base, j+1), (next, j), (next, j+1)
+        indices.push_back(ringStart + j + 1);
+        indices.push_back(nextRingStart + j);
+        indices.push_back(nextRingStart + j + 1);
+    }
+    ringStart += stride;
+
+
+    // Bottom hemisphere body quads (rings below base down to near pole)
+    for (size_t i = 0; i < numHemisphereRings - 1; ++i)
+    {
+        nextRingStart = ringStart + stride;
+        for (size_t j = 0; j < horizontalSegments; ++j)
+        {
+            // Triangle 1: (i, j), (i+1, j), (i, j+1)
+            indices.push_back(ringStart + j);
+            indices.push_back(nextRingStart + j);
+            indices.push_back(ringStart + j + 1);
+
+            // Triangle 2: (i, j+1), (i+1, j), (i+1, j+1)
+            indices.push_back(ringStart + j + 1);
+            indices.push_back(nextRingStart + j);
+            indices.push_back(nextRingStart + j + 1);
+        }
+        ringStart += stride;
+    }
+
+    // Bottom cap triangle fan (connects last ring to bottom pole)
+    // Winding: V(j), pole, V(j+1)
+    for (size_t j = 0; j < horizontalSegments; ++j)
+    {
+        indices.push_back(ringStart + j);
+        indices.push_back(bottomPoleIndex);
+        indices.push_back(ringStart + j + 1);
+    }
+
+
+    // --- Finalize ---
+    std::unique_ptr<Mesh> mesh(new Mesh());
+    // Initialize will call ReverseWinding if rhcoords is false
+    mesh->Initialize(commandList, vertices, indices, rhcoords);
+
+    return mesh;
+}
+
 std::unique_ptr<Mesh> Mesh::CreateCone(CommandList& commandList, float diameter, float height, size_t tessellation, bool rhcoords)
 {
     VertexCollection vertices;

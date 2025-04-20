@@ -57,9 +57,6 @@
     <ClCompile Include="Collider.cpp">
       <Filter>Source Files\Colliders</Filter>
     </ClCompile>
-    <ClCompile Include="BoxCollider.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="CollisionHandlers.h">
       <Filter>Header Files\Colliders</Filter>
     </ClCompile>
@@ -76,6 +73,18 @@
       <Filter>Source Files\Scenarios</Filter>
     </ClCompile>
     <ClCompile Include="BallToWallScenario.cpp">
+      <Filter>Source Files\Scenarios</Filter>
+    </ClCompile>
+    <ClCompile Include="CapsuleCollider.h">
+      <Filter>Header Files\Colliders</Filter>
+    </ClCompile>
+    <ClCompile Include="BoxCollider.cpp">
+      <Filter>Source Files\Colliders</Filter>
+    </ClCompile>
+    <ClCompile Include="CapsuleCollider.cpp">
+      <Filter>Source Files\Colliders</Filter>
+    </ClCompile>
+    <ClCompile Include="BallToCapsuleScenario.cpp">
       <Filter>Source Files\Scenarios</Filter>
     </ClCompile>
   </ItemGroup>
@@ -104,9 +113,6 @@
     <ClInclude Include="SphereCollider.h">
       <Filter>Header Files\Colliders</Filter>
     </ClInclude>
-    <ClInclude Include="BoxCollider.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="PhysicsEngine.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -117,6 +123,12 @@
       <Filter>Header Files\Scenarios</Filter>
     </ClInclude>
     <ClInclude Include="BallToWallScenario.h">
+      <Filter>Header Files\Scenarios</Filter>
+    </ClInclude>
+    <ClInclude Include="BoxCollider.h">
+      <Filter>Header Files\Colliders</Filter>
+    </ClInclude>
+    <ClInclude Include="BallToCapsuleScenario.h">
       <Filter>Header Files\Scenarios</Filter>
     </ClInclude>
   </ItemGroup>

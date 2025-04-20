@@ -28,32 +28,45 @@ void PhysicsEngine::detectAndResolveCollisions(const float& deltaTime) {
 
     std::vector<CollisionManifold> collisions(candidates.size());
 
+    // --- NARROW PHASE ---
     for (int i = 0; i < candidates.size(); i++) {
         auto pair = candidates[i];
         PhysicsObject* objA = pair.first;
         PhysicsObject* objB = pair.second;
 
-        if (auto newManifold = m_collisionSystem.checkCollision(objA, objB)) {
+        // Skip pairs of static objects early if desired
+        // if (objA->isStatic() && objB->isStatic()) continue;
+
+        if (auto newManifoldOpt = m_collisionSystem.checkCollision(objA, objB)) { // Assuming checkCollision returns std::optional<CollisionManifold>
+            CollisionManifold newManifold = *newManifoldOpt; // Get the manifold value
             auto pairKey = makePairKey(objA, objB);
 
             auto it = m_contactManifolds.find(pairKey);
 
             if (it != m_contactManifolds.end()) {
+                // Manifold existed last frame, attempt to transfer accumulated impulses (Warm Starting)
                 CollisionManifold& oldManifold = it->second;
+                matchAndTransferImpulses(newManifold, oldManifold); // Use a proper matching function
 
-                if (!newManifold->contacts.empty() && !oldManifold.contacts.empty()) {
-                    // Simple case: assume one contact and transfer impulses
-                    newManifold->contacts[0].accumulatedNormalImpulse = oldManifold.contacts[0].accumulatedNormalImpulse;
-                    newManifold->contacts[0].accumulatedFrictionImpulse = oldManifold.contacts[0].accumulatedFrictionImpulse;
+                // *** Example Simple Transfer (replace with matchAndTransferImpulses) ***
+                
+                if (!newManifold.contacts.empty() && !oldManifold.contacts.empty()) {
+                    // WARNING: This assumes only one contact and it corresponds.
+                    // A real implementation needs contact matching based on position/features.
+                    newManifold.contacts[0].accumulatedNormalImpulse = oldManifold.contacts[0].accumulatedNormalImpulse;
+                    newManifold.contacts[0].accumulatedFrictionImpulse = oldManifold.contacts[0].accumulatedFrictionImpulse;
+                    // --> TRANSFER ANGULAR IMPULSE <--
+                    newManifold.contacts[0].accumulatedAngularFrictionImpulse = oldManifold.contacts[0].accumulatedAngularFrictionImpulse;
                 }
-                currentFrameManifolds[pairKey] = *newManifold; // Copy the manifold
+                
             }
-            else {
-                currentFrameManifolds[pairKey] = *newManifold; // Copy the manifold
-            }
+            // Store the new manifold (with potentially transferred impulses) for this frame
+            currentFrameManifolds[pairKey] = std::move(newManifold); // Move constructed manifold
         }
     }
-    m_contactManifolds = std::move(currentFrameManifolds); // Efficient swap
+
+    // Update the persistent manifolds map for the next frame
+    m_contactManifolds = std::move(currentFrameManifolds);
 
     // --- PRE-STEP ---
     // Compute each contact's effective masses,bias, and warm-start impulses
@@ -184,6 +197,7 @@ void PhysicsEngine::resolveCollisionVelocity(
     // Geometric mean is often preferred for friction: sqrt(fA * fB)
     // Max is often preferred for restitution: max(eA, eB)
     const float combinedFriction = std::sqrt(matA.friction * matB.friction);
+	const float combinedAngularFriction = std::sqrt(matA.angularFriction * matB.angularFriction);
     const float combinedRestitution = abs((matA.restitution + matB.restitution) / 2.0f);
 
     const float invMassA = A->isStatic() ? 0.0f : 1.0f / A->getMass();
@@ -208,61 +222,98 @@ void PhysicsEngine::resolveCollisionVelocity(
         // Velocity at contact point = linear velocity + angular velocity contribution
         XMVECTOR velA_contact = XMVectorAdd(vA, XMVector3Cross(wA, rA));
         XMVECTOR velB_contact = XMVectorAdd(vB, XMVector3Cross(wB, rB));
-        XMVECTOR relVel = XMVectorSubtract(velB_contact, velA_contact);
+        XMVECTOR relVelLinear = XMVectorSubtract(velB_contact, velA_contact);
+
+        // Angular velocity relative between bodies
+        XMVECTOR relVelAngular = XMVectorSubtract(wB, wA); // NEW
 
         // --- Normal Impulse (Non-penetration & Restitution) ---
         XMVECTOR n = c.normal;
-        float relVelNormal = XMVectorGetX(XMVector3Dot(relVel, n));
+        float relVelNormal = XMVectorGetX(XMVector3Dot(relVelLinear, n));
 
 		if (relVelNormal > 0.0f) {
 			// Objects are separating, no need to resolve
 			continue;
 		}
 
-        // Calculate impulse magnitude change needed (lambda_n)
-        // Formula: lambda = - (J V + bias + restitution) / (J M^-1 J^T)
-        // Where J M^-1 J^T = 1 / effectiveMass = normalMass
-        // J V = relVelNormalfloat 
-        float velocityDueToRestitution = -combinedRestitution * relVelNormal;
-        float deltaVelocity = velocityDueToRestitution - relVelNormal;
-        float lambdaN = (deltaVelocity)*c.normalMass;
+        // Baumgarte bias makes the target velocity slightly positive for penetration
+        // Restitution adds velocity based on the incoming speed
+        float velocityBias = c.bias; // From pre-step
+        float restitutionTerm = 0.0f;
+        if (relVelNormal < -1.0f) { // Apply restitution only if velocity is significant enough
+            restitutionTerm = -combinedRestitution * relVelNormal;
+        }
 
-        // Clamp accumulated impulse: P_n >= 0 (contacts only push)
+        // Target velocity change = -(relative_velocity_normal + bias + restitution)
+        // Note: Erin Catto's Box2D includes bias here. Some sources add it separately.
+        // Let's calculate lambda needed to achieve zero relative velocity + bias + restitution
+        float deltaVelNormalTarget = -relVelNormal + restitutionTerm; // Target change in velocity along normal
+        float lambdaN = deltaVelNormalTarget * c.normalMass;
+
+        // Clamp accumulated impulse: P_n >= 0
         float oldAccumulatedNormalImpulse = c.accumulatedNormalImpulse;
         c.accumulatedNormalImpulse = max(oldAccumulatedNormalImpulse + lambdaN, 0.0f);
         float actualLambdaN = c.accumulatedNormalImpulse - oldAccumulatedNormalImpulse; // The actual change applied
 
-        // --- Friction Impulse ---
-        XMVECTOR t = c.tangent; // Tangent computed in prestep
-        float relVelTangent = XMVectorGetX(XMVector3Dot(relVel, t));
+        // Apply normal impulse immediately (updates velocities for friction calc)
+        XMVECTOR Pn_step = XMVectorScale(n, actualLambdaN);
+        if (!A->isStatic()) A->applyImpulseAtPosition(XMVectorNegate(Pn_step), c.position);
+        if (!B->isStatic()) B->applyImpulseAtPosition(Pn_step, c.position);
 
-        // Calculate impulse magnitude change needed (lambda_t)
-        // Formula: lambda = - (J V) / (J M^-1 J^T)
-        // Where J M^-1 J^T = 1 / effectiveMass = tangentMass
-        // J V = relVelTangent
-        float lambdaT = -relVelTangent * c.tangentMass;
+        // --- Friction Impulses (Linear and Angular) ---
+        // Recalculate relative velocities *after* normal impulse applied
+        // (Important for correct friction calculation in sequential impulse)
+        vA = A->getVelocity(iteration != 0); wA = A->getAngularVelocity(iteration != 0); // Get updated velocities
+        vB = B->getVelocity(iteration != 0); wB = B->getAngularVelocity(iteration != 0);
+        velA_contact = XMVectorAdd(vA, XMVector3Cross(wA, rA));
+        velB_contact = XMVectorAdd(vB, XMVector3Cross(wB, rB));
+        relVelLinear = XMVectorSubtract(velB_contact, velA_contact);
+        relVelAngular = XMVectorSubtract(wB, wA); // Update relative angular velocity too
 
-        // Clamp accumulated impulse within friction cone: |P_t| <= mu * P_n
-        float maxFriction = combinedFriction * c.accumulatedNormalImpulse; // Use the *new* total normal impulse
-        float oldAccumulatedFrictionImpulse = c.accumulatedFrictionImpulse;
-        c.accumulatedFrictionImpulse = std::clamp(oldAccumulatedFrictionImpulse + lambdaT, -maxFriction, maxFriction);
-        float actualLambdaT = c.accumulatedFrictionImpulse - oldAccumulatedFrictionImpulse; // The actual change applied
 
-        // --- Apply Impulses ---
-        // Calculate total impulse vector applied *in this step*
-        XMVECTOR Pn = XMVectorScale(n, actualLambdaN);
-        XMVECTOR Pt = XMVectorScale(t, actualLambdaT);
-        XMVECTOR P = XMVectorAdd(Pn, Pt); // Total impulse vector for this step
+        // --- Linear Friction Impulse ---
+        XMVECTOR t = c.tangent; // Tangent computed in prestep based on initial relVel
+        // Recompute tangent if necessary, or use pre-computed one.
+        // Using the pre-computed one is common.
+        // If tangentMass is zero, skip linear friction.
+        if (c.tangentMass > 1e-9f) {
+            float relVelTangent = XMVectorGetX(XMVector3Dot(relVelLinear, t));
 
-        // Apply impulse to objects (remember impulse on A is -P)
-        // Note: The applyImpulseAtPosition function needs to update both
-        // linear and angular velocity based on the impulse P, the application
-        // point 'pos', the inverse mass, and inverse inertia tensor.
-        if (!A->isStatic()) {
-            A->applyImpulseAtPosition(XMVectorNegate(P), c.position);
+            // Calculate impulse magnitude change needed (lambda_t) to stop tangent motion
+            float lambdaT = -relVelTangent * c.tangentMass;
+
+            // Clamp accumulated impulse within friction cone: |P_t| <= mu * P_n
+            float maxFriction = combinedFriction * c.accumulatedNormalImpulse; // Use the *new* total normal impulse
+            float oldAccumulatedFrictionImpulse = c.accumulatedFrictionImpulse;
+            c.accumulatedFrictionImpulse = std::clamp(oldAccumulatedFrictionImpulse + lambdaT, -maxFriction, maxFriction);
+            float actualLambdaT = c.accumulatedFrictionImpulse - oldAccumulatedFrictionImpulse; // The actual change applied
+
+            // Apply linear friction impulse for this step
+            XMVECTOR Pt_step = XMVectorScale(t, actualLambdaT);
+            if (!A->isStatic()) A->applyImpulseAtPosition(XMVectorNegate(Pt_step), c.position);
+            if (!B->isStatic()) B->applyImpulseAtPosition(Pt_step, c.position);
         }
-        if (!B->isStatic()) {
-            B->applyImpulseAtPosition(P, c.position);
+
+
+        // --- Angular (Torsional) Friction Impulse --- (NEW)
+        // If angularMass is zero, skip angular friction.
+        if (c.angularMass > 1e-9f) {
+            // Relative angular velocity projected onto the normal
+            float relOmegaNormal = XMVectorGetX(XMVector3Dot(relVelAngular, n));
+
+            // Calculate impulse magnitude change needed (lambda_a) to stop relative rotation around normal
+            float lambdaA = -relOmegaNormal * c.angularMass;
+
+            // Clamp accumulated impulse: |P_a| <= mu_angular * P_n
+            float maxAngularFriction = combinedAngularFriction * c.accumulatedNormalImpulse; // Use the *new* total normal impulse
+            float oldAccumulatedAngularImpulse = c.accumulatedAngularFrictionImpulse;
+            c.accumulatedAngularFrictionImpulse = std::clamp(oldAccumulatedAngularImpulse + lambdaA, -maxAngularFriction, maxAngularFriction);
+            float actualLambdaA = c.accumulatedAngularFrictionImpulse - oldAccumulatedAngularImpulse; // Actual change
+
+            // Apply angular friction impulse (pure torque) for this step
+            XMVECTOR Pa_step = XMVectorScale(n, actualLambdaA);
+            if (!A->isStatic()) A->applyAngularImpulse(XMVectorNegate(Pa_step));
+            if (!B->isStatic()) B->applyAngularImpulse(Pa_step);
         }
     } // End loop over contact points
 }
@@ -301,6 +352,33 @@ void PhysicsEngine::positionalCorrection(const ContactPoint& contact, PhysicsObj
         b->getTransform().Translate(XMVectorScale(correction, invMassB), 1);
     }
 }
+
+void PhysicsEngine::matchAndTransferImpulses(CollisionManifold& newManifold, const CollisionManifold& oldManifold) {
+    using namespace DirectX;
+    const float matchDistanceThresholdSq = 0.01f * 0.01f; // Example threshold
+
+    for (auto& newContact : newManifold.contacts) {
+        float closestDistSq = 1e10f;
+        const ContactPoint* bestMatch = nullptr;
+
+        for (const auto& oldContact : oldManifold.contacts) {
+            // Match based on world-space position proximity (simplistic)
+            float distSq = XMVectorGetX(XMVector3LengthSq(XMVectorSubtract(newContact.position, oldContact.position)));
+            if (distSq < closestDistSq && distSq < matchDistanceThresholdSq) {
+                closestDistSq = distSq;
+                bestMatch = &oldContact;
+            }
+        }
+
+        if (bestMatch) {
+            // Transfer impulses from the matched old contact
+            newContact.accumulatedNormalImpulse = bestMatch->accumulatedNormalImpulse;
+            newContact.accumulatedFrictionImpulse = bestMatch->accumulatedFrictionImpulse;
+            newContact.accumulatedAngularFrictionImpulse = bestMatch->accumulatedAngularFrictionImpulse; // NEW
+        }
+    }
+}
+
 std::pair<PhysicsObject*, PhysicsObject*> PhysicsEngine::makePairKey(PhysicsObject* objA, PhysicsObject* objB) {
     return (objA < objB) ? std::make_pair(objA, objB) : std::make_pair(objB, objA);
 }

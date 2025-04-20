@@ -159,13 +159,16 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="BallToBallScenario.cpp" />
+    <ClCompile Include="BallToCapsuleScenario.cpp" />
     <ClCompile Include="BallToWallScenario.cpp" />
     <ClCompile Include="BoxCollider.cpp" />
     <ClCompile Include="Camera.cpp" />
+    <ClCompile Include="CapsuleCollider.cpp" />
     <ClCompile Include="Collider.cpp" />
     <ClCompile Include="CollisionHandlers.cpp" />
     <ClCompile Include="CollisionHandlers.h" />
     <ClCompile Include="CollisionSystem.cpp" />
+    <ClCompile Include="CapsuleCollider.h" />
     <ClCompile Include="Light.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Material.cpp" />
@@ -177,6 +180,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="BallToBallScenario.h" />
+    <ClInclude Include="BallToCapsuleScenario.h" />
     <ClInclude Include="BallToWallScenario.h" />
     <ClInclude Include="BoxCollider.h" />
     <ClInclude Include="Camera.h" />

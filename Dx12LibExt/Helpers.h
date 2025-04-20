@@ -34,6 +34,7 @@
 #include <functional>
 #include <iostream>
 #include <sstream>
+#include <algorithm>
 #include "Transform.h"
 
 #define WIN32_LEAN_AND_MEAN
@@ -368,6 +369,40 @@ namespace Math
 		XMMATRIX invWorldMatrix = XMMatrixInverse(nullptr, mat);
 		return XMVector3Transform(worldPoint, invWorldMatrix);
 	}
+
+    inline DirectX::XMVECTOR ClosestPointOnLineSegment(const DirectX::XMVECTOR& a, const DirectX::XMVECTOR& p1, const DirectX::XMVECTOR& p2) {
+        using namespace DirectX;
+        XMVECTOR seg = XMVectorSubtract(p2, p1);
+        float sqrLength = XMVectorGetX(XMVector3LengthSq(seg));
+
+        if (sqrLength < 1e-6f) { // Segment is a point or very small
+            return p1;
+        }
+
+        XMVECTOR v = XMVectorSubtract(a, p1);
+        float dot = XMVectorGetX(XMVector3Dot(v, seg));
+        float t = dot / sqrLength;
+
+        t = std::clamp(t, 0.0f, 1.0f); // Clamp to segment [0, 1]
+
+        return XMVectorAdd(p1, XMVectorScale(seg, t));
+    }
+
+    inline float SqrDistancePointSegment(const DirectX::XMVECTOR& a, const DirectX::XMVECTOR& p1, const DirectX::XMVECTOR& p2) {
+        using namespace DirectX;
+        XMVECTOR closest = ClosestPointOnLineSegment(a, p1, p2);
+        XMVECTOR diff = XMVectorSubtract(a, closest);
+        return XMVectorGetX(XMVector3LengthSq(diff));
+    }
+
+    inline DirectX::XMVECTOR NormalizeSafe(const DirectX::XMVECTOR& vec) {
+        using namespace DirectX;
+        XMVECTOR lengthSq = XMVector3LengthSq(vec);
+        if (XMVectorGetX(lengthSq) < 1e-12f) { // Use a small epsilon
+            return XMVectorZero();
+        }
+        return XMVector3Normalize(vec);
+    }
 
 }
 
