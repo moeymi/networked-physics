@@ -3,13 +3,11 @@
 
 void Transform::SetParent(const std::shared_ptr<Transform>& newParent) {
 	parent = newParent;
-	CleanDirty(0, true);
 }
 
 bool Transform::IsStatic() const { return isStatic; }
 void Transform::SetStatic(bool value) {
 	isStatic = value;
-	CleanDirty(0, true);
 }
 
 void Transform::swapStates() {
@@ -38,7 +36,7 @@ void Transform::CalculateNewLookDirection(const int& bufferIndex, const bool& bo
 }
 
 void Transform::CleanDirty(const int& bufferIndex, const bool& bothBuffers) {
-	if(m_states[bufferIndex].positionScaleDirty || m_states[bufferIndex].rotationDirty) CalculateWorldMatrix(bufferIndex, false);
+	if (m_states[bufferIndex].positionScaleDirty || m_states[bufferIndex].rotationDirty) CalculateWorldMatrix(bufferIndex, false);
 	if (m_states[bufferIndex].rotationDirty) CalculateNewLookDirection(bufferIndex, false);
 	for (auto& listener : dirtyListeners) {
 		listener();
@@ -80,7 +78,6 @@ void Transform::SetPosition(const DirectX::XMFLOAT3& pos, const int& bufferIndex
 		m_states[bufferIndex].position = DirectX::XMLoadFloat3(&pos);
 	}
 	m_states[bufferIndex].positionScaleDirty = true;
-	CleanDirty(bufferIndex, false);
 
 	if (bothBuffers) {
 		SetPosition(pos, (bufferIndex + 1) % 2, false);
@@ -98,7 +95,6 @@ void Transform::SetPosition(const DirectX::XMVECTOR& pos, const int& bufferIndex
 	}
 
 	m_states[bufferIndex].positionScaleDirty = true;
-	CleanDirty(bufferIndex, false);
 
 	if (bothBuffers) {
 		SetPosition(pos, (bufferIndex + 1) % 2, false);
@@ -111,7 +107,6 @@ void Transform::SetLocalPosition(const DirectX::XMFLOAT3& pos, const int& buffer
 	m_states[bufferIndex].position = DirectX::XMLoadFloat3(&pos);
 
 	m_states[bufferIndex].positionScaleDirty = true;
-	CleanDirty(bufferIndex, false);
 
 	if (bothBuffers) {
 		SetLocalPosition(pos, (bufferIndex + 1) % 2, false);
@@ -122,7 +117,6 @@ void Transform::SetLocalPosition(const DirectX::XMVECTOR& pos, const int& buffer
 	m_states[bufferIndex].position = pos;
 
 	m_states[bufferIndex].positionScaleDirty = true;
-	CleanDirty(bufferIndex, false);
 
 	if (bothBuffers) {
 		SetLocalPosition(pos, (bufferIndex + 1) % 2, false);
@@ -151,7 +145,6 @@ void Transform::SetScale(const DirectX::XMFLOAT3& s, const int& bufferIndex, con
 	}
 
 	m_states[bufferIndex].positionScaleDirty = true;
-	CleanDirty(bufferIndex, false);
 
 	if (bothBuffers) {
 		SetScale(s, (bufferIndex + 1) % 2, false);
@@ -170,7 +163,6 @@ void Transform::SetScale(const DirectX::XMVECTOR& s, const int& bufferIndex, con
 	}
 
 	m_states[bufferIndex].positionScaleDirty = true;
-	CleanDirty(bufferIndex, false);
 
 	if (bothBuffers) {
 		SetScale(s, (bufferIndex + 1) % 2, false);
@@ -183,7 +175,6 @@ void Transform::SetLocalScale(const DirectX::XMFLOAT3& s, const int& bufferIndex
 	m_states[bufferIndex].scale = DirectX::XMLoadFloat3(&s);
 
 	m_states[bufferIndex].positionScaleDirty = true;
-	CleanDirty(bufferIndex, false);
 
 	if (bothBuffers) {
 		SetLocalScale(s, (bufferIndex + 1) % 2, false);
@@ -194,7 +185,6 @@ void Transform::SetLocalScale(const DirectX::XMVECTOR& s, const int& bufferIndex
 	m_states[bufferIndex].scale = s;
 
 	m_states[bufferIndex].positionScaleDirty = true;
-	CleanDirty(bufferIndex, false);
 }
 
 
@@ -216,7 +206,6 @@ void Transform::SetRotationQuaternion(const DirectX::XMVECTOR& rot, const int& b
 	}
 
 	m_states[bufferIndex].rotationDirty = true;
-	CleanDirty(bufferIndex, false);
 
 	if (bothBuffers) {
 		SetRotationQuaternion(rot, (bufferIndex + 1) % 2, false);
@@ -227,7 +216,6 @@ const DirectX::XMVECTOR& Transform::GetLocalRotationQuaternion(const int& buffer
 void Transform::SetLocalRotationQuaternion(const DirectX::XMVECTOR& rot, const int& bufferIndex, const bool& bothBuffers) {
 	if (isStatic) return;
 	m_states[bufferIndex].rotationQuaternion = rot;
-	CleanDirty(bufferIndex, false);
 
 	if (bothBuffers) {
 		SetLocalRotationQuaternion(rot, (bufferIndex + 1) % 2, false);
@@ -253,7 +241,6 @@ void Transform::SetRotationEulerAngles(const DirectX::XMFLOAT3& rot, const int& 
 	}
 
 	m_states[bufferIndex].rotationDirty = true;
-	CleanDirty(bufferIndex, false);
 
 	if (bothBuffers) {
 		SetRotationEulerAngles(rot, (bufferIndex + 1) % 2, false);
@@ -269,7 +256,6 @@ void Transform::SetLocalRotationEulerAngles(const DirectX::XMFLOAT3& rot, const 
 	m_states[bufferIndex].rotationQuaternion = DirectX::XMQuaternionRotationRollPitchYaw(rot.x, rot.y, rot.z);
 
 	m_states[bufferIndex].rotationDirty = true;
-	CleanDirty(bufferIndex, false);
 
 	if (bothBuffers) {
 		SetLocalRotationEulerAngles(rot, (bufferIndex + 1) % 2, false);
@@ -289,7 +275,6 @@ void Transform::Translate(const DirectX::XMFLOAT3& translation, const int& buffe
 	m_states[bufferIndex].position = DirectX::XMVectorAdd(m_states[bufferIndex].position, DirectX::XMLoadFloat3(&translation));
 
 	m_states[bufferIndex].rotationDirty = true;
-	CleanDirty(bufferIndex, false);
 
 	if (bothBuffers) {
 		Translate(translation, (bufferIndex + 1) % 2, false);
@@ -301,7 +286,6 @@ void Transform::Translate(const DirectX::XMVECTOR& translation, const int& buffe
 	m_states[bufferIndex].position = DirectX::XMVectorAdd(m_states[bufferIndex].position, translation);
 
 	m_states[bufferIndex].positionScaleDirty = true;
-	CleanDirty(bufferIndex, false);
 
 	if (bothBuffers) {
 		Translate(translation, (bufferIndex + 1) % 2, false);
@@ -314,7 +298,6 @@ void Transform::RotateEulerAngles(const DirectX::XMFLOAT3& rotation, const int& 
 	m_states[bufferIndex].rotationQuaternion = DirectX::XMQuaternionMultiply(m_states[bufferIndex].rotationQuaternion, rot);
 
 	m_states[bufferIndex].rotationDirty = true;
-	CleanDirty(bufferIndex, false);
 
 	if (bothBuffers) {
 		RotateEulerAngles(rotation, (bufferIndex + 1) % 2, false);
@@ -324,9 +307,8 @@ void Transform::RotateEulerAngles(const DirectX::XMFLOAT3& rotation, const int& 
 void Transform::RotateQuaternion(const DirectX::XMVECTOR& rotation, const int& bufferIndex, const bool& bothBuffers) {
 	if (isStatic) return;
 	m_states[bufferIndex].rotationQuaternion = DirectX::XMQuaternionMultiply(m_states[bufferIndex].rotationQuaternion, rotation);
-	
+
 	m_states[bufferIndex].rotationDirty = true;
-	CleanDirty(bufferIndex, false);
 
 	if (bothBuffers) {
 		RotateQuaternion(rotation, (bufferIndex + 1) % 2, false);
@@ -341,9 +323,8 @@ void Transform::LookAt(const DirectX::XMVECTOR& target, const DirectX::XMVECTOR&
 	DirectX::XMMATRIX view = DirectX::XMMatrixLookToLH(m_states[bufferIndex].position, forward, newUp);
 	DirectX::XMMATRIX worldRot = DirectX::XMMatrixInverse(nullptr, view);
 	m_states[bufferIndex].rotationQuaternion = DirectX::XMQuaternionRotationMatrix(worldRot);
-	
+
 	m_states[bufferIndex].rotationDirty = true;
-	CleanDirty(bufferIndex, false);
 
 	if (bothBuffers) {
 		LookAt(target, up, (bufferIndex + 1) % 2, false);

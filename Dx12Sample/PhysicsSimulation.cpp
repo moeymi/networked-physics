@@ -28,6 +28,9 @@ using namespace DirectX;
 #endif
 #include "BallToWallScenario.h"
 #include "BallToCapsuleScenario.h"
+#include "ScenarioA.h"
+#include "ScenarioB.h"
+#include <omp.h>
 
 // Clamp a value between a min and max range.
 template<typename T>
@@ -93,6 +96,10 @@ PhysicsSimulation::~PhysicsSimulation()
 
 bool PhysicsSimulation::LoadContent()
 {
+
+    omp_set_dynamic(0);     // Explicitly disable dynamic teams
+    omp_set_num_threads(4); // Use 4 threads for all consecutive parallel regions
+
     auto device = Application::Get().GetDevice();
     auto commandQueue = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY);
     auto commandList = commandQueue->GetCommandList();
@@ -100,8 +107,8 @@ bool PhysicsSimulation::LoadContent()
     m_Scenarios.push_back(std::make_unique<BallToCapsuleScenario>());
     m_Scenarios.push_back(std::make_unique<BallToWallScenario>());
 	m_Scenarios.push_back(std::make_unique<BallToBallScenario>());
-	m_Scenarios.push_back(std::make_unique<ConcreteScenarioA>());
-    m_Scenarios.push_back(std::make_unique<ConcreteScenarioB>());
+	m_Scenarios.push_back(std::make_unique<ScenarioA>());
+    m_Scenarios.push_back(std::make_unique<ScenarioB>());
     m_CurrentScenario = 3u;
 
     for (auto& scenario : m_Scenarios)
@@ -198,8 +205,8 @@ bool PhysicsSimulation::LoadContent()
     D3D12_CLEAR_VALUE colorClearValue;
     colorClearValue.Format = colorDesc.Format;
     colorClearValue.Color[0] = 0.4f;
-    colorClearValue.Color[1] = 0.6f;
-    colorClearValue.Color[2] = 0.9f;
+    colorClearValue.Color[1] = 0.2f;
+    colorClearValue.Color[2] = 0.4f;
     colorClearValue.Color[3] = 1.0f;
 
     auto colorTexture = Texture(colorDesc, &colorClearValue, TextureUsage::RenderTarget, L"Color Render Target");
@@ -386,7 +393,7 @@ void PhysicsSimulation::OnRender(RenderEventArgs& e)
 
     // Clear the render targets.
     {
-	    constexpr float clearColor[] = { 0.4f, 0.6f, 0.9f, 1.0f };
+	    constexpr float clearColor[] = { 0.2f, 0.1f, 0.4f, 1.0f };
         commandList->ClearTexture(m_RenderTarget.GetTexture(AttachmentPoint::Color0), clearColor);
         commandList->ClearDepthStencilTexture(m_RenderTarget.GetTexture(AttachmentPoint::DepthStencil), D3D12_CLEAR_FLAG_DEPTH);
     }
@@ -603,7 +610,7 @@ void PhysicsSimulation::OnGUI()
         if (ImGui::BeginMenu("View"))
         {
             ImGui::MenuItem("ImGui Demo", nullptr, &showDemoWindow);
-            ImGui::MenuItem("Tonemapping", nullptr, &showOptions);
+            ImGui::MenuItem("Physics Options", nullptr, &showOptions);
 
             ImGui::EndMenu();
         }
@@ -648,12 +655,47 @@ void PhysicsSimulation::OnGUI()
 
     if (showOptions)
     {
-        ImGui::Begin("Tonemapping", &showOptions);
+        ImGui::Begin("Physics Control", &showOptions);
         {
-        }
+            // Gravity Control
+			auto& engine = m_Scenarios[m_CurrentScenario]->getPhysicsEngine();
+			float gravity = engine.getGravity();
+			bool gravityEnabled = engine.isGravityEnabled();
+            bool reversed = gravity < 0;
 
-        if (ImGui::Button("Reset to Defaults"))
-        {
+			ImGui::Text("Gravity");
+			ImGui::SameLine();
+            if (ImGui::Checkbox("##Gravity Enabled", &gravityEnabled)) {
+                engine.toggleGravity(gravityEnabled);
+            }
+            ImGui::SameLine();
+            ImGui::Text("Reversed");
+
+			ImGui::SameLine();
+            if (ImGui::Checkbox("##Gravity Reversed", &reversed)) {
+				gravity = -gravity;
+				engine.setGravity(gravity);
+            }
+            if (ImGui::SliderFloat("##Gravity", &gravity, 0.0f, 20.0f, "%.5f m/s^2")) {
+                engine.setGravity(gravity);
+            }
+			
+			ImGui::SameLine();
+			ShowHelpMarker("Gravity acceleration in m/s^2");
+			// Animate lights
+			ImGui::Checkbox("Animate Lights", &m_AnimateLights);
+			ImGui::SameLine();
+			ShowHelpMarker("Animate the lights");
+			// Reset camera
+			if (ImGui::Button("Reset Camera"))
+			{
+				m_Camera.set_Translation(m_pAlignedCameraData->m_InitialCamPos);
+				m_Camera.set_Rotation(m_pAlignedCameraData->m_InitialCamRot);
+				m_Pitch = 0.0f;
+				m_Yaw = 0.0f;
+			}
+
+
         }
 
         ImGui::End();

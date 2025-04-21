@@ -27,14 +27,12 @@ void BallToBallScenario::onLoad(CommandList& commandList)
 	particle1->setVelocity({ 3, 0, 0, 0 }, 1);
 	particle1->setAngularVelocity({ 0, 0, 5, 0 }, 0);
 	particle1->setAngularVelocity({ 0, 0, 5, 0 }, 1);
-	//particle->applyConstantForce({ 0.0f, -9.81f * particle->getMass(), 0.0f, 0.0f });
 
 	auto particle2 = std::make_shared<PhysicsObject>(m_SphereMesh, m_customTexture);
 	particle2->setCollider(sphereCollider);
 	particle2->setMaterial(material);
 	particle2->onLoad(commandList);
 	particle2->getTransform().SetPosition({ 3, 0, 2, 1 }, 0, true);
-	//particle->applyConstantForce({ 0.0f, -9.81f * particle->getMass(), 0.0f, 0.0f });
 
 	m_physicsObjects.push_back(particle1);
 	m_physicsEngine.addBody(particle1);

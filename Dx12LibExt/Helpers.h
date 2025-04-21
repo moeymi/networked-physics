@@ -35,7 +35,6 @@
 #include <iostream>
 #include <sstream>
 #include <algorithm>
-#include "Transform.h"
 
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h> // For HRESULT

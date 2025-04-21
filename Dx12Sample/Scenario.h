@@ -1,8 +1,9 @@
 #pragma once
 #include <memory>
 #include <vector>
-#include "PhysicsObject.h"
+#include <random>
 #include "Texture.h"
+#include "PhysicsObject.h"
 #include "PhysicsEngine.h"
 
 class Scenario
@@ -10,6 +11,8 @@ class Scenario
 protected:
 	std::vector<std::shared_ptr<PhysicsObject>> m_physicsObjects;
 	PhysicsEngine m_physicsEngine;
+
+	static std::mt19937 m_randomEngine;
 
 public:
 	Scenario() = default;
@@ -21,40 +24,5 @@ public:
 	void virtual onRender(CommandList& commandList, const DirectX::XMMATRIX& viewMatrix, const DirectX::XMMATRIX& viewProjectionMatrix) = 0;
 
 	std::vector<std::shared_ptr<PhysicsObject>>& getPhysicsObjects() { return m_physicsObjects; }
-};
-
-class ConcreteScenarioA : public Scenario
-{
-	std::shared_ptr<Mesh> m_SphereMesh;
-	std::shared_ptr<Mesh> m_BoxMesh;
-	std::shared_ptr<Mesh> m_PlaneMesh;
-	std::shared_ptr <Texture> m_customTexture;
-	std::shared_ptr <Texture> m_defaultTexture;
-
-public:
-	ConcreteScenarioA() = default;
-	virtual ~ConcreteScenarioA() override = default;
-
-	void onLoad(CommandList& commandList) override;
-	void onUpdate(const float& dt) override;
-	void onUnload(CommandList& commandList) override;
-	void onRender(CommandList& commandList, const DirectX::XMMATRIX& viewMatrix, const DirectX::XMMATRIX& viewProjectionMatrix) override;
-};
-
-class ConcreteScenarioB : public Scenario
-{
-	std::shared_ptr<Mesh> m_SphereMesh;
-	std::shared_ptr<Mesh> m_PlaneMesh;
-	std::shared_ptr<Mesh> m_BoxMesh;
-	std::shared_ptr <Texture> m_customTexture;
-	std::shared_ptr <Texture> m_defaultTexture;
-
-public:
-	ConcreteScenarioB() = default;
-	virtual ~ConcreteScenarioB() override = default;
-
-	void onLoad(CommandList& commandList) override;
-	void onUpdate(const float& dt) override;
-	void onUnload(CommandList& commandList) override;
-	void onRender(CommandList& commandList, const DirectX::XMMATRIX& viewMatrix, const DirectX::XMMATRIX& viewProjectionMatrix) override;
+	PhysicsEngine& getPhysicsEngine() { return m_physicsEngine; }
 };

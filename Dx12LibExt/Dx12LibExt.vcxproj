@@ -160,7 +160,6 @@
     <ClCompile Include="RootSignature.cpp" />
     <ClCompile Include="StructuredBuffer.cpp" />
     <ClCompile Include="Texture.cpp" />
-    <ClCompile Include="Transform.cpp" />
     <ClCompile Include="UploadBuffer.cpp" />
     <ClCompile Include="VertexBuffer.cpp" />
     <ClCompile Include="Window.cpp" />
@@ -204,7 +203,6 @@
     <ClInclude Include="Texture.h" />
     <ClInclude Include="TextureUsage.h" />
     <ClInclude Include="ThreadSafeQueue.h" />
-    <ClInclude Include="Transform.h" />
     <ClInclude Include="UploadBuffer.h" />
     <ClInclude Include="VertexBuffer.h" />
     <ClInclude Include="Window.h" />

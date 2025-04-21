@@ -176,7 +176,10 @@
     <ClCompile Include="PhysicsObject.cpp" />
     <ClCompile Include="PhysicsSimulation.cpp" />
     <ClCompile Include="Scenario.cpp" />
+    <ClCompile Include="ScenarioA.cpp" />
+    <ClCompile Include="ScenarioB.cpp" />
     <ClCompile Include="SphereCollider.cpp" />
+    <ClCompile Include="Transform.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="BallToBallScenario.h" />
@@ -192,7 +195,12 @@
     <ClInclude Include="PhysicsObject.h" />
     <ClInclude Include="PhysicsSimulation.h" />
     <ClInclude Include="Scenario.h" />
+    <ClInclude Include="ScenarioA.h" />
+    <ClInclude Include="ScenarioB.h" />
     <ClInclude Include="SphereCollider.h" />
+    <ClInclude Include="ThreeByThreeCubeScenario.h" />
+    <ClInclude Include="Transform.h" />
+    <ClInclude Include="TransformHelpers.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

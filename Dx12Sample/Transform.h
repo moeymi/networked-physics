@@ -6,10 +6,10 @@
 
 class Transform final {
 private:
-	struct State {
+    struct State {
         DirectX::XMVECTOR position = { 0, 0, 0, 0 };
-		DirectX::XMVECTOR rotationQuaternion = DirectX::XMQuaternionIdentity();;
-		DirectX::XMVECTOR scale = { 1.0f, 1.0f, 1.0f };;
+        DirectX::XMVECTOR rotationQuaternion = DirectX::XMQuaternionIdentity();;
+        DirectX::XMVECTOR scale = { 1.0f, 1.0f, 1.0f };;
 
         DirectX::XMVECTOR lookDirection = { 0.0f, 0.0f, 1.0f, 0.0f };
         DirectX::XMVECTOR upDirection = { 0.0f, 1.0f, 0.0f, 0.0f };
@@ -18,7 +18,7 @@ private:
 
         bool positionScaleDirty = true;
         bool rotationDirty = true;
-	} m_states[2];
+    } m_states[2];
 
     std::shared_ptr<Transform> parent = nullptr;
 
@@ -27,7 +27,7 @@ private:
     // Listeners for dirtifying changes
     std::vector<std::function<void()>> dirtyListeners;
 
-	void CalculateWorldMatrix(const int& bufferIndex, const bool& bothBuffers);
+    void CalculateWorldMatrix(const int& bufferIndex, const bool& bothBuffers);
     void CalculateNewLookDirection(const int& bufferIndex, const bool& bothBuffers);
     void CleanDirty(const int& bufferIndex, const bool& bothBuffers);
 

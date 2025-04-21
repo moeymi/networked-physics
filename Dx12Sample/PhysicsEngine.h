@@ -1,13 +1,14 @@
 #pragma once
 #include "CollisionSystem.h"
+#include "ThreadedSystem.h"
 #include <shared_mutex>
 
-class PhysicsEngine {
+class PhysicsEngine : public ThreadedSystem {
 private:
     std::vector<std::shared_ptr<PhysicsObject>> m_bodies;
     CollisionSystem m_collisionSystem;
 
-    std::map<std::pair<PhysicsObject*, PhysicsObject*>, CollisionManifold> m_contactManifolds;
+    std::unordered_map <std::pair<PhysicsObject*, PhysicsObject*>, CollisionManifold> m_contactManifolds;
 
     static constexpr int m_velocityIterations = 8;
     static constexpr int m_positionIterations = 4;
@@ -16,9 +17,18 @@ private:
     static constexpr float m_kPenetrationSlop = 0.001f;  // 1 mm of allowed overlap
     static constexpr float m_kBaumgarte = 0.2f;    // positional stabilization factor
 
+	static float m_gravity; // Gravity vector
+	static bool m_gravityEnabled; // Gravity enabled flag
+
 public:
     void onUpdate(float deltaTime);
     void addBody(std::shared_ptr<PhysicsObject> body);
+
+    void setGravity(const float& gravity);
+    float getGravity() const;
+    void toggleGravity(const bool& toggle);
+    bool isGravityEnabled() const;
+
 
 private:
     std::vector<std::pair<PhysicsObject*, PhysicsObject*>> broadPhase();

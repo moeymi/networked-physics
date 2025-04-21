@@ -3,10 +3,15 @@
 #include <string>
 #include <omp.h>
 
+float PhysicsEngine::m_gravity = 9.81f;
+bool PhysicsEngine::m_gravityEnabled = true;
+
 void PhysicsEngine::onUpdate(float deltaTime) {
 	for (auto body : m_bodies) {
         body->swapStates();
 	}
+
+    #pragma omp parallel for
     for (int i = 0; i < m_bodies.size(); i++) {
         auto body = m_bodies[i].get();
         if (!body->isStatic()) {
@@ -19,6 +24,39 @@ void PhysicsEngine::onUpdate(float deltaTime) {
 
 void PhysicsEngine::addBody(std::shared_ptr<PhysicsObject> body) {
 	m_bodies.push_back(body);
+	if (m_gravityEnabled) {
+		body->applyConstantForce({ 0.0f, -m_gravity * body->getMass(), 0.0f, 0.0f });
+	}
+}
+
+void PhysicsEngine::setGravity(const float& gravity) {
+	m_gravity = gravity;
+	if (!m_gravityEnabled) return;
+	for (auto body : m_bodies) {
+        body->resetConstantForces();
+		body->applyConstantForce({ 0.0f, -m_gravity * body->getMass(), 0.0f, 0.0f });
+	}
+}
+
+float PhysicsEngine::getGravity() const {
+	return m_gravity;
+}
+
+void PhysicsEngine::toggleGravity(const bool& toggle) {
+	if (m_gravityEnabled == toggle) return;
+	m_gravityEnabled = toggle;
+	if (toggle) {
+		setGravity(m_gravity);
+	}
+	else {
+		for (auto& body : m_bodies) {
+			body->resetConstantForces();
+		}
+	}
+}
+
+bool PhysicsEngine::isGravityEnabled() const {
+	return m_gravityEnabled;
 }
 
 void PhysicsEngine::detectAndResolveCollisions(const float& deltaTime) {
@@ -34,65 +72,54 @@ void PhysicsEngine::detectAndResolveCollisions(const float& deltaTime) {
         PhysicsObject* objA = pair.first;
         PhysicsObject* objB = pair.second;
 
-        // Skip pairs of static objects early if desired
-        // if (objA->isStatic() && objB->isStatic()) continue;
+        if (objA->isStatic() && objB->isStatic()) continue;
 
-        if (auto newManifoldOpt = m_collisionSystem.checkCollision(objA, objB)) { // Assuming checkCollision returns std::optional<CollisionManifold>
-            CollisionManifold newManifold = *newManifoldOpt; // Get the manifold value
+        if (auto newManifoldOpt = m_collisionSystem.checkCollision(objA, objB)) {
+            CollisionManifold newManifold = *newManifoldOpt;
             auto pairKey = makePairKey(objA, objB);
 
             auto it = m_contactManifolds.find(pairKey);
 
             if (it != m_contactManifolds.end()) {
-                // Manifold existed last frame, attempt to transfer accumulated impulses (Warm Starting)
                 CollisionManifold& oldManifold = it->second;
-                matchAndTransferImpulses(newManifold, oldManifold); // Use a proper matching function
-
-                // *** Example Simple Transfer (replace with matchAndTransferImpulses) ***
+                matchAndTransferImpulses(newManifold, oldManifold);
                 
                 if (!newManifold.contacts.empty() && !oldManifold.contacts.empty()) {
-                    // WARNING: This assumes only one contact and it corresponds.
-                    // A real implementation needs contact matching based on position/features.
                     newManifold.contacts[0].accumulatedNormalImpulse = oldManifold.contacts[0].accumulatedNormalImpulse;
                     newManifold.contacts[0].accumulatedFrictionImpulse = oldManifold.contacts[0].accumulatedFrictionImpulse;
-                    // --> TRANSFER ANGULAR IMPULSE <--
                     newManifold.contacts[0].accumulatedAngularFrictionImpulse = oldManifold.contacts[0].accumulatedAngularFrictionImpulse;
                 }
                 
             }
-            // Store the new manifold (with potentially transferred impulses) for this frame
-            currentFrameManifolds[pairKey] = std::move(newManifold); // Move constructed manifold
+            currentFrameManifolds[pairKey] = std::move(newManifold);
         }
     }
 
-    // Update the persistent manifolds map for the next frame
     m_contactManifolds = std::move(currentFrameManifolds);
 
-    // --- PRE-STEP ---
-    // Compute each contact's effective masses,bias, and warm-start impulses
-    // Pass the persistent map to the prestep function
     prestepCollisionManifolds(m_contactManifolds, deltaTime);
 
-    // ITERATIVE VELOCITY SOLVE
     for (int iter = 0; iter < m_velocityIterations; ++iter) {
-        // Iterate over the manifolds in the persistent map
-        for (auto& pair : m_contactManifolds) {
-            auto& manifold = pair.second; // Get the manifold by reference
+
+        #pragma omp parallel for
+        for (int i = 0; i < m_contactManifolds.size(); i++) {
+			auto pair = m_contactManifolds.begin();
+			std::advance(pair, i);
+            auto& manifold = pair->second;
             if (manifold.contacts.empty()) continue;
-            // This now runs one "Gauss–Seidel" pass over all contacts:
             resolveCollisionVelocity(manifold, iter);
         }
     }
 
-    // ITERATIVE POSITION SOLVE (split-impulse style, e.g. 4 passes):
     for (int i = 0; i < m_positionIterations; ++i) {
-        // Iterate over the manifolds in the persistent map
-        for (auto& pair : m_contactManifolds) {
-            auto& manifold = pair.second; // Get the manifold by reference
+        #pragma omp parallel for
+		for (int i = 0; i < m_contactManifolds.size(); i++) {
+            // Output omp thread id
+			auto pair = m_contactManifolds.begin();
+			std::advance(pair, i);
+            auto& manifold = pair->second;
             if (manifold.contacts.empty()) continue;
-            // Positional correction is usually applied per contact point
             for (auto& contact : manifold.contacts) {
-                // Pass the individual contact and objects
                 positionalCorrection(contact, manifold.objectA, manifold.objectB);
             }
         }
@@ -165,13 +192,6 @@ void PhysicsEngine::prestepCollisionManifolds(std::map<std::pair<PhysicsObject*,
 
             float penetrationErr = max(c.penetration - m_kPenetrationSlop, 0.0f);
             c.bias = (m_kBaumgarte / dt) * penetrationErr;
-
-            XMVECTOR Pn = XMVectorScale(n, c.accumulatedNormalImpulse);
-            XMVECTOR Pt = XMVectorScale(c.tangent, c.accumulatedFrictionImpulse);
-            XMVECTOR P = XMVectorAdd(Pn, Pt);
-
-            //A->applyImpulseAtPosition(XMVectorNegate(P), c.position);
-            //B->applyImpulseAtPosition(P, c.position);
         }
     }
 }
@@ -329,7 +349,7 @@ void PhysicsEngine::positionalCorrection(const ContactPoint& contact, PhysicsObj
 
     if (a->isStatic() && b->isStatic()) return;
 
-    const float percent = .3f;
+    const float percent = .25f;
     const float slop = 0.001f;
 
     const float penetrationDepth = contact.penetration - slop;
