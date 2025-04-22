@@ -22,7 +22,10 @@ void PhysicsEngine::onUpdate(float deltaTime) {
     detectAndResolveCollisions(deltaTime);
 }
 
-void PhysicsEngine::addBody(std::shared_ptr<PhysicsObject> body) {
+void PhysicsEngine::addBody(std::shared_ptr<PhysicsObject> body) {/*
+    if (m_running) {
+		throw std::runtime_error("Cannot add bodies while the physics engine is running.");
+    }*/
 	m_bodies.push_back(body);
 	if (m_gravityEnabled) {
 		body->applyConstantForce({ 0.0f, -m_gravity * body->getMass(), 0.0f, 0.0f });

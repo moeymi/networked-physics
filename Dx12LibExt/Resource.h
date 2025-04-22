@@ -35,6 +35,7 @@
 #include <wrl.h>
 
 #include <string>
+#include <memory>
 
 class Resource
 {

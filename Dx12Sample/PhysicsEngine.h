@@ -3,12 +3,12 @@
 #include "ThreadedSystem.h"
 #include <shared_mutex>
 
-class PhysicsEngine : public ThreadedSystem {
+class PhysicsEngine {
 private:
     std::vector<std::shared_ptr<PhysicsObject>> m_bodies;
     CollisionSystem m_collisionSystem;
 
-    std::unordered_map <std::pair<PhysicsObject*, PhysicsObject*>, CollisionManifold> m_contactManifolds;
+    std::map <std::pair<PhysicsObject*, PhysicsObject*>, CollisionManifold> m_contactManifolds;
 
     static constexpr int m_velocityIterations = 8;
     static constexpr int m_positionIterations = 4;
@@ -21,6 +21,7 @@ private:
 	static bool m_gravityEnabled; // Gravity enabled flag
 
 public:
+	PhysicsEngine() = default;
     void onUpdate(float deltaTime);
     void addBody(std::shared_ptr<PhysicsObject> body);
 

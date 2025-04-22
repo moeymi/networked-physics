@@ -44,6 +44,7 @@
 #include <DirectXMath.h>
 
 #include "Scenario.h"
+#include "RenderingEngine.h"
 
 struct Mat
 {
@@ -138,30 +139,7 @@ private:
     std::vector<std::unique_ptr<Scenario>> m_Scenarios;
     unsigned int m_CurrentScenario = 0u;
 
-    // Some geometry to render.
-    std::unique_ptr<Mesh> m_PlaneMesh;
-
-    Texture m_DefaultTexture;
-
-    // Render target
-    RenderTarget m_RenderTarget;
-
-    // Root signature
-    RootSignature m_RootSignature;
-
-    // Pipeline state object.
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> m_PipelineState;
-
-    D3D12_VIEWPORT m_Viewport;
-    D3D12_RECT m_ScissorRect;
-
-    Camera m_Camera;
-    struct alignas(16) CameraData
-    {
-        DirectX::XMVECTOR m_InitialCamPos;
-        DirectX::XMVECTOR m_InitialCamRot;
-    };
-    CameraData* m_pAlignedCameraData;
+	RenderingEngine m_RenderingEngine;
 
     // Camera controller
     float m_Forward;
@@ -174,17 +152,11 @@ private:
     float m_Pitch;
     float m_Yaw;
 
-    // Rotate the lights in a circle.
-    bool m_AnimateLights;
     // Set to true if the Shift key is pressed.
     bool m_Shift;
 
     int m_Width;
     int m_Height;
-
-    // Define some lights.
-    std::vector<PointLight> m_PointLights;
-    std::vector<SpotLight> m_SpotLights;
 
 	void ChangeScenario(int index);
 };
