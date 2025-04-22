@@ -38,15 +38,7 @@ void BallToWallScenario::onLoad(CommandList& commandList)
 	wall->setStatic(true);
 
 	m_physicsObjects.push_back(particle1);
-	m_physicsEngine.addBody(particle1);
 	m_physicsObjects.push_back(wall);
-	m_physicsEngine.addBody(wall);
-}
-
-void BallToWallScenario::onUpdate(const float& dt)
-{
-	// Update physics engine
-	m_physicsEngine.onUpdate(dt);
 }
 
 void BallToWallScenario::onUnload(CommandList& commandList)

@@ -35,15 +35,7 @@ void BallToCapsuleScenario::onLoad(CommandList& commandList)
 	capsule->getTransform().SetPosition({ 1.5, -0.5, 1, 1 }, 0, true);
 
 	m_physicsObjects.push_back(particle);
-	m_physicsEngine.addBody(particle);
 	m_physicsObjects.push_back(capsule);
-	m_physicsEngine.addBody(capsule);
-}
-
-void BallToCapsuleScenario::onUpdate(const float& dt)
-{
-	// Update physics engine
-	m_physicsEngine.onUpdate(dt);
 }
 
 void BallToCapsuleScenario::onUnload(CommandList& commandList)

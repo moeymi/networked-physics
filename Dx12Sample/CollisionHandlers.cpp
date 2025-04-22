@@ -204,5 +204,6 @@ std::optional<CollisionManifold> CollisionHandlers::SphereVsCapsule(PhysicsObjec
 }
 
 std::optional<CollisionManifold> CollisionHandlers::BoxVsBox(PhysicsObject* a, PhysicsObject* b, const bool& flip) {
+	OutputDebugStringW(L"BoxVsBox collision detection not implemented yet.\n");
     return std::nullopt;
 }

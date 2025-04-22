@@ -35,16 +35,9 @@ void BallToBallScenario::onLoad(CommandList& commandList)
 	particle2->getTransform().SetPosition({ 3, 0, 2, 1 }, 0, true);
 
 	m_physicsObjects.push_back(particle1);
-	m_physicsEngine.addBody(particle1);
 	m_physicsObjects.push_back(particle2);
-	m_physicsEngine.addBody(particle2);
 }
 
-void BallToBallScenario::onUpdate(const float& dt)
-{
-	// Update physics engine
-	m_physicsEngine.onUpdate(dt);
-}
 
 void BallToBallScenario::onUnload(CommandList& commandList)
 {

@@ -74,6 +74,7 @@ PhysicsSimulation::PhysicsSimulation(const std::wstring& name, int width, int he
     , m_Height(0)
 {
 
+    m_PhysicsEngine.setAffinity(1); // Core 1
 }
 
 PhysicsSimulation::~PhysicsSimulation()
@@ -85,21 +86,26 @@ bool PhysicsSimulation::LoadContent()
     auto device = Application::Get().GetDevice();
     auto commandQueue = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY);
     auto commandList = commandQueue->GetCommandList();
-    
+
+    m_Scenarios.push_back(std::make_unique<ScenarioA>());
+    m_Scenarios.push_back(std::make_unique<ScenarioB>());
     m_Scenarios.push_back(std::make_unique<BallToCapsuleScenario>());
     m_Scenarios.push_back(std::make_unique<BallToWallScenario>());
 	m_Scenarios.push_back(std::make_unique<BallToBallScenario>());
-	m_Scenarios.push_back(std::make_unique<ScenarioA>());
-    m_Scenarios.push_back(std::make_unique<ScenarioB>());
-    m_CurrentScenario = 3u;
+    m_CurrentScenario = 0u;
 
     for (auto& scenario : m_Scenarios)
     {
         scenario->onLoad(*commandList);
     }
-
+	for (auto& body : m_Scenarios[m_CurrentScenario]->getPhysicsObjects())
+	{
+		m_PhysicsEngine.addBody(body);
+	}
 	// Load the rendering engine.
 	m_RenderingEngine.LoadContent(commandQueue, commandList, device, m_pWindow.get());
+    m_PhysicsEngine.start();
+
 
     return true;
 }
@@ -118,6 +124,7 @@ void PhysicsSimulation::OnResize(ResizeEventArgs& e)
 
 void PhysicsSimulation::UnloadContent()
 {
+    m_PhysicsEngine.stop();
     auto device = Application::Get().GetDevice();
     auto commandQueue = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY);
     auto commandList = commandQueue->GetCommandList();
@@ -126,7 +133,6 @@ void PhysicsSimulation::UnloadContent()
     {
         scenario->onUnload(*commandList);
     }
-
     auto fenceValue = commandQueue->ExecuteCommandList(commandList);
     commandQueue->WaitForFenceValue(fenceValue);
 }
@@ -156,8 +162,6 @@ void PhysicsSimulation::OnUpdate(UpdateEventArgs& e)
         frameCount = 0;
         totalTime = 0.0;
     }
-
-	m_Scenarios[m_CurrentScenario]->onUpdate(e.ElapsedTime);
 
     // Update the camera.
     float speedMultipler = (m_Shift ? 16.0f : 4.0f);
@@ -412,15 +416,14 @@ void PhysicsSimulation::OnGUI()
         ImGui::Begin("Physics Control", &showOptions);
         {
             // Gravity Control
-			auto& engine = m_Scenarios[m_CurrentScenario]->getPhysicsEngine();
-			float gravity = engine.getGravity();
-			bool gravityEnabled = engine.isGravityEnabled();
+			float gravity = m_PhysicsEngine.getGravity();
+			bool gravityEnabled = m_PhysicsEngine.isGravityEnabled();
             bool reversed = gravity < 0;
 
 			ImGui::Text("Gravity");
 			ImGui::SameLine();
             if (ImGui::Checkbox("##Gravity Enabled", &gravityEnabled)) {
-                engine.toggleGravity(gravityEnabled);
+                m_PhysicsEngine.toggleGravity(gravityEnabled);
             }
             ImGui::SameLine();
             ImGui::Text("Reversed");
@@ -428,10 +431,10 @@ void PhysicsSimulation::OnGUI()
 			ImGui::SameLine();
             if (ImGui::Checkbox("##Gravity Reversed", &reversed)) {
 				gravity = -gravity;
-				engine.setGravity(gravity);
+                m_PhysicsEngine.setGravity(gravity);
             }
             if (ImGui::SliderFloat("##Gravity", &gravity, 0.0f, 20.0f, "%.5f m/s^2")) {
-                engine.setGravity(gravity);
+                m_PhysicsEngine.setGravity(gravity);
             }
 			
 			ImGui::SameLine();
@@ -443,8 +446,6 @@ void PhysicsSimulation::OnGUI()
 				m_Pitch = 0.0f;
 				m_Yaw = 0.0f;
 			}
-
-
         }
 
         ImGui::End();

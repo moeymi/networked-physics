@@ -10,7 +10,7 @@ protected:
     std::thread m_thread;
     std::atomic<bool> m_running { false };
     int m_coreAffinity = -1;
-    float m_fixedTimeStep = 0.005f;
+    float m_fixedTimeStep = 0.001f;
 
     virtual void onUpdate(float deltaTime) = 0;
 

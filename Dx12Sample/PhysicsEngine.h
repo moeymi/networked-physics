@@ -3,7 +3,7 @@
 #include "ThreadedSystem.h"
 #include <shared_mutex>
 
-class PhysicsEngine {
+class PhysicsEngine : public ThreadedSystem {
 private:
     std::vector<std::shared_ptr<PhysicsObject>> m_bodies;
     CollisionSystem m_collisionSystem;
@@ -17,21 +17,22 @@ private:
     static constexpr float m_kPenetrationSlop = 0.001f;  // 1 mm of allowed overlap
     static constexpr float m_kBaumgarte = 0.2f;    // positional stabilization factor
 
-	static float m_gravity; // Gravity vector
-	static bool m_gravityEnabled; // Gravity enabled flag
+	static float m_gravity;
+	static bool m_gravityEnabled;
 
 public:
 	PhysicsEngine() = default;
-    void onUpdate(float deltaTime);
     void addBody(std::shared_ptr<PhysicsObject> body);
 
-    void setGravity(const float& gravity);
-    float getGravity() const;
     void toggleGravity(const bool& toggle);
+    void setGravity(const float& gravity);
+
+    float getGravity() const;
     bool isGravityEnabled() const;
 
-
 private:
+    virtual void onUpdate(float deltaTime) override;
+
     std::vector<std::pair<PhysicsObject*, PhysicsObject*>> broadPhase();
 
     void detectAndResolveCollisions(const float& dt);

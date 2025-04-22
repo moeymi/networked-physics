@@ -97,7 +97,6 @@ void PhysicsEngine::detectAndResolveCollisions(const float& deltaTime) {
             currentFrameManifolds[pairKey] = std::move(newManifold);
         }
     }
-
     m_contactManifolds = std::move(currentFrameManifolds);
 
     prestepCollisionManifolds(m_contactManifolds, deltaTime);

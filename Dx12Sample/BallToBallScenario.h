@@ -12,7 +12,6 @@ public:
 	virtual ~BallToBallScenario() override = default;
 
 	void onLoad(CommandList& commandList) override;
-	void onUpdate(const float& dt) override;
 	void onUnload(CommandList& commandList) override;
 	void onRender(CommandList& commandList, const DirectX::XMMATRIX& viewMatrix, const DirectX::XMMATRIX& viewProjectionMatrix) override;
 };

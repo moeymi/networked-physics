@@ -77,13 +77,6 @@ void ScenarioB::onLoad(CommandList& commandList)
 	m_physicsObjects.push_back(plane5);
 	m_physicsObjects.push_back(plane6);
 
-	m_physicsEngine.addBody(plane1);
-	m_physicsEngine.addBody(plane2);
-	m_physicsEngine.addBody(plane3);
-	m_physicsEngine.addBody(plane4);
-	m_physicsEngine.addBody(plane5);
-	m_physicsEngine.addBody(plane6);
-
 	PhysicsMaterial material = {
 		0.5f, // static friction
 		0.5,
@@ -105,7 +98,6 @@ void ScenarioB::onLoad(CommandList& commandList)
 			box->setStatic(true);
 			box->getTransform().SetPosition({ x, y, z, 1 }, 0, true);
 			m_physicsObjects.push_back(box);
-			m_physicsEngine.addBody(box);
 		}
 		else {
 			// Create a sphere
@@ -119,17 +111,10 @@ void ScenarioB::onLoad(CommandList& commandList)
 			particle->onLoad(commandList);
 			particle->getTransform().SetPosition({ x, y, z, 1 }, 0, true);
 			m_physicsObjects.push_back(particle);
-			m_physicsEngine.addBody(particle);
 			//particle->setVelocity({ 5, 0, 0, 0 }, 0);
 			//particle->setVelocity({ 5, 0, 0, 0 }, 1);
 		}
 	}
-}
-
-void ScenarioB::onUpdate(const float& dt)
-{
-	// Update physics engine
-	m_physicsEngine.onUpdate(dt);
 }
 
 void ScenarioB::onUnload(CommandList& commandList)

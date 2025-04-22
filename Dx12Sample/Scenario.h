@@ -10,7 +10,6 @@ class Scenario
 {
 protected:
 	std::vector<std::shared_ptr<PhysicsObject>> m_physicsObjects;
-	PhysicsEngine m_physicsEngine;
 
 	static std::mt19937 m_randomEngine;
 
@@ -19,10 +18,8 @@ public:
 	virtual ~Scenario() = default;
 
 	void virtual onLoad(CommandList& commandList) = 0;
-	void virtual onUpdate(const float& dt) = 0;
 	void virtual onUnload(CommandList& commandList) = 0;
 	void virtual onRender(CommandList& commandList, const DirectX::XMMATRIX& viewMatrix, const DirectX::XMMATRIX& viewProjectionMatrix) = 0;
 
 	std::vector<std::shared_ptr<PhysicsObject>>& getPhysicsObjects() { return m_physicsObjects; }
-	PhysicsEngine& getPhysicsEngine() { return m_physicsEngine; }
 };

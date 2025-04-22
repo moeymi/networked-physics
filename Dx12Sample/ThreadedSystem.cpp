@@ -17,7 +17,7 @@ void ThreadedSystem::start() {
         m_thread = std::thread([this]() { run(); });
 
         if (m_coreAffinity >= 0) {
-            //ThreadAffinity::SetAffinity(m_thread, m_coreAffinity);
+            ThreadAffinity::SetAffinity(m_thread, m_coreAffinity);
         }
     }
 }
@@ -36,22 +36,31 @@ void ThreadedSystem::run() {
 
     while (m_running) {
         auto currentTime = clock::now();
-        float deltaTime = std::chrono::duration<float>(currentTime - previousTime).count();
+        float realDelta = std::chrono::duration<float>(currentTime - previousTime).count();
         previousTime = currentTime;
-        accumulatedTime += deltaTime;
+        accumulatedTime += realDelta;
 
-        // Cap accumulated time to prevent spiral of death
-        if (accumulatedTime > 0.2f) accumulatedTime = 0.2f;
+        // Critical spiral of death prevention
+        constexpr float maxAccumulation = 0.25f;  // Max 250ms buffer
+        if (accumulatedTime > maxAccumulation) {
+            accumulatedTime = maxAccumulation;
+        }
 
-        // Fixed timestep updates
+        // Fixed update loop
         while (accumulatedTime >= m_fixedTimeStep) {
-            onUpdate(m_fixedTimeStep);
+            onUpdate(m_fixedTimeStep);  // Physics simulation
             accumulatedTime -= m_fixedTimeStep;
         }
 
-        // Yield remaining time
-        std::this_thread::sleep_for(std::chrono::duration<float>(
-            m_fixedTimeStep - accumulatedTime
-        ));
+        // Calculate interpolation factor for rendering
+        const float interpolationFactor = accumulatedTime / m_fixedTimeStep;
+
+        // Optional: Sleep to maintain consistent frequency
+        const float remaining = m_fixedTimeStep - accumulatedTime;
+        if (remaining > 0) {
+            std::this_thread::sleep_for(
+                std::chrono::duration<float>(remaining)
+            );
+        }
     }
 }

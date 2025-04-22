@@ -140,6 +140,7 @@ private:
     unsigned int m_CurrentScenario = 0u;
 
 	RenderingEngine m_RenderingEngine;
+	PhysicsEngine m_PhysicsEngine;
 
     // Camera controller
     float m_Forward;

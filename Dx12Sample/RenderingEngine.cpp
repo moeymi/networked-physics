@@ -179,7 +179,6 @@ void RenderingEngine::Render(RenderCallback renderCallback, GUICallback guiCallb
     auto commandList = commandQueue->GetCommandList();
 
     // Clear targets
-
     commandList->ClearTexture(m_RenderTarget.GetTexture(AttachmentPoint::Color0),
         &m_ClearColor.x);
     commandList->ClearDepthStencilTexture(m_RenderTarget.GetTexture(AttachmentPoint::DepthStencil),
