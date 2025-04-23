@@ -11,6 +11,7 @@ protected:
     std::atomic<bool> m_running { false };
     int m_coreAffinity = -1;
     float m_fixedTimeStep = 0.001f;
+	float m_realTimeStep = 0.0f;
 
     virtual void onUpdate(float deltaTime) = 0;
 
@@ -24,6 +25,9 @@ public:
 
     void start();
     void stop();
+
+	float getFixedTimeStep() const;
+	float getRealTimeStep() const;
 
 protected:
     void run();

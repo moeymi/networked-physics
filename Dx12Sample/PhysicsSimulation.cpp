@@ -138,7 +138,8 @@ void PhysicsSimulation::UnloadContent()
 }
 
 namespace {
-    double g_FPS = 0.0;
+    double g_renderingFPS = 0.0;
+	double g_physicsFPS = 0.0;
 }
 
 void PhysicsSimulation::OnUpdate(UpdateEventArgs& e)
@@ -153,10 +154,15 @@ void PhysicsSimulation::OnUpdate(UpdateEventArgs& e)
 
     if (totalTime > 1.0)
     {
-        g_FPS = static_cast<double>(frameCount) / totalTime;
+        g_renderingFPS = static_cast<double>(frameCount) / totalTime;
+		g_physicsFPS = static_cast<double>(m_PhysicsEngine.getRealTimeStep());
+        if(g_physicsFPS > 0)
+		{
+			g_physicsFPS = 1.0 / g_physicsFPS;
+		}
 
         char buffer[512];
-        sprintf_s(buffer, "FPS: %f\n", g_FPS);
+        sprintf_s(buffer, "FPS: %f\n", g_renderingFPS);
         OutputDebugStringA(buffer);
 
         frameCount = 0;
@@ -189,7 +195,7 @@ void PhysicsSimulation::OnRender(RenderEventArgs& e)
     // Wrap the member function in a lambda to match the std::function signature.  
     auto renderCallback = [this](CommandList& commandList, const DirectX::XMMATRIX& viewMatrix, const DirectX::XMMATRIX& viewProjectionMatrix)
     {
-        m_Scenarios[m_CurrentScenario]->onRender(commandList, viewMatrix, viewProjectionMatrix);
+        //m_Scenarios[m_CurrentScenario]->onRender(commandList, viewMatrix, viewProjectionMatrix);
     };
 
     // Wrap OnGUI in a lambda to match the std::function signature.  
@@ -397,10 +403,15 @@ void PhysicsSimulation::OnGUI()
         }
         {
             char buffer[256];
-            sprintf_s(buffer, _countof(buffer), "FPS: %.2f (%.2f ms)  ", g_FPS, 1.0 / g_FPS * 1000.0);
+            sprintf_s(buffer, _countof(buffer), "FPS: %.2f (%.2f ms)  ", g_renderingFPS, 1.0 / g_renderingFPS * 1000.0);
             auto fpsTextSize = ImGui::CalcTextSize(buffer);
             ImGui::SameLine(ImGui::GetWindowWidth() - fpsTextSize.x);
             ImGui::Text(buffer);
+
+			sprintf_s(buffer, _countof(buffer), "Physics FPS: %.2f (%.2f ms)  ", g_physicsFPS, 1.0 / g_physicsFPS * 1000.0);
+			auto physicsFPSTextSize = ImGui::CalcTextSize(buffer);
+			ImGui::SameLine(ImGui::GetWindowWidth() - physicsFPSTextSize.x - fpsTextSize.x);
+			ImGui::Text(buffer);
         }
 
         ImGui::EndMainMenuBar();

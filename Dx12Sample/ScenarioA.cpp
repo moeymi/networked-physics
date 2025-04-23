@@ -6,7 +6,7 @@ void ScenarioA::onLoad(CommandList& commandList)
 {
 	std::normal_distribution<float> d{ 0.0, 3.0 };
 
-	m_SphereMesh = Mesh::CreateSphere(commandList, 1.0f, 16, false);
+	m_SphereMesh = Mesh::CreateSphere(commandList, 1.0f, 8, false);
 	m_PlaneMesh = Mesh::CreatePlane(commandList);
 	m_BoxMesh = Mesh::CreateCube(commandList, 1.0f, false);
 	m_customTexture = std::make_shared<Texture>();
@@ -82,7 +82,7 @@ void ScenarioA::onLoad(CommandList& commandList)
 		0.5,
 		0.7
 	};
-	for (int i = 0; i < 100; i++)
+	for (int i = 0; i < 500; i++)
 	{
 		int randNum = 0;// rand() % 2;
 		if (randNum) {
