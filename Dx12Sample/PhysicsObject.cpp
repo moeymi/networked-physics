@@ -7,8 +7,9 @@
 #include "Material.h"
 #include "PhysicsSimulation.h"
 
-PhysicsObject::PhysicsObject(std::shared_ptr<Mesh> mesh, std::shared_ptr<Texture> texture) 
-    : m_mesh(mesh),
+PhysicsObject::PhysicsObject(const UINT& id, std::shared_ptr<Mesh> mesh, std::shared_ptr<Texture> texture) 
+	: m_id(id),
+    m_mesh(mesh),
     m_texture(texture),
 	m_collider(nullptr),
 	m_mass(1.0f),
@@ -136,6 +137,7 @@ void PhysicsObject::updateInertiaTensor()
 	if (m_collider)
 	{
         XMMATRIX rotation = XMMatrixRotationQuaternion(m_transform.GetRotationQuaternion(0));
+
         m_inverseWorldInertiaTensor = XMMatrixMultiply(
             XMMatrixMultiply(rotation, m_collider->getInverseInertiaTensor(m_mass)),
             XMMatrixTranspose(rotation)

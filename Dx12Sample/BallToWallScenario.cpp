@@ -1,5 +1,6 @@
 #include "BallToWallScenario.h"
 
+#include "BoxCollider.h"
 #include "SphereCollider.h"
 
 

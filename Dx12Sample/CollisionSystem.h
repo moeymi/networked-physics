@@ -1,4 +1,5 @@
 #pragma once
+#include "pch.h"
 #include <memory>
 #include <unordered_map>
 #include <DirectXMath.h>

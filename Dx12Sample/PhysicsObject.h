@@ -1,4 +1,5 @@
 #pragma once
+#include "pch.h"
 #include "Mesh.h"
 #include "Transform.h"
 #include "Collider.h"
@@ -44,7 +45,7 @@ public:
 		RK4,
 		Verlet
 	};
-	PhysicsObject(std::shared_ptr<Mesh> mesh, std::shared_ptr<Texture> texture);
+	PhysicsObject(const UINT& id, std::shared_ptr<Mesh> mesh, std::shared_ptr<Texture> texture);
 	~PhysicsObject() = default;
 
 	void onLoad(CommandList& commandList);
@@ -86,6 +87,7 @@ public:
 
 
 private:
+	UINT m_id = 0u;
 	Transform m_transform;
 	std::shared_ptr<Mesh> m_mesh;
 	std::shared_ptr<Texture> m_texture;

@@ -14,6 +14,7 @@ int ThreadedSystem::getAffinity() const { return m_coreAffinity; }
 float ThreadedSystem::getFixedTimeStep() const { return m_fixedTimeStep; }
 float ThreadedSystem::getRealTimeStep() const { return m_realTimeStep; }
 
+bool ThreadedSystem::isRunning() const { return m_running; }
 
 void ThreadedSystem::start() {
     if (!m_running) {
@@ -41,11 +42,11 @@ void ThreadedSystem::run() {
     while (m_running) {
 
         auto currentTime = clock::now();
-        m_realTimeStep = std::chrono::duration<float>(currentTime - previousTime).count();
+        auto delta = std::chrono::duration<float>(currentTime - previousTime).count();
         previousTime = currentTime;
 
         // Accumulate the elapsed real time
-        accumulatedTime += m_realTimeStep;
+        accumulatedTime += delta;
 
         const float MAX_ACCUMULATED_TIME = 1; // cap at 1 second
         if (accumulatedTime > MAX_ACCUMULATED_TIME) {
@@ -55,9 +56,27 @@ void ThreadedSystem::run() {
         // --- Modified Physics Update Logic ---
         if (m_running && accumulatedTime >= m_fixedTimeStep) {
 
+            m_realTimeStep = delta;
             onUpdate(accumulatedTime);
+
+            {
+                std::lock_guard<std::mutex> lock(m_listenersMutex);
+                for (const auto& listener : m_updateListeners) {
+                    listener(delta);
+                }
+            }
 
             accumulatedTime = 0.0f;
         }
     }
+}
+
+void ThreadedSystem::addUpdateListener(std::function<void(float)> listener) {
+	std::lock_guard<std::mutex> lock(m_listenersMutex);
+	m_updateListeners.push_back(listener);
+}
+
+void ThreadedSystem::removeUpdateListeners() {
+	std::lock_guard<std::mutex> lock(m_listenersMutex);
+	m_updateListeners.clear();
 }

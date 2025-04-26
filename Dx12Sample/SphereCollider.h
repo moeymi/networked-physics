@@ -1,4 +1,6 @@
 #pragma once
+
+#include "pch.h"
 #include "Collider.h"
 
 class SphereCollider : public Collider

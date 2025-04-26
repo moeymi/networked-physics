@@ -1,4 +1,6 @@
 #pragma once
+
+#include "pch.h"
 #include "Scenario.h"
 
 class BallToBallScenario : public Scenario

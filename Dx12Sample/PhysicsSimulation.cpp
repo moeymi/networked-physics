@@ -104,6 +104,12 @@ bool PhysicsSimulation::LoadContent()
 	}
 	// Load the rendering engine.
 	m_RenderingEngine.LoadContent(commandQueue, commandList, device, m_pWindow.get());
+
+	// Add update shared simulation data callback.
+	m_PhysicsEngine.addUpdateListener([this](float deltaTime)
+	{
+		UpdateSharedSimulationData();
+	});
     m_PhysicsEngine.start();
 
 
@@ -195,7 +201,7 @@ void PhysicsSimulation::OnRender(RenderEventArgs& e)
     // Wrap the member function in a lambda to match the std::function signature.  
     auto renderCallback = [this](CommandList& commandList, const DirectX::XMMATRIX& viewMatrix, const DirectX::XMMATRIX& viewProjectionMatrix)
     {
-        //m_Scenarios[m_CurrentScenario]->onRender(commandList, viewMatrix, viewProjectionMatrix);
+        m_Scenarios[m_CurrentScenario]->onRender(commandList, viewMatrix, viewProjectionMatrix);
     };
 
     // Wrap OnGUI in a lambda to match the std::function signature.  
@@ -416,6 +422,19 @@ void PhysicsSimulation::OnGUI()
 
         ImGui::EndMainMenuBar();
     }
+    
+    // Show two buttons to either start client or host
+    if (!m_NetworkingEngine.isRunning()) {
+        
+        ImGui::Begin("Network Session");
+		if (ImGui::Button("Start Host")) {
+			m_NetworkingEngine.startHostSession(54000, &m_sharedSimulationData);
+		}
+        if (ImGui::Button("Join Client")) {
+            m_NetworkingEngine.joinClientSession("127.0.0.1", 54000, &m_sharedSimulationData);
+        }
+        ImGui::End();
+    }
 
     if (showDemoWindow)
     {
@@ -466,4 +485,22 @@ void PhysicsSimulation::OnGUI()
 void PhysicsSimulation::ChangeScenario(int index)
 {
 	m_CurrentScenario = index % m_Scenarios.size();
+}
+
+void PhysicsSimulation::UpdateSharedSimulationData()
+{
+	// Update the shared simulation data with the current state of the physics engine.
+    m_sharedSimulationData.objects.clear();
+	for (const auto& body : m_Scenarios[m_CurrentScenario]->getPhysicsObjects())
+	{
+        m_sharedSimulationData.objects.push_back({
+			body->getId(),
+			body->getType(),
+			body->getPosition(),
+			body->getRotation(),
+			body->getVelocity(),
+			body->getAngularVelocity(),
+			body->getColor(),
+        });
+	}
 }

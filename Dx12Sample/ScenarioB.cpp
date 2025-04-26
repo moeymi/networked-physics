@@ -1,4 +1,6 @@
 #include "ScenarioB.h"
+#include "BoxCollider.h"
+#include "SphereCollider.h"
 #include <algorithm>
 #include <random>
 

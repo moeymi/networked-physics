@@ -30,6 +30,7 @@
   *  @brief Tutorial 3 class.
   */
 
+#include "pch.h"
 #include "Camera.h"
 #include "Game.h"
 #include "IndexBuffer.h"
@@ -45,6 +46,8 @@
 
 #include "Scenario.h"
 #include "RenderingEngine.h"
+#include "PhysicsEngine.h"
+#include "NetworkEngine.h"
 
 struct Mat
 {
@@ -141,6 +144,9 @@ private:
 
 	RenderingEngine m_RenderingEngine;
 	PhysicsEngine m_PhysicsEngine;
+	NetworkEngine m_NetworkingEngine;
+
+    SharedSimulationData m_sharedSimulationData;
 
     // Camera controller
     float m_Forward;
@@ -160,4 +166,5 @@ private:
     int m_Height;
 
 	void ChangeScenario(int index);
+	void UpdateSharedSimulationData();
 };

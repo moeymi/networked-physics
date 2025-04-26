@@ -1,4 +1,6 @@
 #include "CollisionHandlers.h"
+#include "SphereCollider.h"
+#include "BoxCollider.h"
 #include "CapsuleCollider.h"
 #include <Helpers.h>
 
@@ -12,7 +14,12 @@ std::optional<CollisionManifold> CollisionHandlers::SphereVsSphere(PhysicsObject
      const DirectX::XMVECTOR delta = DirectX::XMVectorSubtract(posB, posA);
 
      const float distance = DirectX::XMVectorGetX(DirectX::XMVector3Length(delta));
-     const float radiusSum = sphereA->getRadius() + sphereB->getRadius();
+     DirectX::XMFLOAT3 scaleA;
+	 DirectX::XMFLOAT3 scaleB;
+
+	 DirectX::XMStoreFloat3(&scaleA, a->getTransform().GetScale(0));
+	 DirectX::XMStoreFloat3(&scaleB, b->getTransform().GetScale(0));
+     const float radiusSum = sphereA->getRadius() * max(max(scaleA.x, scaleA.y), scaleA.z) + sphereB->getRadius() * max(max(scaleB.x, scaleB.y), scaleB.z);
 
      if (distance >= radiusSum) return std::nullopt;
 
@@ -45,7 +52,11 @@ std::optional<CollisionManifold> CollisionHandlers::SphereVsBox(PhysicsObject* s
     const BoxCollider* box = static_cast<BoxCollider*>(boxObj->getCollider());
 
     const XMVECTOR sphereCenter = sphereObj->getTransform().GetPosition(1);
-    const float sphereRadius = sphere->getRadius();
+
+    DirectX::XMFLOAT3 sphereScale;
+    DirectX::XMStoreFloat3(&sphereScale, sphereObj->getTransform().GetScale(0));
+
+    const float sphereRadius = sphere->getRadius() * max(max(sphereScale.x, sphereScale.y), sphereScale.z);
     Transform& boxTransform = boxObj->getTransform();
 
     // Get closest point on box surface and check containment
@@ -127,7 +138,10 @@ std::optional<CollisionManifold> CollisionHandlers::SphereVsCapsule(PhysicsObjec
     Transform& capsuleTransform = capsuleObj->getTransform();
 
     // 2. Get Collision Properties
-    const float sphereRadius = sphereCollider->getRadius();
+    DirectX::XMFLOAT3 sphereScale;
+    DirectX::XMStoreFloat3(&sphereScale, sphereObj->getTransform().GetScale(0));
+
+    const float sphereRadius = sphereCollider->getRadius() * max(max(sphereScale.x, sphereScale.y), sphereScale.z);
     const float capsuleRadius = capsuleCollider->getRadius();
     const float radiusSum = sphereRadius + capsuleRadius;
 

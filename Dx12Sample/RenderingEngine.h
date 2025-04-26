@@ -1,4 +1,5 @@
 #pragma once
+#include "pch.h"
 #include "Camera.h"
 #include "Light.h"
 #include "RenderTarget.h"

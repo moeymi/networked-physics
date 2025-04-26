@@ -1,4 +1,5 @@
 #pragma once
+#include "pch.h"
 #include "Scenario.h"
 
 class ScenarioA : public Scenario

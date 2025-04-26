@@ -1,4 +1,6 @@
 #pragma once
+
+#include "pch.h"
 #include <memory>
 #include <DirectXMath.h>
 #include "Transform.h"

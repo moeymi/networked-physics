@@ -1,4 +1,5 @@
 #pragma once
+#include "pch.h"
 #include "Collider.h"
 class BoxCollider : public Collider
 {

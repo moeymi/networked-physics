@@ -31,6 +31,7 @@
  */
 
 
+#include "pch.h"
 #include <DirectXMath.h>
 
 // When performing transformations on the camera, 

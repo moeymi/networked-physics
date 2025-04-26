@@ -30,7 +30,9 @@
  *  @brief Light structures that use HLSL constant buffer padding rules.
  */
 
+#include "pch.h"
 #include <DirectXMath.h>
+#include "NetworkEngine.h"
 
 struct PointLight
 {

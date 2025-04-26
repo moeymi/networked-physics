@@ -1,10 +1,13 @@
 #include "ScenarioA.h"
+#include "BoxCollider.h"
+#include "SphereCollider.h"
+
 #include <algorithm>
 #include <random>
 
 void ScenarioA::onLoad(CommandList& commandList)
 {
-	std::normal_distribution<float> d{ 0.0, 3.0 };
+	std::normal_distribution<float> d{ 0.0, 1.0 };
 
 	m_SphereMesh = Mesh::CreateSphere(commandList, 1.0f, 8, false);
 	m_PlaneMesh = Mesh::CreatePlane(commandList);
@@ -16,7 +19,7 @@ void ScenarioA::onLoad(CommandList& commandList)
 	commandList.LoadTextureFromFile(*m_defaultTexture, L"Assets/Textures/DefaultWhite.bmp");
 
 	// Create 6 planes to make a box
-	auto planeCollider = std::make_shared<BoxCollider>(DirectX::XMVectorSet(10.0f, 0.01f, 10.0f, 0.0f));
+	auto planeCollider = std::make_shared<BoxCollider>(DirectX::XMVectorSet(0.5, 0.01f, 0.5, 0.0f));
 
 	auto plane1 = std::make_shared<PhysicsObject>(m_PlaneMesh, m_defaultTexture);
 	auto plane2 = std::make_shared<PhysicsObject>(m_PlaneMesh, m_defaultTexture);
@@ -39,28 +42,28 @@ void ScenarioA::onLoad(CommandList& commandList)
 	plane5->setCollider(planeCollider);
 	plane6->setCollider(planeCollider);
 
-	plane1->getTransform().SetPosition({ 0.0f, -10.0f, 0.0f, 1 }, 0, true);
-	plane1->getTransform().SetScale({ 20.0f, 1.0f, 20.0f, 1 }, 0, true);
+	plane1->getTransform().SetPosition({ 0.0f, -1.5f, 0.0f, 1 }, 0, true);
+	plane1->getTransform().SetScale({ 3.0f, 1.0f, 3.0f, 1 }, 0, true);
 	plane1->getTransform().SetRotationEulerAngles({ 0.0f, 0.0f, 0.0f }, 0, true);
 
-	plane2->getTransform().SetPosition({ 0.0f, 10.0f, 0.0f, 1 }, 0, true);
-	plane2->getTransform().SetScale({ 20.0f, 1.0f, 20.0f, 1 }, 0, true);
+	plane2->getTransform().SetPosition({ 0.0f, 1.5, 0.0f, 1 }, 0, true);
+	plane2->getTransform().SetScale({ 3.0f, 1.0f, 3.0f, 1 }, 0, true);
 	plane2->getTransform().SetRotationEulerAngles({ DirectX::XMConvertToRadians(180), 0.0f, 0.0f }, 0, true);
 
-	plane3->getTransform().SetPosition({ -10.0f, 0.0f, 0.0f, 1 }, 0, true);
-	plane3->getTransform().SetScale({ 20.0f, 1.0f, 20.0f, 1 }, 0, true);
+	plane3->getTransform().SetPosition({ -1.5, 0.0f, 0.0f, 1 }, 0, true);
+	plane3->getTransform().SetScale({ 3.0f, 1.0f, 3.0f, 1 }, 0, true);
 	plane3->getTransform().SetRotationEulerAngles({ 0, 0, DirectX::XMConvertToRadians(-90) }, 0, true);
 
-	plane4->getTransform().SetPosition({ 10.0f, 0.0f, 0.0f, 1 }, 0, true);
-	plane4->getTransform().SetScale({ 20.0f, 1.0f, 20.0f, 1 }, 0, true);
+	plane4->getTransform().SetPosition({ 1.5, 0.0f, 0.0f, 1 }, 0, true);
+	plane4->getTransform().SetScale({ 3.0f, 1.0f, 3.0f, 1 }, 0, true);
 	plane4->getTransform().SetRotationEulerAngles({ 0, 0, DirectX::XMConvertToRadians(90) }, 0, true);
 
-	plane5->getTransform().SetPosition({ 0.0f, 0.0f, -10.0f, 1 }, 0, true);
-	plane5->getTransform().SetScale({ 20.0f, 1.0f, 20.0f, 1 }, 0, true);
+	plane5->getTransform().SetPosition({ 0.0f, 0.0f, -1.5, 1 }, 0, true);
+	plane5->getTransform().SetScale({ 3.0f, 1.0f, 3.0f, 1 }, 0, true);
 	plane5->getTransform().SetRotationEulerAngles({ DirectX::XMConvertToRadians(90), 0, 0 }, 0, true);
 
-	plane6->getTransform().SetPosition({ 0.0f, 0.0f, 10.0f, 1 }, 0, true);
-	plane6->getTransform().SetScale({ 20.0f, 1.0f, 20.0f, 1 }, 0, true);
+	plane6->getTransform().SetPosition({ 0.0f, 0.0f, 1.5, 1 }, 0, true);
+	plane6->getTransform().SetScale({ 3.0f, 1.0f, 3.0f, 1 }, 0, true);
 	plane6->getTransform().SetRotationEulerAngles({ DirectX::XMConvertToRadians(-90), 0, 0 }, 0, true);
 
 	plane1->setStatic(true);
@@ -82,7 +85,7 @@ void ScenarioA::onLoad(CommandList& commandList)
 		0.5,
 		0.7
 	};
-	for (int i = 0; i < 500; i++)
+	for (int i = 0; i < 40; i++)
 	{
 		int randNum = 0;// rand() % 2;
 		if (randNum) {
@@ -91,9 +94,9 @@ void ScenarioA::onLoad(CommandList& commandList)
 			auto sphereCollider = std::make_shared<BoxCollider>(DirectX::XMVectorReplicate(.5f));
 			box->setCollider(sphereCollider);
 			box->setMaterial(material);
-			float x = std::clamp(d(m_randomEngine), -7.0f, 7.0f);
-			float y = std::clamp(d(m_randomEngine), -7.0f, 7.0f);
-			float z = std::clamp(d(m_randomEngine), -9.0f, 7.0f);
+			float x = std::clamp(d(m_randomEngine), -1.2f, 1.2f);
+			float y = std::clamp(d(m_randomEngine), -1.2f, 1.2f);
+			float z = std::clamp(d(m_randomEngine), -1.2f, 1.2f);
 			box->onLoad(commandList);
 			box->setStatic(true);
 			box->getTransform().SetPosition({ x, y, z, 1 }, 0, true);
@@ -105,9 +108,10 @@ void ScenarioA::onLoad(CommandList& commandList)
 			auto sphereCollider = std::make_shared<SphereCollider>(.5f);
 			particle->setCollider(sphereCollider);
 			particle->setMaterial(material);
-			float x = std::clamp(d(m_randomEngine), -9.0f, 9.0f);
-			float y = std::clamp(d(m_randomEngine), -9.0f, 9.0f);
-			float z = std::clamp(d(m_randomEngine), -9.0f, 9.0f);
+			particle->getTransform().SetScale({ 0.25f, 0.25f, 0.25f, 1 }, 0, true);
+			float x = std::clamp(d(m_randomEngine), -1.2f, 1.2f);
+			float y = std::clamp(d(m_randomEngine), -1.2f, 1.2f);
+			float z = std::clamp(d(m_randomEngine), -1.2f, 1.2f);
 			particle->onLoad(commandList);
 			particle->getTransform().SetPosition({ x, y, z, 1 }, 0, true);
 			m_physicsObjects.push_back(particle);
