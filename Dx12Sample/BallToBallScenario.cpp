@@ -17,7 +17,7 @@ void BallToBallScenario::onLoad(CommandList& commandList)
 		1.0f,
 	};
 
-	auto particle1 = std::make_shared<PhysicsObject>(m_SphereMesh, m_customTexture);
+	auto particle1 = std::make_shared<PhysicsObject>(static_cast<UINT>(4000), m_SphereMesh, m_customTexture);
 	auto sphereCollider = std::make_shared<SphereCollider>(.5f);
 	particle1->setCollider(sphereCollider);
 	particle1->setMaterial(material);
@@ -28,7 +28,7 @@ void BallToBallScenario::onLoad(CommandList& commandList)
 	particle1->setAngularVelocity({ 0, 0, 5, 0 }, 0);
 	particle1->setAngularVelocity({ 0, 0, 5, 0 }, 1);
 
-	auto particle2 = std::make_shared<PhysicsObject>(m_SphereMesh, m_customTexture);
+	auto particle2 = std::make_shared<PhysicsObject>(static_cast<UINT>(4000), m_SphereMesh, m_customTexture);
 	particle2->setCollider(sphereCollider);
 	particle2->setMaterial(material);
 	particle2->onLoad(commandList);

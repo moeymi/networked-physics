@@ -1,123 +1,139 @@
 #pragma once
 #include "pch.h"
 #include "ThreadedSystem.h"
-#include <vector>
-#include <atomic>
-#include <thread>
-#include <mutex>
-#include <chrono>
-#include <iostream>
-#include <string>
-#include <memory>
-#include <algorithm>
+#include "NetworkMessages.h"
+#include "game_state_generated.h"
 
-#include <DirectXMath.h>
 
-struct CPPGameState {
-    int id;
-	int type;
-    DirectX::XMFLOAT3 position;
-    DirectX::XMFLOAT4 rotation;
-    DirectX::XMFLOAT3 velocity;
-    DirectX::XMFLOAT3 angularVelocity;
-    DirectX::XMFLOAT4 color;
+// --- Helper Struct for Per-Socket Receive Buffers ---
+struct SocketReceiveBuffer {
+    SOCKET socket;
+    std::vector<char> buffer; // Buffer to accumulate incoming data
+    // Add state for partial message processing if needed (e.g., expected size)
 };
 
-struct SharedSimulationData {
-    std::vector<CPPGameState> objects;
-    std::mutex mutex; // Mutex to protect 'objects'
-    // Potentially add other shared data like global physics parameters, etc.
+// --- Helper Struct for Per-Socket Send Buffers ---
+struct SocketSendBuffer {
+    SOCKET socket;
+    std::vector<char> buffer; // Data to send
+    size_t bytesSent = 0;    // How many bytes have been sent from this buffer
 };
 
-enum class NetMessageType : uint32_t {
-    Unknown = 0,
-    InitialState = 1, // Full state sent on connect
-    StateUpdate = 2,  // Periodic state delta/snapshot
-    // Add more message types later (e.g., ClientInput, JoinRequest, DisconnectNotification)
+// --- Helper Struct for Outgoing Messages (Queued internally by NetworkSystem) ---
+// This represents a complete FlatBuffers message ready to be sent to all peers.
+struct OutgoingNetMessage {
+    std::vector<char> flatbufferData; // The serialized FlatBuffers message
 };
 
-#pragma pack(push, 1) // Ensure no padding for network struct
-struct NetMessageHeader {
-    NetMessageType type;
-    uint32_t payloadSize; // Size of the data following the header
-};
-#pragma pack(pop) // Restore default padding
 
-struct ClientConnection {
-    SOCKET socket = INVALID_SOCKET;
-    sockaddr_in address = {}; // Client address info
-    // Add other state like last sent timestamp if needed
-};
-
+// --- NetworkSystem Class Definition ---
 
 class NetworkEngine : public ThreadedSystem {
-public:
-    enum class Role {
-        None, // Initial state - not hosting or connected
-        Host,
-        Client
-    };
+private:
+    // --- Network Specific Members ---
 
-    NetworkEngine();
-    ~NetworkEngine() override;
+    SOCKET m_listenSocket = INVALID_SOCKET; // Socket for accepting incoming connections
+    std::vector<SOCKET> m_connectedPeerSockets; // List of active connections (outgoing and incoming)
+    std::mutex m_connectedPeerSocketsMutex; // Protects access to m_connectedPeerSockets
 
-    // --- Public methods to start/join sessions ---
-    // Call one of these based on external input (e.g., button press)
-    // Returns true on success, false on failure (already initialized, network error, etc.)
-    bool startHostSession(int port, SharedSimulationData* sharedData);
-    bool joinClientSession(const char* hostAddress, int port, SharedSimulationData* sharedData);
+    std::string m_listenPort; // Port this peer listens on
+    std::vector<std::string> m_peerAddressesToConnect; // Addresses of peers this instance should connect to
 
-    // Stop the current session and return to Role::None
-    void stopSession();
+    // Timer for throttling outgoing state updates
+    std::chrono::steady_clock::time_point m_lastStateSendTime;
 
-    Role getRole() const { return m_role; }
-    int getPort() const { return m_port; } // Port used for hosting or connecting
-    const std::string& getHostAddress() const { return m_hostAddress; } // Host address for client role
+    // Internal queues and buffers for managing network data
+    std::map<SOCKET, SocketReceiveBuffer> m_receiveBuffers; // Per-socket receive buffers
+    std::mutex m_receiveBuffersMutex; // Protects access to m_receiveBuffers
+
+    std::map<SOCKET, SocketSendBuffer> m_sendBuffers; // Per-socket send buffers
+    std::mutex m_sendBuffersMutex; // Protects access to m_sendBuffers
+
+    std::queue<OutgoingNetMessage> m_outgoingNetMessages; // Internal queue of serialized messages to send to all peers
+    std::mutex m_outgoingNetMessagesMutex; // Protects access to m_outgoingNetMessages
+
+
+    // --- Internal Helper Methods (Called by run()) ---
+
+    // Initializes Winsock, creates and binds listen socket, attempts initial outgoing connections
+    bool initializeNetworking();
+    // Cleans up sockets and Winsock
+    void shutdownNetworking();
+
+    // Checks for and accepts new connections on the listen socket
+    void handleIncomingConnections();
+    // Checks a specific socket for incoming data, buffers it, and processes complete messages
+    // Returns true if the socket should be closed.
+    bool handleDataReceive(SOCKET sock);
+
+    // Gathers StateUpdate messages from the physics queue and serializes them into a FlatBuffers NetMessage
+    void gatherAndSerializeStateUpdates();
+    // Takes serialized messages from the internal outgoing queue and distributes them to per-socket send buffers
+    void distributeOutgoingMessages();
+    // Attempts to send pending data from a specific socket's send buffer
+    // Returns true if the socket should be closed.
+    bool processSocketSend(SOCKET sock);
+
+    // Helper to attempt connecting to a single peer address
+    void connectToPeer(const std::string& peerAddrStr);
+
+    // Helper to close and cleanup a specific socket
+    void closeSocket(SOCKET sock);
 
 
 protected:
-    // --- Inherited from ThreadedSystem ---
-    // This method's implementation will now contain logic for BOTH Host and Client roles.
-    void onUpdate(float deltaTime) override;
+    // --- Overrides from ThreadedSystem ---
 
-    // --- Networking Specific Methods and Members ---
-    // (Declare internal helper methods and member variables as before)
+    // NOTE: The base class's run() implementation, which calls onUpdate based on
+    // a fixed time step, is completely overridden in THIS class's run() method.
+    // Therefore, this onUpdate method will NOT be called by the base class logic.
+    // It must be implemented because it's pure virtual in the base, but it will
+    // likely be empty or contain logic specific to shutdown if needed.
+    void onUpdate(float deltaTime) override; // Dummy implementation
 
-    bool initializeWinsock(); // Unchanged
-    void cleanupWinsock();   // Unchanged
+    // --- Override the base run method entirely ---
+    // This is the main loop for the NetworkSystem thread.
+    void run() override;
 
-    // FlatBuffers methods (Unchanged)
-    std::vector<uint8_t> buildStateUpdatePayload(const std::vector<CPPGameState>& objects);
-    bool applyStateUpdatePayload(const std::vector<uint8_t>& payload, std::vector<CPPGameState>& outObjects);
 
-    // Message helpers (Unchanged)
-    bool sendMessage(SOCKET targetSocket, NetMessageType type, const std::vector<uint8_t>& payload);
-    bool receiveMessage(SOCKET sourceSocket, NetMessageType& outType, std::vector<uint8_t>& outPayload);
+public:
+    // --- Public Interface ---
 
-    // Thread functions (Called internally, implementations largely unchanged)
-    void runListeningThread(); // Host only
-    void runReceivingThread(); // Client only
+    // Constructor: Takes configuration for the network system
+    NetworkEngine(const std::string& listenPort, const std::vector<std::string>& peerAddresses);
 
-    // --- Member Variables (Same as before) ---
-    Role m_role = Role::None;
-    SharedSimulationData* m_sharedSimulationData = nullptr;
+    // Destructor: Ensures networking is shut down
+    virtual ~NetworkEngine();
 
-    // Host Specific
-    SOCKET m_listenSocket = INVALID_SOCKET;
-    std::thread m_listeningThread;
-    std::atomic<bool> m_listening = { false };
-    std::vector<ClientConnection> m_connectedClients;
-    std::mutex m_clientsMutex;
+    // Methods to send specific message types to all connected peers
+    void sendObjectCreation(
+        uint32_t id, int object_type,
+        const PhysicsFlatBuffers::Networking::Vec3& initial_position,
+        const PhysicsFlatBuffers::Networking::Vec4& initial_rotation,
+        const PhysicsFlatBuffers::Networking::Vec3& initial_scale,
+        const PhysicsFlatBuffers::Networking::Vec3& initial_velocity,
+        const PhysicsFlatBuffers::Networking::Vec3& initial_angular_velocity,
+        bool is_static,
+        float sphere_radius, const PhysicsFlatBuffers::Networking::Vec3& box_size,
+        float cylinder_radius, float cylinder_height, const PhysicsFlatBuffers::Networking::Vec3& plane_size
+    );
 
-    // Client Specific
-    SOCKET m_hostSocket = INVALID_SOCKET;
-    std::thread m_receivingThread;
-    std::atomic<bool> m_receiving = { false };
+    void sendPeerJoined(uint32_t peer_id);
+    void sendPeerLeft(uint32_t peer_id);
+    void sendGravityChanged(const PhysicsFlatBuffers::Networking::Vec3& new_gravity);
 
-    // Configuration
-    int m_port = 0;
-    std::string m_hostAddress;
+    // Inherited methods from ThreadedSystem:
+    // void start(); // Starts the network thread by calling our run()
+    // void stop();  // Signals the thread to stop and waits for it to join
+    // bool isRunning() const;
+    // void setAffinity(const int& coreId);
+    // int getAffinity() const;
+    // Note: setFixedTimeStep, getFixedTimeStep, getRealTimeStep, addUpdateListener, removeUpdateListeners
+    // are inherited but effectively unused by the NetworkSystem's custom run() loop.
 
-    // Constants
-    static const int MAX_PAYLOAD_SIZE = 4 * 1024 * 1024;
+
+private:
+    // Disable copy and assignment to prevent issues with socket handles
+    NetworkEngine(const NetworkEngine&) = delete;
+    NetworkEngine& operator=(const NetworkEngine&) = delete;
 };

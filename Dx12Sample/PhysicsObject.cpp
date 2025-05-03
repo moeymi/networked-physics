@@ -13,7 +13,8 @@ PhysicsObject::PhysicsObject(const UINT& id, std::shared_ptr<Mesh> mesh, std::sh
     m_texture(texture),
 	m_collider(nullptr),
 	m_mass(1.0f),
-	m_material(),
+	m_material(Material::White),
+	m_physicsMaterial(),
     m_constantForces({ 0.0f, 0.0f, 0.0f, 0.0f }),
 	m_integrateMotion(&PhysicsObject::integrateSemiImplicitEuler)
 {
@@ -50,7 +51,7 @@ void PhysicsObject::onRender(CommandList& commandList, const DirectX::XMMATRIX& 
     PhysicsSimulation::ComputeMatrices(worldMatrix, viewMatrix, viewProjectionMatrix, matrices);
 
     commandList.SetGraphicsDynamicConstantBuffer(RootParameters::MatricesCB, matrices);
-    commandList.SetGraphicsDynamicConstantBuffer(RootParameters::MaterialCB, Material::White);
+    commandList.SetGraphicsDynamicConstantBuffer(RootParameters::MaterialCB, m_material);
     commandList.SetShaderResourceView(RootParameters::Textures, 0, *m_texture, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
 	m_mesh->Draw(commandList);
@@ -72,7 +73,7 @@ void PhysicsObject::setStatic(const bool& isStatic)
 
 void PhysicsObject::setMaterial(const PhysicsMaterial& material)
 {
-	m_material = material;
+	m_physicsMaterial = material;
 }
 
 void PhysicsObject::setCollider(std::shared_ptr<Collider> collider)
@@ -101,6 +102,11 @@ bool PhysicsObject::isStatic() const
 	return m_transform.IsStatic();
 }
 
+UINT PhysicsObject::getId() const
+{
+	return m_id;
+}
+
 float PhysicsObject::getMass() const
 {
     return m_mass;
@@ -121,9 +127,14 @@ DirectX::XMVECTOR PhysicsObject::getCenterOfMass() const
 	return m_centerOfMass;
 }
 
-PhysicsMaterial PhysicsObject::getMaterial() const
+Material PhysicsObject::getMaterial() const
 {
 	return m_material;
+}
+
+PhysicsMaterial PhysicsObject::getPhysicsMaterial() const
+{
+	return m_physicsMaterial;
 }
 
 DirectX::XMMATRIX PhysicsObject::getInverseWorldInertiaTensor(const USHORT& bufferIndex) const

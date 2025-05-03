@@ -18,7 +18,7 @@ void BallToCapsuleScenario::onLoad(CommandList& commandList)
 		.01f,
 	};
 
-	auto particle = std::make_shared<PhysicsObject>(m_SphereMesh, m_customTexture);
+	auto particle = std::make_shared<PhysicsObject>(static_cast<UINT>(4000), m_SphereMesh, m_customTexture);
 	auto sphereCollider = std::make_shared<SphereCollider>(.5f);
 	particle->setCollider(sphereCollider);
 	particle->setMaterial(material);
@@ -27,7 +27,7 @@ void BallToCapsuleScenario::onLoad(CommandList& commandList)
 	particle->setVelocity({ 2, 0, 0, 0 }, 1);
 	//particle->setAngularVelocity({ 0, 0, 5, 0 }, 1);
 
-	auto capsule = std::make_shared<PhysicsObject>(m_CapsuleMesh, m_customTexture);
+	auto capsule = std::make_shared<PhysicsObject>(static_cast<UINT>(4000), m_CapsuleMesh, m_customTexture);
 	auto capsuleCollider = std::make_shared<CapsuleCollider>(0.5f, 1.0f);
 	capsule->setCollider(capsuleCollider);
 	capsule->setMaterial(material);

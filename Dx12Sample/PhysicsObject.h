@@ -3,6 +3,7 @@
 #include "Mesh.h"
 #include "Transform.h"
 #include "Collider.h"
+#include "Material.h"
 
 class CommandList;
 
@@ -74,17 +75,18 @@ public:
 
 	bool isStatic() const;
 	float getMass() const;
+	UINT getId() const;
 	DirectX::XMVECTOR getCenterOfMass() const;
 	DirectX::XMVECTOR getVelocity(const USHORT& bufferIndex) const;
 	DirectX::XMVECTOR getAngularVelocity(const USHORT& bufferIndex) const;
 	DirectX::XMMATRIX getInverseWorldInertiaTensor(const USHORT& bufferIndex) const;
 
-	PhysicsMaterial getMaterial() const;
+	Material getMaterial() const;
+	PhysicsMaterial getPhysicsMaterial() const;
 	Collider* getCollider() const;
 	Transform& getTransform();
 
 	void swapStates();
-
 
 private:
 	UINT m_id = 0u;
@@ -92,6 +94,7 @@ private:
 	std::shared_ptr<Mesh> m_mesh;
 	std::shared_ptr<Texture> m_texture;
 	std::shared_ptr<Collider> m_collider;
+	Material m_material = Material::White;
 
 	struct State {
 		DirectX::XMVECTOR m_velocity =			{ 0, 0, 0, 0 };
@@ -100,7 +103,7 @@ private:
 
 	// Physics properties
 	float m_mass = 1.0f;
-	PhysicsMaterial m_material;
+	PhysicsMaterial m_physicsMaterial;
 
 	DirectX::XMVECTOR m_centerOfMass = { 0.0f, 0.0f, 0.0f, 1.0f };
 

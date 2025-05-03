@@ -20,12 +20,12 @@ void ScenarioB::onLoad(CommandList& commandList)
 	// Create 6 planes to make a box
 	auto planeCollider = std::make_shared<BoxCollider>(DirectX::XMVectorSet(10.0f, 0.01f, 10.0f, 0.0f));
 
-	auto plane1 = std::make_shared<PhysicsObject>(m_PlaneMesh, m_defaultTexture);
-	auto plane2 = std::make_shared<PhysicsObject>(m_PlaneMesh, m_defaultTexture);
-	auto plane3 = std::make_shared<PhysicsObject>(m_PlaneMesh, m_defaultTexture);
-	auto plane4 = std::make_shared<PhysicsObject>(m_PlaneMesh, m_defaultTexture);
-	auto plane5 = std::make_shared<PhysicsObject>(m_PlaneMesh, m_defaultTexture);
-	auto plane6 = std::make_shared<PhysicsObject>(m_PlaneMesh, m_defaultTexture);
+	auto plane1 = std::make_shared<PhysicsObject>(static_cast<UINT>(4000), m_PlaneMesh, m_defaultTexture);
+	auto plane2 = std::make_shared<PhysicsObject>(static_cast<UINT>(4000), m_PlaneMesh, m_defaultTexture);
+	auto plane3 = std::make_shared<PhysicsObject>(static_cast<UINT>(4000), m_PlaneMesh, m_defaultTexture);
+	auto plane4 = std::make_shared<PhysicsObject>(static_cast<UINT>(4000), m_PlaneMesh, m_defaultTexture);
+	auto plane5 = std::make_shared<PhysicsObject>(static_cast<UINT>(4000), m_PlaneMesh, m_defaultTexture);
+	auto plane6 = std::make_shared<PhysicsObject>(static_cast<UINT>(4000), m_PlaneMesh, m_defaultTexture);
 
 	plane1->onLoad(commandList);
 	plane2->onLoad(commandList);
@@ -89,7 +89,7 @@ void ScenarioB::onLoad(CommandList& commandList)
 		int randNum = 0;// rand() % 2;
 		if (randNum) {
 			// Create a static box
-			auto box = std::make_shared<PhysicsObject>(m_BoxMesh, m_defaultTexture);
+			auto box = std::make_shared<PhysicsObject>(static_cast<UINT>(4000), m_BoxMesh, m_defaultTexture);
 			auto sphereCollider = std::make_shared<BoxCollider>(DirectX::XMVectorReplicate(.5f));
 			box->setCollider(sphereCollider);
 			box->setMaterial(material);
@@ -103,7 +103,7 @@ void ScenarioB::onLoad(CommandList& commandList)
 		}
 		else {
 			// Create a sphere
-			auto particle = std::make_shared<PhysicsObject>(m_SphereMesh, m_customTexture);
+			auto particle = std::make_shared<PhysicsObject>(static_cast<UINT>(4000), m_SphereMesh, m_customTexture);
 			auto sphereCollider = std::make_shared<SphereCollider>(.5f);
 			particle->setCollider(sphereCollider);
 			particle->setMaterial(material);

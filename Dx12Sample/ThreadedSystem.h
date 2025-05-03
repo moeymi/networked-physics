@@ -41,5 +41,5 @@ public:
     void removeUpdateListeners();
 
 protected:
-    void run();
+    virtual void run();
 };

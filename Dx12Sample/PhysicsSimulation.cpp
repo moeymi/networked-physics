@@ -493,14 +493,23 @@ void PhysicsSimulation::UpdateSharedSimulationData()
     m_sharedSimulationData.objects.clear();
 	for (const auto& body : m_Scenarios[m_CurrentScenario]->getPhysicsObjects())
 	{
-        m_sharedSimulationData.objects.push_back({
+        DirectX::XMFLOAT3 position;
+		DirectX::XMFLOAT4 rotation;
+		DirectX::XMFLOAT3 velocity;
+		DirectX::XMFLOAT3 angularVelocity;
+		XMStoreFloat3(&position, body->getTransform().GetPosition(0));
+		XMStoreFloat4(&rotation, body->getTransform().GetRotationQuaternion(0));
+		XMStoreFloat3(&velocity, body->getVelocity(0));
+		XMStoreFloat3(&angularVelocity, body->getAngularVelocity(0));
+
+        m_sharedSimulationData.objects.push_back(CPPGameState{
 			body->getId(),
-			body->getType(),
-			body->getPosition(),
-			body->getRotation(),
-			body->getVelocity(),
-			body->getAngularVelocity(),
-			body->getColor(),
+			static_cast<USHORT>(body->getCollider()->getType()),
+            position,
+            rotation,
+            velocity,
+            angularVelocity,
+			body->getMaterial().Ambient,
         });
 	}
 }

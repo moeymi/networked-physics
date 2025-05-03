@@ -7,9 +7,9 @@ float PhysicsEngine::m_gravity = 9.81f;
 bool PhysicsEngine::m_gravityEnabled = true;
 
 void PhysicsEngine::onUpdate(float deltaTime) {
-	for (auto body : m_bodies) {
+    for (auto body : m_bodies) {
         body->swapStates();
-	}
+    }
 
     #pragma omp parallel for
     for (int i = 0; i < m_bodies.size(); i++) {
@@ -20,6 +20,11 @@ void PhysicsEngine::onUpdate(float deltaTime) {
     }
 
     detectAndResolveCollisions(deltaTime);
+
+    for (auto body : m_bodies) {
+        body->swapStates();
+    }
+
 }
 
 void PhysicsEngine::addBody(std::shared_ptr<PhysicsObject> body) {
@@ -211,8 +216,8 @@ void PhysicsEngine::resolveCollisionVelocity(
         return;
     }
 
-    const PhysicsMaterial& matA = A->getMaterial();
-    const PhysicsMaterial& matB = B->getMaterial();
+    const PhysicsMaterial& matA = A->getPhysicsMaterial();
+    const PhysicsMaterial& matB = B->getPhysicsMaterial();
 
     const float combinedFriction = std::sqrt(matA.friction * matB.friction);
 	const float combinedAngularFriction = std::sqrt(matA.angularFriction * matB.angularFriction);
