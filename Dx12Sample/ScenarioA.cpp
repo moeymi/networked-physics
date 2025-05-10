@@ -1,6 +1,7 @@
 #include "ScenarioA.h"
 #include "BoxCollider.h"
 #include "SphereCollider.h"
+#include "GlobalData.h"
 
 #include <algorithm>
 #include <random>
@@ -9,31 +10,22 @@ void ScenarioA::onLoad(CommandList& commandList)
 {
 	std::normal_distribution<float> d{ 0.0, 1.0 };
 
-	m_SphereMesh = Mesh::CreateSphere(commandList, 1.0f, 8, false);
-	m_PlaneMesh = Mesh::CreatePlane(commandList);
-	m_BoxMesh = Mesh::CreateCube(commandList, 1.0f, false);
-	m_customTexture = std::make_shared<Texture>();
-	m_defaultTexture = std::make_shared<Texture>();
-
-	commandList.LoadTextureFromFile(*m_customTexture, L"Assets/Textures/earth.dds");
-	commandList.LoadTextureFromFile(*m_defaultTexture, L"Assets/Textures/DefaultWhite.bmp");
-
 	// Create 6 planes to make a box
 	auto planeCollider = std::make_shared<BoxCollider>(DirectX::XMVectorSet(0.5, 0.01f, 0.5, 0.0f));
 
-	auto plane1 = std::make_shared<PhysicsObject>(static_cast<UINT>(4000), m_PlaneMesh, m_defaultTexture);
-	auto plane2 = std::make_shared<PhysicsObject>(static_cast<UINT>(4001), m_PlaneMesh, m_defaultTexture);
-	auto plane3 = std::make_shared<PhysicsObject>(static_cast<UINT>(4002), m_PlaneMesh, m_defaultTexture);
-	auto plane4 = std::make_shared<PhysicsObject>(static_cast<UINT>(4003), m_PlaneMesh, m_defaultTexture);
-	auto plane5 = std::make_shared<PhysicsObject>(static_cast<UINT>(4004), m_PlaneMesh, m_defaultTexture);
-	auto plane6 = std::make_shared<PhysicsObject>(static_cast<UINT>(4005), m_PlaneMesh, m_defaultTexture);
+	auto plane1 = std::make_shared<PhysicsObject>(static_cast<UINT>(4000), MeshType::Plane, GlobalData::g_planeMesh, GlobalData::g_defaultTexture);
+	auto plane2 = std::make_shared<PhysicsObject>(static_cast<UINT>(4001), MeshType::Plane, GlobalData::g_planeMesh, GlobalData::g_defaultTexture);
+	auto plane3 = std::make_shared<PhysicsObject>(static_cast<UINT>(4002), MeshType::Plane, GlobalData::g_planeMesh, GlobalData::g_defaultTexture);
+	auto plane4 = std::make_shared<PhysicsObject>(static_cast<UINT>(4003), MeshType::Plane, GlobalData::g_planeMesh, GlobalData::g_defaultTexture);
+	auto plane5 = std::make_shared<PhysicsObject>(static_cast<UINT>(4004), MeshType::Plane, GlobalData::g_planeMesh, GlobalData::g_defaultTexture);
+	auto plane6 = std::make_shared<PhysicsObject>(static_cast<UINT>(4005), MeshType::Plane, GlobalData::g_planeMesh, GlobalData::g_defaultTexture);
 
-	plane1->onLoad(commandList);
-	plane2->onLoad(commandList);
-	plane3->onLoad(commandList);
-	plane4->onLoad(commandList);
-	plane5->onLoad(commandList);
-	plane6->onLoad(commandList);
+	plane1->onLoad();
+	plane2->onLoad();
+	plane3->onLoad();
+	plane4->onLoad();
+	plane5->onLoad();
+	plane6->onLoad();
 
 	plane1->setCollider(planeCollider);
 	plane2->setCollider(planeCollider);
@@ -85,26 +77,26 @@ void ScenarioA::onLoad(CommandList& commandList)
 		0.5,
 		0.7
 	};
-	for (int i = 0; i < 40; i++)
+	for (int i = 0; i < 4; i++)
 	{
 		int randNum = 0;// rand() % 2;
 		if (randNum) {
 			// Create a static box
-			auto box = std::make_shared<PhysicsObject>(static_cast<UINT>(i), m_BoxMesh, m_defaultTexture);
+			auto box = std::make_shared<PhysicsObject>(static_cast<UINT>(i), MeshType::Box, GlobalData::g_boxMesh, GlobalData::g_defaultTexture);
 			auto sphereCollider = std::make_shared<BoxCollider>(DirectX::XMVectorReplicate(.5f));
 			box->setCollider(sphereCollider);
 			box->setMaterial(material);
 			float x = std::clamp(d(m_randomEngine), -1.2f, 1.2f);
 			float y = std::clamp(d(m_randomEngine), -1.2f, 1.2f);
 			float z = std::clamp(d(m_randomEngine), -1.2f, 1.2f);
-			box->onLoad(commandList);
+			box->onLoad();
 			box->setStatic(true);
 			box->getTransform().SetPosition({ x, y, z, 1 }, 0, true);
 			m_physicsObjects.push_back(box);
 		}
 		else {
 			// Create a sphere
-			auto particle = std::make_shared<PhysicsObject>(static_cast<UINT>(i), m_SphereMesh, m_customTexture);
+			auto particle = std::make_shared<PhysicsObject>(static_cast<UINT>(i), MeshType::Sphere, GlobalData::g_sphereMesh, GlobalData::g_customTexture);
 			auto sphereCollider = std::make_shared<SphereCollider>(.5f);
 			particle->setCollider(sphereCollider);
 			particle->setMaterial(material);
@@ -112,7 +104,7 @@ void ScenarioA::onLoad(CommandList& commandList)
 			float x = std::clamp(d(m_randomEngine), -1.2f, 1.2f);
 			float y = std::clamp(d(m_randomEngine), -1.2f, 1.2f);
 			float z = std::clamp(d(m_randomEngine), -1.2f, 1.2f);
-			particle->onLoad(commandList);
+			particle->onLoad();
 			particle->getTransform().SetPosition({ x, y, z, 1 }, 0, true);
 			m_physicsObjects.push_back(particle);
 			//particle->setVelocity({ 5, 0, 0, 0 }, 0);
@@ -125,7 +117,7 @@ void ScenarioA::onUnload(CommandList& commandList)
 {
 	for (auto& physicsObject : m_physicsObjects)
 	{
-		physicsObject->onUnload(commandList);
+		physicsObject->onUnload();
 	}
 	m_physicsObjects.clear();
 }

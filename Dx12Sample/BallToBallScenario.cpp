@@ -17,21 +17,21 @@ void BallToBallScenario::onLoad(CommandList& commandList)
 		1.0f,
 	};
 
-	auto particle1 = std::make_shared<PhysicsObject>(static_cast<UINT>(4000), m_SphereMesh, m_customTexture);
+	auto particle1 = std::make_shared<PhysicsObject>(static_cast<UINT>(4000), MeshType::Sphere, m_SphereMesh, m_customTexture);
 	auto sphereCollider = std::make_shared<SphereCollider>(.5f);
 	particle1->setCollider(sphereCollider);
 	particle1->setMaterial(material);
-	particle1->onLoad(commandList);
+	particle1->onLoad();
 	particle1->getTransform().SetPosition({ 0, 0, 2, 1 }, 0, true);
 	particle1->setVelocity({ 3, 0, 0, 0 }, 0);
 	particle1->setVelocity({ 3, 0, 0, 0 }, 1);
 	particle1->setAngularVelocity({ 0, 0, 5, 0 }, 0);
 	particle1->setAngularVelocity({ 0, 0, 5, 0 }, 1);
 
-	auto particle2 = std::make_shared<PhysicsObject>(static_cast<UINT>(4000), m_SphereMesh, m_customTexture);
+	auto particle2 = std::make_shared<PhysicsObject>(static_cast<UINT>(4000), MeshType::Sphere, m_SphereMesh, m_customTexture);
 	particle2->setCollider(sphereCollider);
 	particle2->setMaterial(material);
-	particle2->onLoad(commandList);
+	particle2->onLoad();
 	particle2->getTransform().SetPosition({ 3, 0, 2, 1 }, 0, true);
 
 	m_physicsObjects.push_back(particle1);
@@ -43,7 +43,7 @@ void BallToBallScenario::onUnload(CommandList& commandList)
 {
 	for (const auto& physicsObject : m_physicsObjects)
 	{
-		physicsObject->onUnload(commandList);
+		physicsObject->onUnload();
 	}
 	m_physicsObjects.clear();
 }

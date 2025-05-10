@@ -7,32 +7,22 @@
 void ScenarioB::onLoad(CommandList& commandList)
 {
 	std::normal_distribution<float> d{ 0.0, 3.0 };
-
-	m_SphereMesh = Mesh::CreateSphere(commandList, 1.0f, 16, false);
-	m_PlaneMesh = Mesh::CreatePlane(commandList);
-	m_BoxMesh = Mesh::CreateCube(commandList, 1.0f, false);
-	m_customTexture = std::make_shared<Texture>();
-	m_defaultTexture = std::make_shared<Texture>();
-
-	commandList.LoadTextureFromFile(*m_customTexture, L"Assets/Textures/earth.dds");
-	commandList.LoadTextureFromFile(*m_defaultTexture, L"Assets/Textures/DefaultWhite.bmp");
-
 	// Create 6 planes to make a box
 	auto planeCollider = std::make_shared<BoxCollider>(DirectX::XMVectorSet(10.0f, 0.01f, 10.0f, 0.0f));
 
-	auto plane1 = std::make_shared<PhysicsObject>(static_cast<UINT>(4000), m_PlaneMesh, m_defaultTexture);
-	auto plane2 = std::make_shared<PhysicsObject>(static_cast<UINT>(4000), m_PlaneMesh, m_defaultTexture);
-	auto plane3 = std::make_shared<PhysicsObject>(static_cast<UINT>(4000), m_PlaneMesh, m_defaultTexture);
-	auto plane4 = std::make_shared<PhysicsObject>(static_cast<UINT>(4000), m_PlaneMesh, m_defaultTexture);
-	auto plane5 = std::make_shared<PhysicsObject>(static_cast<UINT>(4000), m_PlaneMesh, m_defaultTexture);
-	auto plane6 = std::make_shared<PhysicsObject>(static_cast<UINT>(4000), m_PlaneMesh, m_defaultTexture);
+	auto plane1 = std::make_shared<PhysicsObject>(static_cast<UINT>(4000), MeshType::Plane, GlobalData::g_planeMesh, GlobalData::g_defaultTexture);
+	auto plane2 = std::make_shared<PhysicsObject>(static_cast<UINT>(4000), MeshType::Plane, GlobalData::g_planeMesh, GlobalData::g_defaultTexture);
+	auto plane3 = std::make_shared<PhysicsObject>(static_cast<UINT>(4000), MeshType::Plane, GlobalData::g_planeMesh, GlobalData::g_defaultTexture);
+	auto plane4 = std::make_shared<PhysicsObject>(static_cast<UINT>(4000), MeshType::Plane, GlobalData::g_planeMesh, GlobalData::g_defaultTexture);
+	auto plane5 = std::make_shared<PhysicsObject>(static_cast<UINT>(4000), MeshType::Plane, GlobalData::g_planeMesh, GlobalData::g_defaultTexture);
+	auto plane6 = std::make_shared<PhysicsObject>(static_cast<UINT>(4000), MeshType::Plane, GlobalData::g_planeMesh, GlobalData::g_defaultTexture);
 
-	plane1->onLoad(commandList);
-	plane2->onLoad(commandList);
-	plane3->onLoad(commandList);
-	plane4->onLoad(commandList);
-	plane5->onLoad(commandList);
-	plane6->onLoad(commandList);
+	plane1->onLoad();
+	plane2->onLoad();
+	plane3->onLoad();
+	plane4->onLoad();
+	plane5->onLoad();
+	plane6->onLoad();
 
 	plane1->setCollider(planeCollider);
 	plane2->setCollider(planeCollider);
@@ -89,28 +79,28 @@ void ScenarioB::onLoad(CommandList& commandList)
 		int randNum = 0;// rand() % 2;
 		if (randNum) {
 			// Create a static box
-			auto box = std::make_shared<PhysicsObject>(static_cast<UINT>(4000), m_BoxMesh, m_defaultTexture);
+			auto box = std::make_shared<PhysicsObject>(static_cast<UINT>(4000), MeshType::Box, GlobalData::g_boxMesh, GlobalData::g_defaultTexture);
 			auto sphereCollider = std::make_shared<BoxCollider>(DirectX::XMVectorReplicate(.5f));
 			box->setCollider(sphereCollider);
 			box->setMaterial(material);
 			float x = std::clamp(d(m_randomEngine), -7.0f, 7.0f);
 			float y = std::clamp(d(m_randomEngine), -7.0f, 7.0f);
 			float z = std::clamp(d(m_randomEngine), -9.0f, 7.0f);
-			box->onLoad(commandList);
+			box->onLoad();
 			box->setStatic(true);
 			box->getTransform().SetPosition({ x, y, z, 1 }, 0, true);
 			m_physicsObjects.push_back(box);
 		}
 		else {
 			// Create a sphere
-			auto particle = std::make_shared<PhysicsObject>(static_cast<UINT>(4000), m_SphereMesh, m_customTexture);
+			auto particle = std::make_shared<PhysicsObject>(static_cast<UINT>(4000), MeshType::Sphere, GlobalData::g_sphereMesh, GlobalData::g_customTexture);
 			auto sphereCollider = std::make_shared<SphereCollider>(.5f);
 			particle->setCollider(sphereCollider);
 			particle->setMaterial(material);
 			float x = std::clamp(d(m_randomEngine), -9.0f, 9.0f);
 			float y = std::clamp(d(m_randomEngine), -9.0f, 9.0f);
 			float z = std::clamp(d(m_randomEngine), -9.0f, 9.0f);
-			particle->onLoad(commandList);
+			particle->onLoad();
 			particle->getTransform().SetPosition({ x, y, z, 1 }, 0, true);
 			m_physicsObjects.push_back(particle);
 			//particle->setVelocity({ 5, 0, 0, 0 }, 0);
@@ -123,7 +113,7 @@ void ScenarioB::onUnload(CommandList& commandList)
 {
 	for (auto& physicsObject : m_physicsObjects)
 	{
-		physicsObject->onUnload(commandList);
+		physicsObject->onUnload();
 	}
 	m_physicsObjects.clear();
 }

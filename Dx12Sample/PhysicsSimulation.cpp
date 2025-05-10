@@ -31,6 +31,8 @@ using namespace DirectX;
 #include "ScenarioA.h"
 #include "ScenarioB.h"
 #include <omp.h>
+#include "EmptyScenario.h"
+#include "GlobalData.h"
 
 // Clamp a value between a min and max range.
 template<typename T>
@@ -73,8 +75,15 @@ PhysicsSimulation::PhysicsSimulation(const std::wstring& name, int width, int he
     , m_Width(0)
     , m_Height(0)
 {
-
-    m_PhysicsEngine.setAffinity(1); // Core 1
+    //m_PhysicsEngine.setAffinity(1); // Core 1
+	m_PhysicsEngine.setFixedTimeStep(1.0 / 120.0); // 120 FPS
+	m_NetworkingEngine.setFixedTimeStep(1.0 / 60.0); // 60 FPS
+	m_NetworkingEngine.setScnearioListener(
+		[this](std::vector<std::shared_ptr<PhysicsObject>>&& objects)
+		{
+			CreateEmptyScenario(std::move(objects));
+		}
+	);
 }
 
 PhysicsSimulation::~PhysicsSimulation()
@@ -87,30 +96,33 @@ bool PhysicsSimulation::LoadContent()
     auto commandQueue = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY);
     auto commandList = commandQueue->GetCommandList();
 
-    m_Scenarios.push_back(std::make_unique<ScenarioA>());
-    m_Scenarios.push_back(std::make_unique<ScenarioB>());
-    m_Scenarios.push_back(std::make_unique<BallToCapsuleScenario>());
-    m_Scenarios.push_back(std::make_unique<BallToWallScenario>());
-	m_Scenarios.push_back(std::make_unique<BallToBallScenario>());
-    m_CurrentScenario = 0u;
+    std::srand(static_cast<unsigned int>(std::chrono::system_clock::now().time_since_epoch().count()));
+    GlobalData::g_clientId = rand() % 100;
 
-    for (auto& scenario : m_Scenarios)
-    {
-        scenario->onLoad(*commandList);
-    }
-	for (auto& body : m_Scenarios[m_CurrentScenario]->getPhysicsObjects())
-	{
-		m_PhysicsEngine.addBody(body);
-	}
 	// Load the rendering engine.
 	m_RenderingEngine.LoadContent(commandQueue, commandList, device, m_pWindow.get());
+
+    // Load shared textures
+    GlobalData::g_customTexture = std::make_shared<Texture>();
+    GlobalData::g_defaultTexture = std::make_shared<Texture>();
+
+    commandList->LoadTextureFromFile(*GlobalData::g_customTexture, L"Assets/Textures/earth.dds");
+    commandList->LoadTextureFromFile(*GlobalData::g_defaultTexture, L"Assets/Textures/DefaultWhite.bmp");
+
+	// Load the scenario meshes.
+	GlobalData::g_sphereMesh = Mesh::CreateSphere(*commandList, 1.0f, 16);
+	GlobalData::g_boxMesh = Mesh::CreateCube(*commandList, 1.0f, false);
+	GlobalData::g_planeMesh = Mesh::CreatePlane(*commandList);
+
+    auto fenceValue = commandQueue->ExecuteCommandList(commandList);
+    commandQueue->WaitForFenceValue(fenceValue);
 
 	// Add update shared simulation data callback.
 	m_PhysicsEngine.addUpdateListener([this](float deltaTime)
 	{
 		UpdateSharedSimulationData();
 	});
-    m_PhysicsEngine.start();
+
 
 
     return true;
@@ -131,14 +143,28 @@ void PhysicsSimulation::OnResize(ResizeEventArgs& e)
 void PhysicsSimulation::UnloadContent()
 {
     m_PhysicsEngine.stop();
+	m_NetworkingEngine.stop();
     auto device = Application::Get().GetDevice();
     auto commandQueue = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY);
     auto commandList = commandQueue->GetCommandList();
 
-    for (auto& scenario : m_Scenarios)
-    {
-        scenario->onUnload(*commandList);
-    }
+
+    m_ScenarioMutex.lock();
+	if (m_CurrentScenario)
+	{
+		m_CurrentScenario->onUnload(*commandList);
+	}
+
+    m_ScenarioMutex.unlock();
+
+    // Unload textures
+    GlobalData::g_customTexture = nullptr;
+	GlobalData::g_defaultTexture = nullptr;
+	GlobalData::g_sphereMesh = nullptr;
+	GlobalData::g_boxMesh = nullptr;
+	GlobalData::g_planeMesh = nullptr;
+
+
     auto fenceValue = commandQueue->ExecuteCommandList(commandList);
     commandQueue->WaitForFenceValue(fenceValue);
 }
@@ -198,13 +224,17 @@ void PhysicsSimulation::OnRender(RenderEventArgs& e)
 {
     super::OnRender(e);
 
+    m_ScenarioMutex.lock();
     // Wrap the member function in a lambda to match the std::function signature.  
     auto renderCallback = [this](CommandList& commandList, const DirectX::XMMATRIX& viewMatrix, const DirectX::XMMATRIX& viewProjectionMatrix)
     {
-        m_Scenarios[m_CurrentScenario]->onRender(commandList, viewMatrix, viewProjectionMatrix);
+		if (m_CurrentScenario)
+		{
+			m_CurrentScenario->onRender(commandList, viewMatrix, viewProjectionMatrix);
+		}
     };
+	m_ScenarioMutex.unlock();
 
-    // Wrap OnGUI in a lambda to match the std::function signature.  
     auto guiCallback = [this]()
     {
         OnGUI();
@@ -366,10 +396,8 @@ void PhysicsSimulation::OnGUI()
     static bool showDemoWindow = false;
     static bool showOptions = true;
 
-    if (ImGui::BeginMainMenuBar())
-    {
-        if (ImGui::BeginMenu("File"))
-        {
+    if (ImGui::BeginMainMenuBar()) {
+        if (ImGui::BeginMenu("File")) {
             if (ImGui::MenuItem("Exit", "Esc"))
             {
                 Application::Get().Quit();
@@ -377,33 +405,31 @@ void PhysicsSimulation::OnGUI()
             ImGui::EndMenu();
         }
 
-        if (ImGui::BeginMenu("View"))
-        {
+        if (ImGui::BeginMenu("View")) {
             ImGui::MenuItem("ImGui Demo", nullptr, &showDemoWindow);
             ImGui::MenuItem("Physics Options", nullptr, &showOptions);
 
             ImGui::EndMenu();
         }
 
-        if (ImGui::BeginMenu("Options"))
-        {
+        if (ImGui::BeginMenu("Options")) {
             bool vSync = m_pWindow->IsVSync();
-            if (ImGui::MenuItem("V-Sync", "V", &vSync))
-            {
+            if (ImGui::MenuItem("V-Sync", "V", &vSync)) {
                 m_pWindow->SetVSync(vSync);
             }
 
             bool fullscreen = m_pWindow->IsFullScreen();
-            if (ImGui::MenuItem("Full screen", "Alt+Enter", &fullscreen))
-            {
+            if (ImGui::MenuItem("Full screen", "Alt+Enter", &fullscreen)) {
                 m_pWindow->SetFullscreen(fullscreen);
             }
 
             // Change scenario
-			if (ImGui::MenuItem("Next Scenario", "Ctrl+N"))
-			{
-				ChangeScenario(m_CurrentScenario+1);
+			if (ImGui::MenuItem("Create Scenario A")) {
+				ChangeScenario(0);
 			}
+            if (ImGui::MenuItem("Create Scenario B")) {
+				ChangeScenario(1);
+            }
 
             ImGui::EndMenu();
         }
@@ -427,12 +453,53 @@ void PhysicsSimulation::OnGUI()
     if (!m_NetworkingEngine.isRunning()) {
         
         ImGui::Begin("Network Session");
-		if (ImGui::Button("Start Host")) {
-			m_NetworkingEngine.startHostSession(54000, &m_sharedSimulationData);
-		}
-        if (ImGui::Button("Join Client")) {
-            m_NetworkingEngine.joinClientSession("127.0.0.1", 54000, &m_sharedSimulationData);
+        static int port = GlobalData::g_listenPort;
+        if (ImGui::InputInt("Port", &port)) {
+			GlobalData::g_listenPort = port;
         }
+		if (ImGui::Button("Start Host")) {
+            m_NetworkingEngine.initializeSockets(port);
+			m_NetworkingEngine.start();
+		}
+        ImGui::End();
+    }
+    else {
+		ImGui::Begin("Network");
+
+        if (ImGui::CollapsingHeader("Info")) {
+
+            ImGui::Text("Client ID: %d", GlobalData::g_clientId);
+
+            static char clientName[64] = "";
+            if (ImGui::InputText("Client Name", clientName, sizeof(clientName))) {
+                GlobalData::g_clientName = clientName;
+            }
+
+            DirectX::XMFLOAT4 clientColor = GlobalData::g_clientColor;
+            if (ImGui::ColorEdit4("Client Color", &clientColor.x)) {
+                GlobalData::g_clientColor = clientColor;
+            }
+        }
+
+		// Show peers
+		ImGui::Text("Peer Info:");
+		auto peers = m_NetworkingEngine.getPeersInfo();
+        for (auto& peer : peers)
+        {
+			auto color = ImColor(peer.color.x, peer.color.y, peer.color.z);
+			ImGui::TextColored(color, "Peer ID: %d, Client Name: %s", peer.peer_id, peer.client_name.c_str());
+        }
+		ImGui::End();
+
+        // Connect to peer
+		ImGui::Begin("Peer Connection");
+        // Port to connect to
+		static int connectPort = 54000;
+		ImGui::InputInt("Port", &connectPort);
+        if (ImGui::Button("Connect")) {
+            m_NetworkingEngine.connectToPeer("127.0.0.1", connectPort);
+        }
+
         ImGui::End();
     }
 
@@ -484,11 +551,70 @@ void PhysicsSimulation::OnGUI()
 
 void PhysicsSimulation::ChangeScenario(int index)
 {
-	m_CurrentScenario = index % m_Scenarios.size();
+    auto commandQueue = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY);
+    auto commandList = commandQueue->GetCommandList();
+	m_ScenarioMutex.lock();
+
+	if (m_CurrentScenario)
+	{
+		m_PhysicsEngine.stop();
+		m_CurrentScenario->onUnload(*commandList);
+		m_PhysicsEngine.clearBodies();
+	}
+    switch (index)
+    {
+	case 0:
+		m_CurrentScenario = std::make_unique<ScenarioA>();
+		break;
+	case 1:
+		m_CurrentScenario = std::make_unique<ScenarioB>();
+		break;
+    default:
+        break;
+    }
+    if (m_CurrentScenario) {
+
+        m_CurrentScenario->onLoad(*commandList);
+
+        for (auto& body : m_CurrentScenario->getPhysicsObjects())
+        {
+            m_PhysicsEngine.addBody(body);
+        }
+    }
+
+    m_ScenarioMutex.unlock();
+    auto fenceValue = commandQueue->ExecuteCommandList(commandList);
+    commandQueue->WaitForFenceValue(fenceValue);
+
+	// Inform peers about the new scenario
+	m_NetworkingEngine.broadcastScenarioCreate("Scenario", m_CurrentScenario->getPhysicsObjects());
+}
+
+void PhysicsSimulation::CreateEmptyScenario(std::vector <std::shared_ptr<PhysicsObject>>&& objects)
+{
+	auto commandQueue = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY);
+	auto commandList = commandQueue->GetCommandList();
+	if (m_CurrentScenario)
+	{
+		m_PhysicsEngine.stop();
+		m_CurrentScenario->onUnload(*commandList);
+		m_PhysicsEngine.clearBodies();
+	}
+	m_CurrentScenario = std::make_unique<EmptyScenario>(std::move(objects));
+	if (m_CurrentScenario) {
+		m_CurrentScenario->onLoad(*commandList);
+		for (auto& body : m_CurrentScenario->getPhysicsObjects())
+		{
+			m_PhysicsEngine.addBody(body);
+		}
+	}
+	auto fenceValue = commandQueue->ExecuteCommandList(commandList);
+	commandQueue->WaitForFenceValue(fenceValue);
 }
 
 void PhysicsSimulation::UpdateSharedSimulationData()
 {
+    /*
 	// Update the shared simulation data with the current state of the physics engine.
     m_sharedSimulationData.objects.clear();
 	for (const auto& body : m_Scenarios[m_CurrentScenario]->getPhysicsObjects())
@@ -512,4 +638,5 @@ void PhysicsSimulation::UpdateSharedSimulationData()
 			body->getMaterial().Ambient,
         });
 	}
+    */
 }

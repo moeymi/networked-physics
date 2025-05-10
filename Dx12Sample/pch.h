@@ -6,6 +6,7 @@
 #include <vector>
 #include <algorithm>
 #include <map>
+#include <memory>
 
 #include <DirectXMath.h>
 

@@ -11,7 +11,7 @@ void PhysicsEngine::onUpdate(float deltaTime) {
         body->swapStates();
     }
 
-    #pragma omp parallel for
+    //#pragma omp parallel for
     for (int i = 0; i < m_bodies.size(); i++) {
         auto body = m_bodies[i].get();
         if (!body->isStatic()) {
@@ -24,7 +24,6 @@ void PhysicsEngine::onUpdate(float deltaTime) {
     for (auto body : m_bodies) {
         body->swapStates();
     }
-
 }
 
 void PhysicsEngine::addBody(std::shared_ptr<PhysicsObject> body) {
@@ -35,6 +34,14 @@ void PhysicsEngine::addBody(std::shared_ptr<PhysicsObject> body) {
 	if (m_gravityEnabled) {
 		body->applyConstantForce({ 0.0f, -m_gravity * body->getMass(), 0.0f, 0.0f });
 	}
+}
+
+void PhysicsEngine::clearBodies() {
+	if (m_running) {
+		throw std::runtime_error("Cannot clear bodies while the physics engine is running.");
+	}
+	m_bodies.clear();
+	m_contactManifolds.clear();
 }
 
 void PhysicsEngine::setGravity(const float& gravity) {
@@ -108,7 +115,7 @@ void PhysicsEngine::detectAndResolveCollisions(const float& deltaTime) {
 
     for (int iter = 0; iter < m_velocityIterations; ++iter) {
 
-        #pragma omp parallel for
+        //#pragma omp parallel for
         for (int i = 0; i < m_contactManifolds.size(); i++) {
 			auto pair = m_contactManifolds.begin();
 			std::advance(pair, i);
@@ -119,7 +126,7 @@ void PhysicsEngine::detectAndResolveCollisions(const float& deltaTime) {
     }
 
     for (int i = 0; i < m_positionIterations; ++i) {
-        #pragma omp parallel for
+        //#pragma omp parallel for
 		for (int i = 0; i < m_contactManifolds.size(); i++) {
             // Output omp thread id
 			auto pair = m_contactManifolds.begin();
@@ -295,6 +302,20 @@ void PhysicsEngine::resolveCollisionVelocity(
             XMVECTOR Pt_step = XMVectorScale(t, actualLambdaT);
             if (!A->isStatic()) A->applyImpulseAtPosition(XMVectorNegate(Pt_step), c.position);
             if (!B->isStatic()) B->applyImpulseAtPosition(Pt_step, c.position);
+
+			auto angVelocityB = B->getAngularVelocity(1);
+			float angVelX = XMVectorGetX(angVelocityB);
+			float angVelY = XMVectorGetY(angVelocityB);
+			float angVelZ = XMVectorGetZ(angVelocityB);
+
+			auto velB = B->getVelocity(1);
+			float velX = XMVectorGetX(velB);
+			float velY = XMVectorGetY(velB);
+			float velZ = XMVectorGetZ(velB);
+
+            if (abs(angVelX) > 1 || abs(angVelY) > 1 || abs(angVelZ) > 1) {
+				std::cout << "Velocity: " << velY << std::endl;
+            }
         }
 
 
@@ -326,7 +347,7 @@ void PhysicsEngine::positionalCorrection(const ContactPoint& contact, PhysicsObj
 
     if (a->isStatic() && b->isStatic()) return;
 
-    const float percent = .15f;
+    const float percent = .18f;
     const float slop = 0.001f;
 
     const float penetrationDepth = contact.penetration - slop;

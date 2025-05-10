@@ -3,6 +3,7 @@
 #include <DirectXMath.h>
 #include <memory>
 #include <vector>
+#include <mutex>
 #include <functional>
 
 class Transform final {
@@ -10,7 +11,7 @@ private:
     struct State {
         DirectX::XMVECTOR position = { 0, 0, 0, 0 };
         DirectX::XMVECTOR rotationQuaternion = DirectX::XMQuaternionIdentity();;
-        DirectX::XMVECTOR scale = { 1.0f, 1.0f, 1.0f };;
+        DirectX::XMVECTOR scale = { 1.0f, 1.0f, 1.0f };
 
         DirectX::XMVECTOR lookDirection = { 0.0f, 0.0f, 1.0f, 0.0f };
         DirectX::XMVECTOR upDirection = { 0.0f, 1.0f, 0.0f, 0.0f };
@@ -19,8 +20,10 @@ private:
 
         bool positionScaleDirty = true;
         bool rotationDirty = true;
+
     } m_states[2];
 
+    std::mutex worldMatrixMutex[2];
     std::shared_ptr<Transform> parent = nullptr;
 
     bool isStatic = false;

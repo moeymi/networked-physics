@@ -22,7 +22,7 @@ public:
 
 	// Getters for dimensions
 	float getRadius() const { return m_radius; }
-	float getCylinderHeight() const { return m_cylinderHeight; }
+	float getHeight() const { return m_cylinderHeight; }
 
 	// Helper to get the local-space endpoints of the capsule's central segment
 	void getLocalSegmentEndpoints(DirectX::XMVECTOR& out_p1, DirectX::XMVECTOR& out_p2) const;

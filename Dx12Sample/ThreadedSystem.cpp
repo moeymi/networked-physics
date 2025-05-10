@@ -36,37 +36,49 @@ void ThreadedSystem::stop() {
 
 void ThreadedSystem::run() {
     using clock = std::chrono::steady_clock;
+    constexpr int maxUpdatesPerCycle = 5;
+
     auto previousTime = clock::now();
+	auto realPreviousTime = previousTime;
     float accumulatedTime = 0.0f;
 
     while (m_running) {
-
         auto currentTime = clock::now();
-        auto delta = std::chrono::duration<float>(currentTime - previousTime).count();
+        float frameTime = std::chrono::duration<float>(currentTime - previousTime).count();
         previousTime = currentTime;
 
-        // Accumulate the elapsed real time
-        accumulatedTime += delta;
+        frameTime = min(frameTime, 0.25f); // clamp to avoid huge catch-ups
+        accumulatedTime += frameTime;
 
-        const float MAX_ACCUMULATED_TIME = 1; // cap at 1 second
-        if (accumulatedTime > MAX_ACCUMULATED_TIME) {
-            accumulatedTime = MAX_ACCUMULATED_TIME;
-        }
+        int updateCount = 0;
+        while (accumulatedTime >= m_fixedTimeStep && updateCount < maxUpdatesPerCycle) {
+            auto realCurrentTime = clock::now();
+            m_realTimeStep = std::chrono::duration<float>(realCurrentTime - realPreviousTime).count();
 
-        // --- Modified Physics Update Logic ---
-        if (m_running && accumulatedTime >= m_fixedTimeStep) {
+			realPreviousTime = realCurrentTime;
 
-            m_realTimeStep = delta;
-            onUpdate(accumulatedTime);
+            onUpdate(m_fixedTimeStep);
 
             {
                 std::lock_guard<std::mutex> lock(m_listenersMutex);
                 for (const auto& listener : m_updateListeners) {
-                    listener(delta);
+                    listener(m_fixedTimeStep);
                 }
             }
 
-            accumulatedTime = 0.0f;
+            accumulatedTime -= m_fixedTimeStep;
+            updateCount++;
+        }
+
+        if (updateCount == maxUpdatesPerCycle) {
+            // If we hit the update cap, we likely dropped frames or are running slow.
+            accumulatedTime = 0.0f; // Optionally reset, or log a warning
+        }
+
+        // Sleep until the next frame
+        float timeToSleep = m_fixedTimeStep - accumulatedTime;
+        if (timeToSleep > 0.0f) {
+            std::this_thread::sleep_for(std::chrono::duration<float>(0));
         }
     }
 }

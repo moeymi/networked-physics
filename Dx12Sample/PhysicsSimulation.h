@@ -139,14 +139,12 @@ protected:
     void OnGUI();
 
 private:
-    std::vector<std::unique_ptr<Scenario>> m_Scenarios;
-    unsigned int m_CurrentScenario = 0u;
+	std::mutex m_ScenarioMutex;
+    std::unique_ptr<Scenario> m_CurrentScenario;
 
 	RenderingEngine m_RenderingEngine;
 	PhysicsEngine m_PhysicsEngine;
 	NetworkEngine m_NetworkingEngine;
-
-    SharedSimulationData m_sharedSimulationData;
 
     // Camera controller
     float m_Forward;
@@ -166,5 +164,6 @@ private:
     int m_Height;
 
 	void ChangeScenario(int index);
+	void CreateEmptyScenario(std::vector<std::shared_ptr<PhysicsObject>>&&);
 	void UpdateSharedSimulationData();
 };

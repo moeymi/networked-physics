@@ -7,9 +7,10 @@
 #include "Material.h"
 #include "PhysicsSimulation.h"
 
-PhysicsObject::PhysicsObject(const UINT& id, std::shared_ptr<Mesh> mesh, std::shared_ptr<Texture> texture) 
+PhysicsObject::PhysicsObject(const UINT& id, const MeshType& meshType, std::shared_ptr<Mesh> mesh, std::shared_ptr<Texture> texture)
 	: m_id(id),
     m_mesh(mesh),
+	m_meshType(meshType),
     m_texture(texture),
 	m_collider(nullptr),
 	m_mass(1.0f),
@@ -20,11 +21,11 @@ PhysicsObject::PhysicsObject(const UINT& id, std::shared_ptr<Mesh> mesh, std::sh
 {
 };
 
-void PhysicsObject::onLoad(CommandList& commandList)
+void PhysicsObject::onLoad()
 {
 }
 
-void PhysicsObject::onUnload(CommandList& commandList)
+void PhysicsObject::onUnload()
 {
 }
 
@@ -35,6 +36,7 @@ void PhysicsObject::onUnload(CommandList& commandList)
 void PhysicsObject::onUpdate(float deltaTime)
 {
     if (m_transform.IsStatic()) return;
+
 
     updateInertiaTensor();
 
@@ -76,6 +78,12 @@ void PhysicsObject::setMaterial(const PhysicsMaterial& material)
 	m_physicsMaterial = material;
 }
 
+void PhysicsObject::setColor(const DirectX::XMFLOAT4& color)
+{
+    m_material.Ambient = { color.x * 0.1f, color.y * 0.1f, color.z * 0.1f, 1 };
+	m_material.Diffuse = color;
+}
+
 void PhysicsObject::setCollider(std::shared_ptr<Collider> collider)
 {
 	m_collider = collider;
@@ -105,6 +113,11 @@ bool PhysicsObject::isStatic() const
 UINT PhysicsObject::getId() const
 {
 	return m_id;
+}
+
+MeshType PhysicsObject::getMeshType() const
+{
+	return m_meshType;
 }
 
 float PhysicsObject::getMass() const

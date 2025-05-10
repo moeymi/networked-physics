@@ -1,14 +1,13 @@
 #pragma once
-#include "pch.h"
 #include "Scenario.h"
-
-class ScenarioA : public Scenario
+class EmptyScenario : public Scenario
 {
 public:
-	ScenarioA() = default;
-	virtual ~ScenarioA() override = default;
+	EmptyScenario(std::vector<std::shared_ptr<PhysicsObject>>&&);
+	virtual ~EmptyScenario() override = default;
 
 	void onLoad(CommandList& commandList) override;
 	void onUnload(CommandList& commandList) override;
 	void onRender(CommandList& commandList, const DirectX::XMMATRIX& viewMatrix, const DirectX::XMMATRIX& viewProjectionMatrix) override;
 };
+

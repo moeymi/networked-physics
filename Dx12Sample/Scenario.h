@@ -5,12 +5,12 @@
 #include <random>
 #include "Texture.h"
 #include "PhysicsObject.h"
+#include "GlobalData.h"
 
 class Scenario
 {
 protected:
 	std::vector<std::shared_ptr<PhysicsObject>> m_physicsObjects;
-
 	static std::mt19937 m_randomEngine;
 
 public:

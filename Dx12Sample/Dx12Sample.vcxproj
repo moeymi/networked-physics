@@ -179,6 +179,9 @@
     <ClCompile Include="CollisionHandlers.h" />
     <ClCompile Include="CollisionSystem.cpp" />
     <ClCompile Include="CapsuleCollider.h" />
+    <ClCompile Include="EmptyScenario.cpp" />
+    <ClCompile Include="FlatBufferHelper.cpp" />
+    <ClCompile Include="GlobalData.cpp" />
     <ClCompile Include="Light.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Material.cpp" />
@@ -204,11 +207,12 @@
     <ClInclude Include="Camera.h" />
     <ClInclude Include="Collider.h" />
     <ClInclude Include="CollisionSystem.h" />
+    <ClInclude Include="EmptyScenario.h" />
+    <ClInclude Include="FlatBufferHelper.h" />
     <ClInclude Include="game_state_generated.h" />
     <ClInclude Include="Light.h" />
     <ClInclude Include="Material.h" />
     <ClInclude Include="NetworkEngine.h" />
-    <ClInclude Include="NetworkMessages.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="PhysicsEngine.h" />
     <ClInclude Include="PhysicsObject.h" />
@@ -218,6 +222,7 @@
     <ClInclude Include="ScenarioA.h" />
     <ClInclude Include="ScenarioB.h" />
     <ClInclude Include="SphereCollider.h" />
+    <ClInclude Include="GlobalData.h" />
     <ClInclude Include="ThreadAffinity.h" />
     <ClInclude Include="ThreadedSystem.h" />
     <ClInclude Include="ThreeByThreeCubeScenario.h" />

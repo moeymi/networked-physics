@@ -5,14 +5,24 @@
 #include <DirectXMath.h>
 #include "Transform.h"
 
-enum class ColliderType : uint8_t 
+enum class ColliderType : UINT16 
 {
 	Sphere,
 	Box,
 	Capsule,
-	Mesh,
 	Count
 };
+
+
+// Specialize std::hash for ColliderType
+namespace std {
+	template <>
+	struct hash<ColliderType> {
+		std::size_t operator()(const ColliderType& type) const noexcept {
+			return static_cast<std::size_t>(type);
+		}
+	};
+}
 
 class AABB
 {

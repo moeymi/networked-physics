@@ -4,12 +4,6 @@
 
 class ScenarioB : public Scenario
 {
-	std::shared_ptr<Mesh> m_SphereMesh;
-	std::shared_ptr<Mesh> m_BoxMesh;
-	std::shared_ptr<Mesh> m_PlaneMesh;
-	std::shared_ptr <Texture> m_customTexture;
-	std::shared_ptr <Texture> m_defaultTexture;
-
 public:
 	ScenarioB() = default;
 	virtual ~ScenarioB() override = default;

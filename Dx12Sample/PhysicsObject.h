@@ -5,6 +5,15 @@
 #include "Collider.h"
 #include "Material.h"
 
+enum class MeshType : UINT16
+{
+	Sphere,
+	Box,
+	Capsule,
+	Plane,
+	Count
+};
+
 class CommandList;
 
 struct PhysicsMaterial {
@@ -46,11 +55,11 @@ public:
 		RK4,
 		Verlet
 	};
-	PhysicsObject(const UINT& id, std::shared_ptr<Mesh> mesh, std::shared_ptr<Texture> texture);
+	PhysicsObject(const UINT& id, const MeshType& meshType, std::shared_ptr<Mesh> mesh, std::shared_ptr<Texture> texture);
 	~PhysicsObject() = default;
 
-	void onLoad(CommandList& commandList);
-	void onUnload(CommandList& commandList);
+	void onLoad();
+	void onUnload();
 	void onUpdate(float deltaTime);
 	void onRender(CommandList& commandList, const DirectX::XMMATRIX& viewMatrix, const DirectX::XMMATRIX& viewProjectionMatrix);
 	void onCollision(CollisionManifold collisionManifold);
@@ -72,10 +81,12 @@ public:
 	void setMass(const float& mass);
 	void setStatic(const bool& isStatic);
 	void setMaterial(const PhysicsMaterial& material);
+	void setColor(const DirectX::XMFLOAT4& color);
 
 	bool isStatic() const;
 	float getMass() const;
 	UINT getId() const;
+	MeshType getMeshType() const;
 	DirectX::XMVECTOR getCenterOfMass() const;
 	DirectX::XMVECTOR getVelocity(const USHORT& bufferIndex) const;
 	DirectX::XMVECTOR getAngularVelocity(const USHORT& bufferIndex) const;
@@ -91,6 +102,7 @@ public:
 private:
 	UINT m_id = 0u;
 	Transform m_transform;
+	MeshType m_meshType;
 	std::shared_ptr<Mesh> m_mesh;
 	std::shared_ptr<Texture> m_texture;
 	std::shared_ptr<Collider> m_collider;
@@ -101,15 +113,11 @@ private:
 		DirectX::XMVECTOR m_angularVelocity =	{ 0, 0, 0, 0 };
 	} m_states[2];
 
-	// Physics properties
 	float m_mass = 1.0f;
 	PhysicsMaterial m_physicsMaterial;
 
 	DirectX::XMVECTOR m_centerOfMass = { 0.0f, 0.0f, 0.0f, 1.0f };
-
-	// Forces and motion integration
 	DirectX::XMVECTOR m_constantForces = { 0.0f, 0.0f, 0.0f, 0.0f };
-
 	DirectX::XMMATRIX m_inverseWorldInertiaTensor = DirectX::XMMatrixScaling(0.0f, 0.0f, 0.0f);
 
 	void (PhysicsObject::* m_integrateMotion)(const float& deltaTime);

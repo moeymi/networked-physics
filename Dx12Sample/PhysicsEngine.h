@@ -24,6 +24,7 @@ private:
 public:
 	PhysicsEngine() = default;
     void addBody(std::shared_ptr<PhysicsObject> body);
+    void clearBodies();
 
     void toggleGravity(const bool& toggle);
     void setGravity(const float& gravity);
