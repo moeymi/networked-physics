@@ -5,8 +5,7 @@
 #include "Collider.h"
 #include "Material.h"
 
-enum class MeshType : UINT16
-{
+enum class MeshType : UINT16 {
 	Sphere,
 	Box,
 	Capsule,
@@ -46,8 +45,7 @@ struct CollisionManifold {
 	std::vector<ContactPoint> contacts;
 };
 
-class PhysicsObject final
-{
+class PhysicsObject final {
 public:
 	enum class MotionIntegrationType {
 		SemiImplicitEuler,
@@ -66,6 +64,7 @@ public:
 
 	void updateInertiaTensor();
 
+	void setOwnerId(const uint32_t& ownerId);
 	void setIntegrationType(const MotionIntegrationType& integrationType);
 
 	void applyConstantForce(const DirectX::XMVECTOR& force);
@@ -80,12 +79,13 @@ public:
 	void setCollider(std::shared_ptr<Collider> collider);
 	void setMass(const float& mass);
 	void setStatic(const bool& isStatic);
-	void setMaterial(const PhysicsMaterial& material);
+	void setPhysicsMaterial(const PhysicsMaterial& material);
 	void setColor(const DirectX::XMFLOAT4& color);
 
 	bool isStatic() const;
 	float getMass() const;
 	UINT getId() const;
+	uint32_t getOwnerId() const;
 	MeshType getMeshType() const;
 	DirectX::XMVECTOR getCenterOfMass() const;
 	DirectX::XMVECTOR getVelocity(const USHORT& bufferIndex) const;
@@ -101,6 +101,7 @@ public:
 
 private:
 	UINT m_id = 0u;
+	uint32_t m_ownerId;
 	Transform m_transform;
 	MeshType m_meshType;
 	std::shared_ptr<Mesh> m_mesh;

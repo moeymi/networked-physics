@@ -11,7 +11,8 @@
 #include "GlobalData.h"
 
 NetworkEngine::NetworkEngine()
-    : m_listenSocket(INVALID_SOCKET)
+	: m_listenSocket(INVALID_SOCKET),
+	m_sharedData(std::make_unique<SharedData>())
 {
     m_materialMap[0] = Material::White;
 	m_materialMap[1] = Material::Red;
@@ -32,8 +33,28 @@ std::vector<PeerInfo> NetworkEngine::getPeersInfo() const {
     return peers;
 }
 
-void NetworkEngine::setScnearioListener(std::function<void(std::vector<std::shared_ptr<PhysicsObject>>&&)> listener) {
+void NetworkEngine::setScnearioListener(std::function<void(std::vector<std::shared_ptr<PhysicsObject>>&&, const float&)> listener) {
 	m_createScenario = listener;
+}
+
+void NetworkEngine::setStartSimulationListener(std::function<void(double)> listener) {
+	m_startSimulation = listener;
+}
+
+void NetworkEngine::scheduleSimulationStart(float time) {
+    flatbuffers::FlatBufferBuilder builder;
+    auto msgType = builder.CreateString("StartSimulation");
+    auto startSim = NetSim::CreateStartSimulation(builder, time);
+
+    NetSim::NetworkMessageBuilder msg(builder);
+    msg.add_msg_type(msgType);
+    msg.add_data_type(NetSim::MessageUnion_StartSimulation);
+    msg.add_data(startSim.Union());
+    builder.Finish(msg.Finish());
+
+    for (SOCKET s : m_peerSockets) {
+        sendMessage(s, builder);
+    }
 }
 
 void NetworkEngine::initializeSockets(unsigned short listenPort) {
@@ -67,6 +88,11 @@ void NetworkEngine::initializeSockets(unsigned short listenPort) {
         WSACleanup();
         throw std::runtime_error("Listen failed");
     }
+
+    std::thread(&NetworkEngine::listenForDiscovery, this, GlobalData::g_broadcastPort).detach();
+
+    // Broadcast discovery message
+    broadcastDiscovery(GlobalData::g_broadcastPort);
 }
 
 void NetworkEngine::connectToPeer(const std::string& ip, unsigned short port) {
@@ -99,6 +125,148 @@ void NetworkEngine::removePeer(SOCKET peerSocket) {
 	m_peerInfoMap.erase(peerSocket);
 }
 
+void NetworkEngine::broadcastDiscovery(unsigned short discoveryPort) {
+    SOCKET udpSocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (udpSocket == INVALID_SOCKET) {
+        // Handle error
+        return;
+    }
+
+    // Enable broadcast option
+    int broadcastEnable = 1;
+    if (setsockopt(udpSocket, SOL_SOCKET, SO_BROADCAST, reinterpret_cast<const char*>(&broadcastEnable), sizeof(broadcastEnable)) < 0) {
+        // Handle error
+        closesocket(udpSocket);
+        return;
+    }
+
+    sockaddr_in broadcastAddr{};
+    broadcastAddr.sin_family = AF_INET;
+    broadcastAddr.sin_port = htons(discoveryPort);
+    broadcastAddr.sin_addr.s_addr = INADDR_BROADCAST; // 255.255.255.255
+
+    // Construct discovery message (e.g., JSON or custom binary format)
+    std::string discoveryMessage = constructDiscoveryMessage();
+
+    sendto(udpSocket, discoveryMessage.c_str(), static_cast<int>(discoveryMessage.size()), 0,
+        reinterpret_cast<sockaddr*>(&broadcastAddr), sizeof(broadcastAddr));
+
+    closesocket(udpSocket);
+}
+
+void NetworkEngine::listenForDiscovery(unsigned short discoveryPort) {
+    SOCKET udpSocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (udpSocket == INVALID_SOCKET) {
+        // Handle error
+        return;
+    }
+
+    sockaddr_in recvAddr{};
+    recvAddr.sin_family = AF_INET;
+    recvAddr.sin_port = htons(discoveryPort);
+    recvAddr.sin_addr.s_addr = INADDR_ANY;
+
+    if (bind(udpSocket, reinterpret_cast<sockaddr*>(&recvAddr), sizeof(recvAddr)) == SOCKET_ERROR) {
+        // Handle error
+        closesocket(udpSocket);
+        return;
+    }
+
+    char buffer[1024];
+    sockaddr_in senderAddr{};
+    int senderAddrSize = sizeof(senderAddr);
+
+    while (true) {
+        int bytesReceived = recvfrom(udpSocket, buffer, sizeof(buffer), 0,
+            reinterpret_cast<sockaddr*>(&senderAddr), &senderAddrSize);
+        if (bytesReceived > 0) {
+            auto message = NetSim::GetNetworkMessage(buffer);
+            if (message->data_type() == NetSim::MessageUnion_DiscoveryBroadcast) {
+                const NetSim::DiscoveryBroadcast* discovery = message->data_as_DiscoveryBroadcast();
+                if (discovery->peer_id() == GlobalData::g_clientId) {
+                    continue; // Ignore discovery from self
+                }
+                if (discovery->protocol_version() != PROTOCOL_VERSION) {
+                    continue; // Skip incompatible versions
+                }
+
+                char ipStr[INET_ADDRSTRLEN];
+                inet_ntop(AF_INET, &senderAddr.sin_addr, ipStr, sizeof(ipStr));
+                std::string senderIP = ipStr;
+                unsigned short senderPort = discovery->tcp_port();
+
+                // Initiate TCP connection back to the sender
+                connectToPeer(senderIP, senderPort);
+            }
+        }
+    }
+
+    closesocket(udpSocket);
+}
+
+std::string NetworkEngine::constructDiscoveryMessage() {
+    flatbuffers::FlatBufferBuilder builder;
+
+    // Create fields
+    auto name = builder.CreateString(GlobalData::g_clientName);
+    NetSim::Vec3 color{ GlobalData::g_clientColor.x, GlobalData::g_clientColor.y, GlobalData::g_clientColor.z };
+
+    // Create the DiscoveryBroadcast payload
+    auto discovery = NetSim::CreateDiscoveryBroadcast(
+        builder,
+        PROTOCOL_VERSION,
+        GlobalData::g_clientId,
+        name,
+        GlobalData::g_listenPort,
+        &color
+    );
+
+    // Wrap in a NetworkMessage
+    auto msgType = builder.CreateString("DiscoveryBroadcast");
+    NetSim::NetworkMessageBuilder msgBuilder(builder);
+    msgBuilder.add_msg_type(msgType);
+    msgBuilder.add_data_type(NetSim::MessageUnion_DiscoveryBroadcast);
+    msgBuilder.add_data(discovery.Union());
+
+    auto networkMessage = msgBuilder.Finish();
+    builder.Finish(networkMessage);
+
+    // Return serialized buffer as string
+    return std::string(reinterpret_cast<const char*>(builder.GetBufferPointer()), builder.GetSize());
+}
+
+void NetworkEngine::sendPing(SOCKET peerSocket) {
+    flatbuffers::FlatBufferBuilder builder;
+    double now = GlobalData::getTimestamp();
+    m_sentPingTimestamps[now] = now;
+    auto ping = NetSim::CreatePing(builder, now);
+
+    auto msgType = builder.CreateString("Ping");
+    NetSim::NetworkMessageBuilder msg(builder);
+    msg.add_msg_type(msgType);
+    msg.add_data_type(NetSim::MessageUnion_Ping);
+    msg.add_data(ping.Union());
+    builder.Finish(msg.Finish());
+
+    sendMessage(peerSocket, builder);
+}
+
+void NetworkEngine::sendPong(SOCKET peerSocket, const NetSim::Ping* ping) {
+    flatbuffers::FlatBufferBuilder builder;
+    double now = GlobalData::getTimestamp();
+
+    auto pong = NetSim::CreatePong(builder, ping->sent_time(), now);
+    auto msgType = builder.CreateString("Pong");
+
+    NetSim::NetworkMessageBuilder msg(builder);
+    msg.add_msg_type(msgType);
+    msg.add_data_type(NetSim::MessageUnion_Pong);
+    msg.add_data(pong.Union());
+    builder.Finish(msg.Finish());
+
+    sendMessage(peerSocket, builder);
+}
+
 void NetworkEngine::sendRecognize(SOCKET peerSocket) {  
     flatbuffers::FlatBufferBuilder builder;
 
@@ -118,13 +286,22 @@ void NetworkEngine::sendRecognize(SOCKET peerSocket) {
     builder.Finish(message);
 
     sendMessage(peerSocket, builder);
+
+    sendPing(peerSocket);
 }
 
-void NetworkEngine::sendScenarioCreate(SOCKET peerSocket, const std::vector<std::shared_ptr<PhysicsObject>>& physicsObjects) {
+void NetworkEngine::assignOwnersAndBroadcastScenarioCreate(std::string scenarioName, const std::vector<std::shared_ptr<PhysicsObject>>& physicsObjects, const float& gravity,
+    std::vector<PhysicsObject*>& ownedObjects, PhysicsObject** unownedObjects) {
     flatbuffers::FlatBufferBuilder builder;
-    std::vector<flatbuffers::Offset<NetSim::ObjectState>> objectStates;
 
+    std::vector<flatbuffers::Offset<NetSim::ObjectState>> objectStates;
     std::unordered_map<int, int> nonStaticObjects;
+
+	m_sharedData->m_incomingObjectStates[0].clear();
+    m_sharedData->m_incomingObjectStates[1].clear();
+	m_sharedData->m_outgoingObjectStates[0].clear();
+    m_sharedData->m_outgoingObjectStates[1].clear();
+
     int cnt = 0;
     for (int j = 0; j < physicsObjects.size(); j++) {
         if (!physicsObjects[j]->isStatic()) {
@@ -133,19 +310,19 @@ void NetworkEngine::sendScenarioCreate(SOCKET peerSocket, const std::vector<std:
     }
 
     for (int i = 0; i < physicsObjects.size(); i++) {
-		auto& object = physicsObjects[i];
+        auto& object = physicsObjects[i];
         DirectX::XMFLOAT3 position;
-		DirectX::XMStoreFloat3(&position, object->getTransform().GetPosition(0));
+        DirectX::XMStoreFloat3(&position, object->getTransform().GetPosition(0));
 
-		DirectX::XMFLOAT4 rotation;
-		DirectX::XMStoreFloat4(&rotation, object->getTransform().GetRotationQuaternion(0));
+        DirectX::XMFLOAT4 rotation;
+        DirectX::XMStoreFloat4(&rotation, object->getTransform().GetRotationQuaternion(0));
 
         DirectX::XMFLOAT3 scale;
-		DirectX::XMStoreFloat3(&scale, object->getTransform().GetScale(0));
+        DirectX::XMStoreFloat3(&scale, object->getTransform().GetScale(0));
 
-		DirectX::XMFLOAT3 colliderSize;
-		auto collider = object->getCollider();
-		auto type = object->getMeshType();
+        DirectX::XMFLOAT3 colliderSize;
+        auto collider = object->getCollider();
+        auto type = object->getMeshType();
         switch (type)
         {
         case MeshType::Sphere:
@@ -167,60 +344,73 @@ void NetworkEngine::sendScenarioCreate(SOCKET peerSocket, const std::vector<std:
             colliderSize = { capsuleCollider->getRadius(), capsuleCollider->getHeight(), 0.0f };
             break;
         }
-		case MeshType::Plane:
-		{
-			auto planeCollider = static_cast<BoxCollider*>(collider);
-			DirectX::XMStoreFloat3(&colliderSize, planeCollider->getHalfSize());
-			break;
-		}
-        default:
-			throw std::runtime_error("Unknown collider type");
+        case MeshType::Plane:
+        {
+            auto planeCollider = static_cast<BoxCollider*>(collider);
+            DirectX::XMStoreFloat3(&colliderSize, planeCollider->getHalfSize());
             break;
         }
-		NetSim::Vec3 positionVec3 = { position.x, position.y, position.z };
-		NetSim::Vec4 rotationVec4 = { rotation.x, rotation.y, rotation.z, rotation.w };
-		NetSim::Vec3 scaleVec3 = { scale.x, scale.y, scale.z };
-		NetSim::Vec3 colliderSizeVec3 = { colliderSize.x, colliderSize.y, colliderSize.z };
+        default:
+            throw std::runtime_error("Unknown collider type");
+            break;
+        }
+        NetSim::Vec3 positionVec3 = { position.x, position.y, position.z };
+        NetSim::Vec4 rotationVec4 = { rotation.x, rotation.y, rotation.z, rotation.w };
+        NetSim::Vec3 scaleVec3 = { scale.x, scale.y, scale.z };
+        NetSim::Vec3 colliderSizeVec3 = { colliderSize.x, colliderSize.y, colliderSize.z };
 
         uint16_t peerIndex = 0;
+        uint32_t peerId = GlobalData::g_clientId;
         NetSim::Vec3 colorVec3 = { GlobalData::g_clientColor.x, GlobalData::g_clientColor.y, GlobalData::g_clientColor.z };
 
         if (!object->isStatic()) {
-			int distrib = ceil(static_cast<float>(nonStaticObjects.size()) / static_cast<float>(m_peerSockets.size() + 1));
-			if (distrib == 0) distrib = 1;
-			peerIndex = static_cast<uint16_t>(nonStaticObjects[i] / distrib);
+            int distrib = ceil(static_cast<float>(nonStaticObjects.size()) / static_cast<float>(m_peerSockets.size() + 1));
+            if (distrib == 0) distrib = 1;
+            peerIndex = static_cast<uint16_t>(nonStaticObjects[i] / distrib);
             if (peerIndex > 0) {
                 peerIndex--;
+                peerId = m_peerInfoMap[m_peerSockets[peerIndex]].peer_id;
                 auto clientColor = m_peerInfoMap[m_peerSockets[peerIndex]].color;
                 colorVec3 = { clientColor.x, clientColor.y, clientColor.z };
+				unownedObjects[object->getId()] = object.get();
+				m_sharedData->m_incomingObjectStates[0].push_back({object->getId(), position, rotation, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}});
+			}
+			else {
+				peerId = GlobalData::g_clientId;
+				ownedObjects.push_back(object.get());
+                m_sharedData->m_outgoingObjectStates[0].push_back({ object->getId(), position, rotation, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f } });
             }
+            object->setOwnerId(peerId);
         }
         else {
             // Static objects are always white
             colorVec3 = { 1.0f, 1.0f, 1.0f };
         }
-		bool isStatic = object->isStatic();
-		object->setColor({ colorVec3.x(), colorVec3.y(), colorVec3.z(), 1.0f});
-        auto objectState = NetSim::CreateObjectState(builder, object->getId(), &isStatic, static_cast<NetSim::MeshType>(type), &colliderSizeVec3, &positionVec3, &rotationVec4, &scaleVec3, &colorVec3, 0);
+        bool isStatic = object->isStatic();
+        object->setColor({ colorVec3.x(), colorVec3.y(), colorVec3.z(), 1.0f });
+        auto physicsMaterial = object->getPhysicsMaterial();
+
+		NetSim::PhysicsMaterial material = { physicsMaterial.friction, physicsMaterial.angularFriction, physicsMaterial.restitution };
+        auto objectState = NetSim::CreateObjectState(builder, object->getId(), isStatic, static_cast<NetSim::MeshType>(type), &material, &colliderSizeVec3, &positionVec3, &rotationVec4, &scaleVec3, &colorVec3, peerId);
         objectStates.push_back(objectState);
     }
 
+	m_sharedData->m_outgoingObjectStates[1] = m_sharedData->m_outgoingObjectStates[0];
+	m_sharedData->m_incomingObjectStates[1] = m_sharedData->m_incomingObjectStates[0];
+
     auto objectsVector = builder.CreateVector(objectStates);
     auto scenarioId = builder.CreateString("Scenario");
-    auto scenario_offset = NetSim::CreateScenario(builder, GlobalData::g_clientId, objectsVector);
+    auto scenario_offset = NetSim::CreateScenario(builder, GlobalData::g_clientId, objectsVector, gravity);
     NetSim::NetworkMessageBuilder msg_builder(builder);
     msg_builder.add_msg_type(scenarioId);
     msg_builder.add_data_type(NetSim::MessageUnion_Scenario);
     msg_builder.add_data(scenario_offset.Union());
     auto message = msg_builder.Finish();
     builder.Finish(message);
-    sendMessage(peerSocket, builder);
-}
 
-void NetworkEngine::broadcastScenarioCreate(std::string scenarioName, const std::vector<std::shared_ptr<PhysicsObject>>& objects) {
     std::lock_guard<std::mutex> lock(m_peerMutex);
     for (SOCKET s : m_peerSockets) {
-        sendScenarioCreate(s, objects);
+        sendMessage(s, builder);
     }
 }
 
@@ -228,6 +418,13 @@ void NetworkEngine::sendMessage(SOCKET peerSocket, flatbuffers::FlatBufferBuilde
     uint32_t size = htonl(static_cast<uint32_t>(builder.GetSize()));
     send(peerSocket, reinterpret_cast<const char*>(&size), sizeof(size), 0);
     send(peerSocket, reinterpret_cast<const char*>(builder.GetBufferPointer()), builder.GetSize(), 0);
+}
+
+void NetworkEngine::cleanDirtyOutgoingObjects() {
+	if (m_sharedData->m_ownedObjectsDirty) {
+		m_sharedData->m_outgoingObjectStates[0] = m_sharedData->m_outgoingObjectStates[1];
+		m_sharedData->m_ownedObjectsDirty = false;
+	}
 }
 
 void NetworkEngine::sendPeerList(SOCKET to) {
@@ -257,6 +454,37 @@ void NetworkEngine::sendPeerList(SOCKET to) {
     sendMessage(to, builder);
 }
 
+void NetworkEngine::sendObjectUpdatesToPeers(const std::vector<ObjectUpdate>& updates) {
+    flatbuffers::FlatBufferBuilder builder;
+
+    std::vector<flatbuffers::Offset<NetSim::ObjectUpdate>> fbUpdates;
+    for (const auto& update : updates) {
+        NetSim::Vec3 pos(update.position.x, update.position.y, update.position.z);
+        NetSim::Vec4 rot(update.rotation.x, update.rotation.y, update.rotation.z, update.rotation.w);
+
+		NetSim::Vec3 vel(update.velocity.x, update.velocity.y, update.velocity.z);
+		NetSim::Vec3 angVel(update.angular_velocity.x, update.angular_velocity.y, update.angular_velocity.z);
+
+		auto offset = NetSim::CreateObjectUpdate(builder, update.object_id, &pos, &rot, &vel, &angVel);
+        fbUpdates.push_back(offset);
+    }
+
+    auto updateVec = builder.CreateVector(fbUpdates);
+    auto msgType = builder.CreateString("ObjectUpdate");
+    auto updatesOffset = NetSim::CreateObjectUpdateList(builder, updateVec); // you'll need this wrapper table
+
+    NetSim::NetworkMessageBuilder msg_builder(builder);
+    msg_builder.add_msg_type(msgType);
+    msg_builder.add_data_type(NetSim::MessageUnion_ObjectUpdateList);
+    msg_builder.add_data(updatesOffset.Union());
+    builder.Finish(msg_builder.Finish());
+
+    // Send to all peers
+    std::lock_guard<std::mutex> lock(m_peerMutex);
+    for (SOCKET s : m_peerSockets) {
+        sendMessage(s, builder);
+    }
+}
 
 void NetworkEngine::handleNewConnection() {
     SOCKET clientSocket = accept(m_listenSocket, nullptr, nullptr);
@@ -298,10 +526,18 @@ void NetworkEngine::handlePeerData(SOCKET peerSocket) {
     case NetSim::MessageUnion_Scenario:
         handleScenario(message->data_as_Scenario());
         break;
-    case NetSim::MessageUnion_ObjectUpdate:
-        //handleObjectUpdate(message->data_as_ObjectUpdate());
+    case NetSim::MessageUnion_ObjectUpdateList:
+        handleObjectUpdate(message->data_as_ObjectUpdateList());
         break;
-        // Handle other message types as needed
+	case NetSim::MessageUnion_StartSimulation:
+		handleStartSimulation(peerSocket, message->data_as_StartSimulation());
+		break;
+	case NetSim::MessageUnion_Ping:
+		handlePing(peerSocket, message->data_as_Ping());
+		break;
+	case NetSim::MessageUnion_Pong:
+		handlePong(peerSocket, message->data_as_Pong());
+		break;
     default:
         break;
     }
@@ -336,6 +572,24 @@ void NetworkEngine::handlePeerList(const NetSim::PeerList* list) {
     }
 }
 
+void NetworkEngine::handlePing(SOCKET from, const NetSim::Ping* ping) {
+    sendPong(from, ping);
+}
+
+void NetworkEngine::handlePong(SOCKET from, const NetSim::Pong* pong) {
+    auto it = m_sentPingTimestamps.find(pong->ping_sent_time());
+    if (it == m_sentPingTimestamps.end()) return;
+
+    double T_send = it->second;
+    double T_recv = GlobalData::getTimestamp();
+    double T_remote = pong->remote_time();
+
+    double rtt = T_recv - T_send;
+    double offset = T_remote - (T_send + rtt * 0.5);
+    m_peerClockOffsets[from] = offset;
+
+    m_sentPingTimestamps.erase(it);
+}
 
 void NetworkEngine::handleRecognize(const NetSim::Recognize* recognize) {
     if (!recognize) return;
@@ -434,6 +688,8 @@ void NetworkEngine::handleScenario(const NetSim::Scenario* scenario) {
 		physicsObject->getTransform().SetRotationQuaternion(rotation, 0, true);
 		physicsObject->getTransform().SetScale(scale, 0, true);
 		physicsObject->setStatic(object->is_static());
+		physicsObject->setOwnerId(object->authority_peer_id());
+		physicsObject->setPhysicsMaterial({ object->material()->friction(), object->material()->angular_friction(), object->material()->restitution() });
 
 		objects.push_back(physicsObject);
 	}
@@ -443,11 +699,46 @@ void NetworkEngine::handleScenario(const NetSim::Scenario* scenario) {
 
 	// Notify the scenario listener
 	if (m_createScenario) {
-		m_createScenario(std::move(objects));
+		m_createScenario(std::move(objects), scenario->gravity());
 	}
 }
 
+void NetworkEngine::handleObjectUpdate(const NetSim::ObjectUpdateList* objectUpdateList) {
+	if (!objectUpdateList) return;
+    {
+        std::lock_guard<std::mutex> lock(m_sharedData->m_incomingMutex);
+        m_sharedData->m_incomingObjectStates[1].clear();
+        for (const auto* update : *objectUpdateList->updates()) {
+            uint32_t objectId = update->object_id();
+            DirectX::XMFLOAT3 position = { update->position()->x(), update->position()->y(), update->position()->z() };
+            DirectX::XMFLOAT4 rotation = { update->rotation()->x(), update->rotation()->y(), update->rotation()->z(), update->rotation()->w() };
+			DirectX::XMFLOAT3 velocity = { update->velocity()->x(), update->velocity()->y(), update->velocity()->z() };
+			DirectX::XMFLOAT3 angularVelocity = { update->angular_velocity()->x(), update->angular_velocity()->y(), update->angular_velocity()->z() };
+            m_sharedData->m_incomingObjectStates[1].push_back({ objectId, position, rotation, velocity, angularVelocity });
+        }
+		m_sharedData->m_unownedObjectsDirty = true;
+    }
+}
+
+void NetworkEngine::handleStartSimulation(SOCKET peerSocket, const NetSim::StartSimulation* startSim) {
+    double remoteTime = startSim->simulation_start_time();
+    double offset = m_peerClockOffsets[peerSocket];
+
+    double localStartTime = remoteTime - offset;
+    m_startSimulation(localStartTime);
+}
+
 void NetworkEngine::onUpdate(float deltaTime) {
+    static double lastPingTime = 0.0;
+    double now = GlobalData::getTimestamp();
+    if (now - lastPingTime > 5.0) {
+        std::lock_guard<std::mutex> lock(m_peerMutex);
+        for (SOCKET s : m_peerSockets) {
+            sendPing(s);
+        }
+        lastPingTime = now;
+    }
+
     fd_set readSet;
     FD_ZERO(&readSet);
     FD_SET(m_listenSocket, &readSet);
@@ -474,4 +765,30 @@ void NetworkEngine::onUpdate(float deltaTime) {
             }
         }
     }
+
+    {
+        std::lock_guard<std::mutex> lock(m_sharedData->m_outgoingMutex);
+		if (m_sharedData->m_ownedObjectsDirty) {
+			cleanDirtyOutgoingObjects();
+		}
+    }
+
+    m_sharedData->m_outgoingMutex.lock();
+    if (m_sharedData->m_outgoingObjectStates[1].size()) {
+        sendObjectUpdatesToPeers(m_sharedData->m_outgoingObjectStates[1]);
+    }
+	m_sharedData->m_outgoingMutex.unlock();
 }
+
+void NetworkEngine::onStop() {
+	for (SOCKET s : m_peerSockets) {
+		closesocket(s);
+	}
+	m_peerSockets.clear();
+	m_peerInfoMap.clear();
+	closesocket(m_listenSocket);
+	m_listenSocket = INVALID_SOCKET;
+	WSACleanup();
+}
+
+void NetworkEngine::onStart() {}

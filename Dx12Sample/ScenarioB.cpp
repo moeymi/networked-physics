@@ -82,7 +82,7 @@ void ScenarioB::onLoad(CommandList& commandList)
 			auto box = std::make_shared<PhysicsObject>(static_cast<UINT>(4000), MeshType::Box, GlobalData::g_boxMesh, GlobalData::g_defaultTexture);
 			auto sphereCollider = std::make_shared<BoxCollider>(DirectX::XMVectorReplicate(.5f));
 			box->setCollider(sphereCollider);
-			box->setMaterial(material);
+			box->setPhysicsMaterial(material);
 			float x = std::clamp(d(m_randomEngine), -7.0f, 7.0f);
 			float y = std::clamp(d(m_randomEngine), -7.0f, 7.0f);
 			float z = std::clamp(d(m_randomEngine), -9.0f, 7.0f);
@@ -96,7 +96,7 @@ void ScenarioB::onLoad(CommandList& commandList)
 			auto particle = std::make_shared<PhysicsObject>(static_cast<UINT>(4000), MeshType::Sphere, GlobalData::g_sphereMesh, GlobalData::g_customTexture);
 			auto sphereCollider = std::make_shared<SphereCollider>(.5f);
 			particle->setCollider(sphereCollider);
-			particle->setMaterial(material);
+			particle->setPhysicsMaterial(material);
 			float x = std::clamp(d(m_randomEngine), -9.0f, 9.0f);
 			float y = std::clamp(d(m_randomEngine), -9.0f, 9.0f);
 			float z = std::clamp(d(m_randomEngine), -9.0f, 9.0f);

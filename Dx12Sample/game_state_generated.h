@@ -19,6 +19,8 @@ struct Vec3;
 
 struct Vec4;
 
+struct PhysicsMaterial;
+
 struct ObjectState;
 struct ObjectStateBuilder;
 
@@ -31,6 +33,9 @@ struct RecognizeBuilder;
 struct ObjectUpdate;
 struct ObjectUpdateBuilder;
 
+struct ObjectUpdateList;
+struct ObjectUpdateListBuilder;
+
 struct PeerInfo;
 struct PeerInfoBuilder;
 
@@ -40,19 +45,22 @@ struct PeerListBuilder;
 struct RequestScenario;
 struct RequestScenarioBuilder;
 
-struct PeerDisconnect;
-struct PeerDisconnectBuilder;
-
 struct Ping;
 struct PingBuilder;
 
 struct Pong;
 struct PongBuilder;
 
+struct StartSimulation;
+struct StartSimulationBuilder;
+
+struct DiscoveryBroadcast;
+struct DiscoveryBroadcastBuilder;
+
 struct NetworkMessage;
 struct NetworkMessageBuilder;
 
-enum MeshType : int8_t {
+enum MeshType : uint8_t {
   MeshType_Sphere = 0,
   MeshType_Box = 1,
   MeshType_Capsule = 2,
@@ -92,49 +100,52 @@ enum MessageUnion : uint8_t {
   MessageUnion_NONE = 0,
   MessageUnion_Recognize = 1,
   MessageUnion_Scenario = 2,
-  MessageUnion_ObjectUpdate = 3,
+  MessageUnion_ObjectUpdateList = 3,
   MessageUnion_RequestScenario = 4,
-  MessageUnion_PeerList = 5,
-  MessageUnion_PeerDisconnect = 6,
+  MessageUnion_StartSimulation = 5,
+  MessageUnion_PeerList = 6,
   MessageUnion_Ping = 7,
   MessageUnion_Pong = 8,
+  MessageUnion_DiscoveryBroadcast = 9,
   MessageUnion_MIN = MessageUnion_NONE,
-  MessageUnion_MAX = MessageUnion_Pong
+  MessageUnion_MAX = MessageUnion_DiscoveryBroadcast
 };
 
-inline const MessageUnion (&EnumValuesMessageUnion())[9] {
+inline const MessageUnion (&EnumValuesMessageUnion())[10] {
   static const MessageUnion values[] = {
     MessageUnion_NONE,
     MessageUnion_Recognize,
     MessageUnion_Scenario,
-    MessageUnion_ObjectUpdate,
+    MessageUnion_ObjectUpdateList,
     MessageUnion_RequestScenario,
+    MessageUnion_StartSimulation,
     MessageUnion_PeerList,
-    MessageUnion_PeerDisconnect,
     MessageUnion_Ping,
-    MessageUnion_Pong
+    MessageUnion_Pong,
+    MessageUnion_DiscoveryBroadcast
   };
   return values;
 }
 
 inline const char * const *EnumNamesMessageUnion() {
-  static const char * const names[10] = {
+  static const char * const names[11] = {
     "NONE",
     "Recognize",
     "Scenario",
-    "ObjectUpdate",
+    "ObjectUpdateList",
     "RequestScenario",
+    "StartSimulation",
     "PeerList",
-    "PeerDisconnect",
     "Ping",
     "Pong",
+    "DiscoveryBroadcast",
     nullptr
   };
   return names;
 }
 
 inline const char *EnumNameMessageUnion(MessageUnion e) {
-  if (::flatbuffers::IsOutRange(e, MessageUnion_NONE, MessageUnion_Pong)) return "";
+  if (::flatbuffers::IsOutRange(e, MessageUnion_NONE, MessageUnion_DiscoveryBroadcast)) return "";
   const size_t index = static_cast<size_t>(e);
   return EnumNamesMessageUnion()[index];
 }
@@ -151,20 +162,20 @@ template<> struct MessageUnionTraits<NetSim::Scenario> {
   static const MessageUnion enum_value = MessageUnion_Scenario;
 };
 
-template<> struct MessageUnionTraits<NetSim::ObjectUpdate> {
-  static const MessageUnion enum_value = MessageUnion_ObjectUpdate;
+template<> struct MessageUnionTraits<NetSim::ObjectUpdateList> {
+  static const MessageUnion enum_value = MessageUnion_ObjectUpdateList;
 };
 
 template<> struct MessageUnionTraits<NetSim::RequestScenario> {
   static const MessageUnion enum_value = MessageUnion_RequestScenario;
 };
 
-template<> struct MessageUnionTraits<NetSim::PeerList> {
-  static const MessageUnion enum_value = MessageUnion_PeerList;
+template<> struct MessageUnionTraits<NetSim::StartSimulation> {
+  static const MessageUnion enum_value = MessageUnion_StartSimulation;
 };
 
-template<> struct MessageUnionTraits<NetSim::PeerDisconnect> {
-  static const MessageUnion enum_value = MessageUnion_PeerDisconnect;
+template<> struct MessageUnionTraits<NetSim::PeerList> {
+  static const MessageUnion enum_value = MessageUnion_PeerList;
 };
 
 template<> struct MessageUnionTraits<NetSim::Ping> {
@@ -173,6 +184,10 @@ template<> struct MessageUnionTraits<NetSim::Ping> {
 
 template<> struct MessageUnionTraits<NetSim::Pong> {
   static const MessageUnion enum_value = MessageUnion_Pong;
+};
+
+template<> struct MessageUnionTraits<NetSim::DiscoveryBroadcast> {
+  static const MessageUnion enum_value = MessageUnion_DiscoveryBroadcast;
 };
 
 bool VerifyMessageUnion(::flatbuffers::Verifier &verifier, const void *obj, MessageUnion type);
@@ -242,18 +257,48 @@ FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(4) Vec4 FLATBUFFERS_FINAL_CLASS {
 };
 FLATBUFFERS_STRUCT_END(Vec4, 16);
 
+FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(4) PhysicsMaterial FLATBUFFERS_FINAL_CLASS {
+ private:
+  float friction_;
+  float angular_friction_;
+  float restitution_;
+
+ public:
+  PhysicsMaterial()
+      : friction_(0),
+        angular_friction_(0),
+        restitution_(0) {
+  }
+  PhysicsMaterial(float _friction, float _angular_friction, float _restitution)
+      : friction_(::flatbuffers::EndianScalar(_friction)),
+        angular_friction_(::flatbuffers::EndianScalar(_angular_friction)),
+        restitution_(::flatbuffers::EndianScalar(_restitution)) {
+  }
+  float friction() const {
+    return ::flatbuffers::EndianScalar(friction_);
+  }
+  float angular_friction() const {
+    return ::flatbuffers::EndianScalar(angular_friction_);
+  }
+  float restitution() const {
+    return ::flatbuffers::EndianScalar(restitution_);
+  }
+};
+FLATBUFFERS_STRUCT_END(PhysicsMaterial, 12);
+
 struct ObjectState FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   typedef ObjectStateBuilder Builder;
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_ID = 4,
     VT_IS_STATIC = 6,
     VT_TYPE = 8,
-    VT_COLLIDER_SIZE = 10,
-    VT_POSITION = 12,
-    VT_ROTATION = 14,
-    VT_SCALE = 16,
-    VT_COLOR = 18,
-    VT_AUTHORITY_PEER_ID = 20
+    VT_MATERIAL = 10,
+    VT_COLLIDER_SIZE = 12,
+    VT_POSITION = 14,
+    VT_ROTATION = 16,
+    VT_SCALE = 18,
+    VT_COLOR = 20,
+    VT_AUTHORITY_PEER_ID = 22
   };
   uint32_t id() const {
     return GetField<uint32_t>(VT_ID, 0);
@@ -262,7 +307,10 @@ struct ObjectState FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
     return GetField<uint8_t>(VT_IS_STATIC, 0) != 0;
   }
   NetSim::MeshType type() const {
-    return static_cast<NetSim::MeshType>(GetField<int8_t>(VT_TYPE, 0));
+    return static_cast<NetSim::MeshType>(GetField<uint8_t>(VT_TYPE, 0));
+  }
+  const NetSim::PhysicsMaterial *material() const {
+    return GetStruct<const NetSim::PhysicsMaterial *>(VT_MATERIAL);
   }
   const NetSim::Vec3 *collider_size() const {
     return GetStruct<const NetSim::Vec3 *>(VT_COLLIDER_SIZE);
@@ -286,7 +334,8 @@ struct ObjectState FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
     return VerifyTableStart(verifier) &&
            VerifyField<uint32_t>(verifier, VT_ID, 4) &&
            VerifyField<uint8_t>(verifier, VT_IS_STATIC, 1) &&
-           VerifyField<int8_t>(verifier, VT_TYPE, 1) &&
+           VerifyField<uint8_t>(verifier, VT_TYPE, 1) &&
+           VerifyField<NetSim::PhysicsMaterial>(verifier, VT_MATERIAL, 4) &&
            VerifyField<NetSim::Vec3>(verifier, VT_COLLIDER_SIZE, 4) &&
            VerifyField<NetSim::Vec3>(verifier, VT_POSITION, 4) &&
            VerifyField<NetSim::Vec4>(verifier, VT_ROTATION, 4) &&
@@ -308,7 +357,10 @@ struct ObjectStateBuilder {
     fbb_.AddElement<uint8_t>(ObjectState::VT_IS_STATIC, static_cast<uint8_t>(is_static), 0);
   }
   void add_type(NetSim::MeshType type) {
-    fbb_.AddElement<int8_t>(ObjectState::VT_TYPE, static_cast<int8_t>(type), 0);
+    fbb_.AddElement<uint8_t>(ObjectState::VT_TYPE, static_cast<uint8_t>(type), 0);
+  }
+  void add_material(const NetSim::PhysicsMaterial *material) {
+    fbb_.AddStruct(ObjectState::VT_MATERIAL, material);
   }
   void add_collider_size(const NetSim::Vec3 *collider_size) {
     fbb_.AddStruct(ObjectState::VT_COLLIDER_SIZE, collider_size);
@@ -344,6 +396,7 @@ inline ::flatbuffers::Offset<ObjectState> CreateObjectState(
     uint32_t id = 0,
     bool is_static = false,
     NetSim::MeshType type = NetSim::MeshType_Sphere,
+    const NetSim::PhysicsMaterial *material = nullptr,
     const NetSim::Vec3 *collider_size = nullptr,
     const NetSim::Vec3 *position = nullptr,
     const NetSim::Vec4 *rotation = nullptr,
@@ -357,6 +410,7 @@ inline ::flatbuffers::Offset<ObjectState> CreateObjectState(
   builder_.add_rotation(rotation);
   builder_.add_position(position);
   builder_.add_collider_size(collider_size);
+  builder_.add_material(material);
   builder_.add_id(id);
   builder_.add_type(type);
   builder_.add_is_static(is_static);
@@ -367,7 +421,8 @@ struct Scenario FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   typedef ScenarioBuilder Builder;
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_SCENARIO_ID = 4,
-    VT_OBJECTS = 6
+    VT_OBJECTS = 6,
+    VT_GRAVITY = 8
   };
   uint32_t scenario_id() const {
     return GetField<uint32_t>(VT_SCENARIO_ID, 0);
@@ -375,12 +430,16 @@ struct Scenario FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   const ::flatbuffers::Vector<::flatbuffers::Offset<NetSim::ObjectState>> *objects() const {
     return GetPointer<const ::flatbuffers::Vector<::flatbuffers::Offset<NetSim::ObjectState>> *>(VT_OBJECTS);
   }
+  float gravity() const {
+    return GetField<float>(VT_GRAVITY, 0.0f);
+  }
   bool Verify(::flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
            VerifyField<uint32_t>(verifier, VT_SCENARIO_ID, 4) &&
            VerifyOffset(verifier, VT_OBJECTS) &&
            verifier.VerifyVector(objects()) &&
            verifier.VerifyVectorOfTables(objects()) &&
+           VerifyField<float>(verifier, VT_GRAVITY, 4) &&
            verifier.EndTable();
   }
 };
@@ -394,6 +453,9 @@ struct ScenarioBuilder {
   }
   void add_objects(::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<NetSim::ObjectState>>> objects) {
     fbb_.AddOffset(Scenario::VT_OBJECTS, objects);
+  }
+  void add_gravity(float gravity) {
+    fbb_.AddElement<float>(Scenario::VT_GRAVITY, gravity, 0.0f);
   }
   explicit ScenarioBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
@@ -409,8 +471,10 @@ struct ScenarioBuilder {
 inline ::flatbuffers::Offset<Scenario> CreateScenario(
     ::flatbuffers::FlatBufferBuilder &_fbb,
     uint32_t scenario_id = 0,
-    ::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<NetSim::ObjectState>>> objects = 0) {
+    ::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<NetSim::ObjectState>>> objects = 0,
+    float gravity = 0.0f) {
   ScenarioBuilder builder_(_fbb);
+  builder_.add_gravity(gravity);
   builder_.add_objects(objects);
   builder_.add_scenario_id(scenario_id);
   return builder_.Finish();
@@ -419,12 +483,14 @@ inline ::flatbuffers::Offset<Scenario> CreateScenario(
 inline ::flatbuffers::Offset<Scenario> CreateScenarioDirect(
     ::flatbuffers::FlatBufferBuilder &_fbb,
     uint32_t scenario_id = 0,
-    const std::vector<::flatbuffers::Offset<NetSim::ObjectState>> *objects = nullptr) {
+    const std::vector<::flatbuffers::Offset<NetSim::ObjectState>> *objects = nullptr,
+    float gravity = 0.0f) {
   auto objects__ = objects ? _fbb.CreateVector<::flatbuffers::Offset<NetSim::ObjectState>>(*objects) : 0;
   return NetSim::CreateScenario(
       _fbb,
       scenario_id,
-      objects__);
+      objects__,
+      gravity);
 }
 
 struct Recognize FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
@@ -531,7 +597,9 @@ struct ObjectUpdate FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_OBJECT_ID = 4,
     VT_POSITION = 6,
-    VT_ROTATION = 8
+    VT_ROTATION = 8,
+    VT_VELOCITY = 10,
+    VT_ANGULAR_VELOCITY = 12
   };
   uint32_t object_id() const {
     return GetField<uint32_t>(VT_OBJECT_ID, 0);
@@ -542,11 +610,19 @@ struct ObjectUpdate FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   const NetSim::Vec4 *rotation() const {
     return GetStruct<const NetSim::Vec4 *>(VT_ROTATION);
   }
+  const NetSim::Vec3 *velocity() const {
+    return GetStruct<const NetSim::Vec3 *>(VT_VELOCITY);
+  }
+  const NetSim::Vec3 *angular_velocity() const {
+    return GetStruct<const NetSim::Vec3 *>(VT_ANGULAR_VELOCITY);
+  }
   bool Verify(::flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
            VerifyField<uint32_t>(verifier, VT_OBJECT_ID, 4) &&
            VerifyField<NetSim::Vec3>(verifier, VT_POSITION, 4) &&
            VerifyField<NetSim::Vec4>(verifier, VT_ROTATION, 4) &&
+           VerifyField<NetSim::Vec3>(verifier, VT_VELOCITY, 4) &&
+           VerifyField<NetSim::Vec3>(verifier, VT_ANGULAR_VELOCITY, 4) &&
            verifier.EndTable();
   }
 };
@@ -564,6 +640,12 @@ struct ObjectUpdateBuilder {
   void add_rotation(const NetSim::Vec4 *rotation) {
     fbb_.AddStruct(ObjectUpdate::VT_ROTATION, rotation);
   }
+  void add_velocity(const NetSim::Vec3 *velocity) {
+    fbb_.AddStruct(ObjectUpdate::VT_VELOCITY, velocity);
+  }
+  void add_angular_velocity(const NetSim::Vec3 *angular_velocity) {
+    fbb_.AddStruct(ObjectUpdate::VT_ANGULAR_VELOCITY, angular_velocity);
+  }
   explicit ObjectUpdateBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
     start_ = fbb_.StartTable();
@@ -579,12 +661,68 @@ inline ::flatbuffers::Offset<ObjectUpdate> CreateObjectUpdate(
     ::flatbuffers::FlatBufferBuilder &_fbb,
     uint32_t object_id = 0,
     const NetSim::Vec3 *position = nullptr,
-    const NetSim::Vec4 *rotation = nullptr) {
+    const NetSim::Vec4 *rotation = nullptr,
+    const NetSim::Vec3 *velocity = nullptr,
+    const NetSim::Vec3 *angular_velocity = nullptr) {
   ObjectUpdateBuilder builder_(_fbb);
+  builder_.add_angular_velocity(angular_velocity);
+  builder_.add_velocity(velocity);
   builder_.add_rotation(rotation);
   builder_.add_position(position);
   builder_.add_object_id(object_id);
   return builder_.Finish();
+}
+
+struct ObjectUpdateList FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef ObjectUpdateListBuilder Builder;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_UPDATES = 4
+  };
+  const ::flatbuffers::Vector<::flatbuffers::Offset<NetSim::ObjectUpdate>> *updates() const {
+    return GetPointer<const ::flatbuffers::Vector<::flatbuffers::Offset<NetSim::ObjectUpdate>> *>(VT_UPDATES);
+  }
+  bool Verify(::flatbuffers::Verifier &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyOffset(verifier, VT_UPDATES) &&
+           verifier.VerifyVector(updates()) &&
+           verifier.VerifyVectorOfTables(updates()) &&
+           verifier.EndTable();
+  }
+};
+
+struct ObjectUpdateListBuilder {
+  typedef ObjectUpdateList Table;
+  ::flatbuffers::FlatBufferBuilder &fbb_;
+  ::flatbuffers::uoffset_t start_;
+  void add_updates(::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<NetSim::ObjectUpdate>>> updates) {
+    fbb_.AddOffset(ObjectUpdateList::VT_UPDATES, updates);
+  }
+  explicit ObjectUpdateListBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  ::flatbuffers::Offset<ObjectUpdateList> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = ::flatbuffers::Offset<ObjectUpdateList>(end);
+    return o;
+  }
+};
+
+inline ::flatbuffers::Offset<ObjectUpdateList> CreateObjectUpdateList(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    ::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<NetSim::ObjectUpdate>>> updates = 0) {
+  ObjectUpdateListBuilder builder_(_fbb);
+  builder_.add_updates(updates);
+  return builder_.Finish();
+}
+
+inline ::flatbuffers::Offset<ObjectUpdateList> CreateObjectUpdateListDirect(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    const std::vector<::flatbuffers::Offset<NetSim::ObjectUpdate>> *updates = nullptr) {
+  auto updates__ = updates ? _fbb.CreateVector<::flatbuffers::Offset<NetSim::ObjectUpdate>>(*updates) : 0;
+  return NetSim::CreateObjectUpdateList(
+      _fbb,
+      updates__);
 }
 
 struct PeerInfo FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
@@ -767,58 +905,17 @@ inline ::flatbuffers::Offset<RequestScenario> CreateRequestScenario(
   return builder_.Finish();
 }
 
-struct PeerDisconnect FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
-  typedef PeerDisconnectBuilder Builder;
-  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
-    VT_PEER_ID = 4
-  };
-  uint32_t peer_id() const {
-    return GetField<uint32_t>(VT_PEER_ID, 0);
-  }
-  bool Verify(::flatbuffers::Verifier &verifier) const {
-    return VerifyTableStart(verifier) &&
-           VerifyField<uint32_t>(verifier, VT_PEER_ID, 4) &&
-           verifier.EndTable();
-  }
-};
-
-struct PeerDisconnectBuilder {
-  typedef PeerDisconnect Table;
-  ::flatbuffers::FlatBufferBuilder &fbb_;
-  ::flatbuffers::uoffset_t start_;
-  void add_peer_id(uint32_t peer_id) {
-    fbb_.AddElement<uint32_t>(PeerDisconnect::VT_PEER_ID, peer_id, 0);
-  }
-  explicit PeerDisconnectBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
-        : fbb_(_fbb) {
-    start_ = fbb_.StartTable();
-  }
-  ::flatbuffers::Offset<PeerDisconnect> Finish() {
-    const auto end = fbb_.EndTable(start_);
-    auto o = ::flatbuffers::Offset<PeerDisconnect>(end);
-    return o;
-  }
-};
-
-inline ::flatbuffers::Offset<PeerDisconnect> CreatePeerDisconnect(
-    ::flatbuffers::FlatBufferBuilder &_fbb,
-    uint32_t peer_id = 0) {
-  PeerDisconnectBuilder builder_(_fbb);
-  builder_.add_peer_id(peer_id);
-  return builder_.Finish();
-}
-
 struct Ping FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   typedef PingBuilder Builder;
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
-    VT_TIMESTAMP = 4
+    VT_SENT_TIME = 4
   };
-  float timestamp() const {
-    return GetField<float>(VT_TIMESTAMP, 0.0f);
+  double sent_time() const {
+    return GetField<double>(VT_SENT_TIME, 0.0);
   }
   bool Verify(::flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
-           VerifyField<float>(verifier, VT_TIMESTAMP, 4) &&
+           VerifyField<double>(verifier, VT_SENT_TIME, 8) &&
            verifier.EndTable();
   }
 };
@@ -827,8 +924,8 @@ struct PingBuilder {
   typedef Ping Table;
   ::flatbuffers::FlatBufferBuilder &fbb_;
   ::flatbuffers::uoffset_t start_;
-  void add_timestamp(float timestamp) {
-    fbb_.AddElement<float>(Ping::VT_TIMESTAMP, timestamp, 0.0f);
+  void add_sent_time(double sent_time) {
+    fbb_.AddElement<double>(Ping::VT_SENT_TIME, sent_time, 0.0);
   }
   explicit PingBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
@@ -843,23 +940,28 @@ struct PingBuilder {
 
 inline ::flatbuffers::Offset<Ping> CreatePing(
     ::flatbuffers::FlatBufferBuilder &_fbb,
-    float timestamp = 0.0f) {
+    double sent_time = 0.0) {
   PingBuilder builder_(_fbb);
-  builder_.add_timestamp(timestamp);
+  builder_.add_sent_time(sent_time);
   return builder_.Finish();
 }
 
 struct Pong FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   typedef PongBuilder Builder;
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
-    VT_TIMESTAMP = 4
+    VT_PING_SENT_TIME = 4,
+    VT_REMOTE_TIME = 6
   };
-  float timestamp() const {
-    return GetField<float>(VT_TIMESTAMP, 0.0f);
+  double ping_sent_time() const {
+    return GetField<double>(VT_PING_SENT_TIME, 0.0);
+  }
+  double remote_time() const {
+    return GetField<double>(VT_REMOTE_TIME, 0.0);
   }
   bool Verify(::flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
-           VerifyField<float>(verifier, VT_TIMESTAMP, 4) &&
+           VerifyField<double>(verifier, VT_PING_SENT_TIME, 8) &&
+           VerifyField<double>(verifier, VT_REMOTE_TIME, 8) &&
            verifier.EndTable();
   }
 };
@@ -868,8 +970,11 @@ struct PongBuilder {
   typedef Pong Table;
   ::flatbuffers::FlatBufferBuilder &fbb_;
   ::flatbuffers::uoffset_t start_;
-  void add_timestamp(float timestamp) {
-    fbb_.AddElement<float>(Pong::VT_TIMESTAMP, timestamp, 0.0f);
+  void add_ping_sent_time(double ping_sent_time) {
+    fbb_.AddElement<double>(Pong::VT_PING_SENT_TIME, ping_sent_time, 0.0);
+  }
+  void add_remote_time(double remote_time) {
+    fbb_.AddElement<double>(Pong::VT_REMOTE_TIME, remote_time, 0.0);
   }
   explicit PongBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
@@ -884,10 +989,152 @@ struct PongBuilder {
 
 inline ::flatbuffers::Offset<Pong> CreatePong(
     ::flatbuffers::FlatBufferBuilder &_fbb,
-    float timestamp = 0.0f) {
+    double ping_sent_time = 0.0,
+    double remote_time = 0.0) {
   PongBuilder builder_(_fbb);
-  builder_.add_timestamp(timestamp);
+  builder_.add_remote_time(remote_time);
+  builder_.add_ping_sent_time(ping_sent_time);
   return builder_.Finish();
+}
+
+struct StartSimulation FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef StartSimulationBuilder Builder;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_SIMULATION_START_TIME = 4
+  };
+  double simulation_start_time() const {
+    return GetField<double>(VT_SIMULATION_START_TIME, 0.0);
+  }
+  bool Verify(::flatbuffers::Verifier &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyField<double>(verifier, VT_SIMULATION_START_TIME, 8) &&
+           verifier.EndTable();
+  }
+};
+
+struct StartSimulationBuilder {
+  typedef StartSimulation Table;
+  ::flatbuffers::FlatBufferBuilder &fbb_;
+  ::flatbuffers::uoffset_t start_;
+  void add_simulation_start_time(double simulation_start_time) {
+    fbb_.AddElement<double>(StartSimulation::VT_SIMULATION_START_TIME, simulation_start_time, 0.0);
+  }
+  explicit StartSimulationBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  ::flatbuffers::Offset<StartSimulation> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = ::flatbuffers::Offset<StartSimulation>(end);
+    return o;
+  }
+};
+
+inline ::flatbuffers::Offset<StartSimulation> CreateStartSimulation(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    double simulation_start_time = 0.0) {
+  StartSimulationBuilder builder_(_fbb);
+  builder_.add_simulation_start_time(simulation_start_time);
+  return builder_.Finish();
+}
+
+struct DiscoveryBroadcast FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef DiscoveryBroadcastBuilder Builder;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_PROTOCOL_VERSION = 4,
+    VT_PEER_ID = 6,
+    VT_CLIENT_NAME = 8,
+    VT_TCP_PORT = 10,
+    VT_COLOR = 12
+  };
+  uint32_t protocol_version() const {
+    return GetField<uint32_t>(VT_PROTOCOL_VERSION, 0);
+  }
+  uint32_t peer_id() const {
+    return GetField<uint32_t>(VT_PEER_ID, 0);
+  }
+  const ::flatbuffers::String *client_name() const {
+    return GetPointer<const ::flatbuffers::String *>(VT_CLIENT_NAME);
+  }
+  uint16_t tcp_port() const {
+    return GetField<uint16_t>(VT_TCP_PORT, 0);
+  }
+  const NetSim::Vec3 *color() const {
+    return GetStruct<const NetSim::Vec3 *>(VT_COLOR);
+  }
+  bool Verify(::flatbuffers::Verifier &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyField<uint32_t>(verifier, VT_PROTOCOL_VERSION, 4) &&
+           VerifyField<uint32_t>(verifier, VT_PEER_ID, 4) &&
+           VerifyOffset(verifier, VT_CLIENT_NAME) &&
+           verifier.VerifyString(client_name()) &&
+           VerifyField<uint16_t>(verifier, VT_TCP_PORT, 2) &&
+           VerifyField<NetSim::Vec3>(verifier, VT_COLOR, 4) &&
+           verifier.EndTable();
+  }
+};
+
+struct DiscoveryBroadcastBuilder {
+  typedef DiscoveryBroadcast Table;
+  ::flatbuffers::FlatBufferBuilder &fbb_;
+  ::flatbuffers::uoffset_t start_;
+  void add_protocol_version(uint32_t protocol_version) {
+    fbb_.AddElement<uint32_t>(DiscoveryBroadcast::VT_PROTOCOL_VERSION, protocol_version, 0);
+  }
+  void add_peer_id(uint32_t peer_id) {
+    fbb_.AddElement<uint32_t>(DiscoveryBroadcast::VT_PEER_ID, peer_id, 0);
+  }
+  void add_client_name(::flatbuffers::Offset<::flatbuffers::String> client_name) {
+    fbb_.AddOffset(DiscoveryBroadcast::VT_CLIENT_NAME, client_name);
+  }
+  void add_tcp_port(uint16_t tcp_port) {
+    fbb_.AddElement<uint16_t>(DiscoveryBroadcast::VT_TCP_PORT, tcp_port, 0);
+  }
+  void add_color(const NetSim::Vec3 *color) {
+    fbb_.AddStruct(DiscoveryBroadcast::VT_COLOR, color);
+  }
+  explicit DiscoveryBroadcastBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  ::flatbuffers::Offset<DiscoveryBroadcast> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = ::flatbuffers::Offset<DiscoveryBroadcast>(end);
+    return o;
+  }
+};
+
+inline ::flatbuffers::Offset<DiscoveryBroadcast> CreateDiscoveryBroadcast(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    uint32_t protocol_version = 0,
+    uint32_t peer_id = 0,
+    ::flatbuffers::Offset<::flatbuffers::String> client_name = 0,
+    uint16_t tcp_port = 0,
+    const NetSim::Vec3 *color = nullptr) {
+  DiscoveryBroadcastBuilder builder_(_fbb);
+  builder_.add_color(color);
+  builder_.add_client_name(client_name);
+  builder_.add_peer_id(peer_id);
+  builder_.add_protocol_version(protocol_version);
+  builder_.add_tcp_port(tcp_port);
+  return builder_.Finish();
+}
+
+inline ::flatbuffers::Offset<DiscoveryBroadcast> CreateDiscoveryBroadcastDirect(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    uint32_t protocol_version = 0,
+    uint32_t peer_id = 0,
+    const char *client_name = nullptr,
+    uint16_t tcp_port = 0,
+    const NetSim::Vec3 *color = nullptr) {
+  auto client_name__ = client_name ? _fbb.CreateString(client_name) : 0;
+  return NetSim::CreateDiscoveryBroadcast(
+      _fbb,
+      protocol_version,
+      peer_id,
+      client_name__,
+      tcp_port,
+      color);
 }
 
 struct NetworkMessage FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
@@ -913,23 +1160,26 @@ struct NetworkMessage FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   const NetSim::Scenario *data_as_Scenario() const {
     return data_type() == NetSim::MessageUnion_Scenario ? static_cast<const NetSim::Scenario *>(data()) : nullptr;
   }
-  const NetSim::ObjectUpdate *data_as_ObjectUpdate() const {
-    return data_type() == NetSim::MessageUnion_ObjectUpdate ? static_cast<const NetSim::ObjectUpdate *>(data()) : nullptr;
+  const NetSim::ObjectUpdateList *data_as_ObjectUpdateList() const {
+    return data_type() == NetSim::MessageUnion_ObjectUpdateList ? static_cast<const NetSim::ObjectUpdateList *>(data()) : nullptr;
   }
   const NetSim::RequestScenario *data_as_RequestScenario() const {
     return data_type() == NetSim::MessageUnion_RequestScenario ? static_cast<const NetSim::RequestScenario *>(data()) : nullptr;
   }
+  const NetSim::StartSimulation *data_as_StartSimulation() const {
+    return data_type() == NetSim::MessageUnion_StartSimulation ? static_cast<const NetSim::StartSimulation *>(data()) : nullptr;
+  }
   const NetSim::PeerList *data_as_PeerList() const {
     return data_type() == NetSim::MessageUnion_PeerList ? static_cast<const NetSim::PeerList *>(data()) : nullptr;
-  }
-  const NetSim::PeerDisconnect *data_as_PeerDisconnect() const {
-    return data_type() == NetSim::MessageUnion_PeerDisconnect ? static_cast<const NetSim::PeerDisconnect *>(data()) : nullptr;
   }
   const NetSim::Ping *data_as_Ping() const {
     return data_type() == NetSim::MessageUnion_Ping ? static_cast<const NetSim::Ping *>(data()) : nullptr;
   }
   const NetSim::Pong *data_as_Pong() const {
     return data_type() == NetSim::MessageUnion_Pong ? static_cast<const NetSim::Pong *>(data()) : nullptr;
+  }
+  const NetSim::DiscoveryBroadcast *data_as_DiscoveryBroadcast() const {
+    return data_type() == NetSim::MessageUnion_DiscoveryBroadcast ? static_cast<const NetSim::DiscoveryBroadcast *>(data()) : nullptr;
   }
   bool Verify(::flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
@@ -950,20 +1200,20 @@ template<> inline const NetSim::Scenario *NetworkMessage::data_as<NetSim::Scenar
   return data_as_Scenario();
 }
 
-template<> inline const NetSim::ObjectUpdate *NetworkMessage::data_as<NetSim::ObjectUpdate>() const {
-  return data_as_ObjectUpdate();
+template<> inline const NetSim::ObjectUpdateList *NetworkMessage::data_as<NetSim::ObjectUpdateList>() const {
+  return data_as_ObjectUpdateList();
 }
 
 template<> inline const NetSim::RequestScenario *NetworkMessage::data_as<NetSim::RequestScenario>() const {
   return data_as_RequestScenario();
 }
 
-template<> inline const NetSim::PeerList *NetworkMessage::data_as<NetSim::PeerList>() const {
-  return data_as_PeerList();
+template<> inline const NetSim::StartSimulation *NetworkMessage::data_as<NetSim::StartSimulation>() const {
+  return data_as_StartSimulation();
 }
 
-template<> inline const NetSim::PeerDisconnect *NetworkMessage::data_as<NetSim::PeerDisconnect>() const {
-  return data_as_PeerDisconnect();
+template<> inline const NetSim::PeerList *NetworkMessage::data_as<NetSim::PeerList>() const {
+  return data_as_PeerList();
 }
 
 template<> inline const NetSim::Ping *NetworkMessage::data_as<NetSim::Ping>() const {
@@ -972,6 +1222,10 @@ template<> inline const NetSim::Ping *NetworkMessage::data_as<NetSim::Ping>() co
 
 template<> inline const NetSim::Pong *NetworkMessage::data_as<NetSim::Pong>() const {
   return data_as_Pong();
+}
+
+template<> inline const NetSim::DiscoveryBroadcast *NetworkMessage::data_as<NetSim::DiscoveryBroadcast>() const {
+  return data_as_DiscoveryBroadcast();
 }
 
 struct NetworkMessageBuilder {
@@ -1036,20 +1290,20 @@ inline bool VerifyMessageUnion(::flatbuffers::Verifier &verifier, const void *ob
       auto ptr = reinterpret_cast<const NetSim::Scenario *>(obj);
       return verifier.VerifyTable(ptr);
     }
-    case MessageUnion_ObjectUpdate: {
-      auto ptr = reinterpret_cast<const NetSim::ObjectUpdate *>(obj);
+    case MessageUnion_ObjectUpdateList: {
+      auto ptr = reinterpret_cast<const NetSim::ObjectUpdateList *>(obj);
       return verifier.VerifyTable(ptr);
     }
     case MessageUnion_RequestScenario: {
       auto ptr = reinterpret_cast<const NetSim::RequestScenario *>(obj);
       return verifier.VerifyTable(ptr);
     }
-    case MessageUnion_PeerList: {
-      auto ptr = reinterpret_cast<const NetSim::PeerList *>(obj);
+    case MessageUnion_StartSimulation: {
+      auto ptr = reinterpret_cast<const NetSim::StartSimulation *>(obj);
       return verifier.VerifyTable(ptr);
     }
-    case MessageUnion_PeerDisconnect: {
-      auto ptr = reinterpret_cast<const NetSim::PeerDisconnect *>(obj);
+    case MessageUnion_PeerList: {
+      auto ptr = reinterpret_cast<const NetSim::PeerList *>(obj);
       return verifier.VerifyTable(ptr);
     }
     case MessageUnion_Ping: {
@@ -1058,6 +1312,10 @@ inline bool VerifyMessageUnion(::flatbuffers::Verifier &verifier, const void *ob
     }
     case MessageUnion_Pong: {
       auto ptr = reinterpret_cast<const NetSim::Pong *>(obj);
+      return verifier.VerifyTable(ptr);
+    }
+    case MessageUnion_DiscoveryBroadcast: {
+      auto ptr = reinterpret_cast<const NetSim::DiscoveryBroadcast *>(obj);
       return verifier.VerifyTable(ptr);
     }
     default: return true;

@@ -21,6 +21,8 @@ private:
 	static float m_gravity;
 	static bool m_gravityEnabled;
 
+	static float m_simulationDeltaTime;
+
 public:
 	PhysicsEngine() = default;
     void addBody(std::shared_ptr<PhysicsObject> body);
@@ -32,8 +34,13 @@ public:
     float getGravity() const;
     bool isGravityEnabled() const;
 
+    void setSimulationDeltaTime(const float& deltaTime);
+    float getSimulationDeltaTime() const;
+
 private:
     virtual void onUpdate(float deltaTime) override;
+	virtual void onStop() override;
+    virtual void onStart() override;
 
     std::vector<std::pair<PhysicsObject*, PhysicsObject*>> broadPhase();
 

@@ -21,7 +21,7 @@ void BallToCapsuleScenario::onLoad(CommandList& commandList)
 	auto particle = std::make_shared<PhysicsObject>(static_cast<UINT>(4000), MeshType::Sphere, m_SphereMesh, m_customTexture);
 	auto sphereCollider = std::make_shared<SphereCollider>(.5f);
 	particle->setCollider(sphereCollider);
-	particle->setMaterial(material);
+	particle->setPhysicsMaterial(material);
 	particle->onLoad();
 	particle->getTransform().SetPosition({ -1.5, 0.98, 1, 1 }, 0, true);
 	particle->setVelocity({ 2, 0, 0, 0 }, 1);
@@ -30,7 +30,7 @@ void BallToCapsuleScenario::onLoad(CommandList& commandList)
 	auto capsule = std::make_shared<PhysicsObject>(static_cast<UINT>(4000), MeshType::Capsule, m_CapsuleMesh, m_customTexture);
 	auto capsuleCollider = std::make_shared<CapsuleCollider>(0.5f, 1.0f);
 	capsule->setCollider(capsuleCollider);
-	capsule->setMaterial(material);
+	capsule->setPhysicsMaterial(material);
 	capsule->onLoad();
 	capsule->getTransform().SetPosition({ 1.5, -0.5, 1, 1 }, 0, true);
 

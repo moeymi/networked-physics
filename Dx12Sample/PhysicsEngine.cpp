@@ -1,26 +1,26 @@
 #include "PhysicsEngine.h"
+#include "GlobalData.h"
 #include <algorithm>
 #include <string>
 #include <omp.h>
 
 float PhysicsEngine::m_gravity = 9.81f;
 bool PhysicsEngine::m_gravityEnabled = true;
+float PhysicsEngine::m_simulationDeltaTime;
 
-void PhysicsEngine::onUpdate(float deltaTime) {
+void PhysicsEngine::onUpdate(float) {
     for (auto body : m_bodies) {
         body->swapStates();
     }
 
-    //#pragma omp parallel for
     for (int i = 0; i < m_bodies.size(); i++) {
         auto body = m_bodies[i].get();
         if (!body->isStatic()) {
-            body->onUpdate(deltaTime);
+            body->onUpdate(m_simulationDeltaTime);
         }
     }
 
-    detectAndResolveCollisions(deltaTime);
-
+    detectAndResolveCollisions(m_simulationDeltaTime);
     for (auto body : m_bodies) {
         body->swapStates();
     }
@@ -74,6 +74,14 @@ bool PhysicsEngine::isGravityEnabled() const {
 	return m_gravityEnabled;
 }
 
+void PhysicsEngine::setSimulationDeltaTime(const float& deltaTime) {
+	m_simulationDeltaTime = deltaTime;
+}
+
+float PhysicsEngine::getSimulationDeltaTime() const {
+	return m_simulationDeltaTime;
+}
+
 void PhysicsEngine::detectAndResolveCollisions(const float& deltaTime) {
     auto candidates = broadPhase();
 
@@ -104,7 +112,6 @@ void PhysicsEngine::detectAndResolveCollisions(const float& deltaTime) {
                     newManifold.contacts[0].accumulatedFrictionImpulse = oldManifold.contacts[0].accumulatedFrictionImpulse;
                     newManifold.contacts[0].accumulatedAngularFrictionImpulse = oldManifold.contacts[0].accumulatedAngularFrictionImpulse;
                 }
-                
             }
             currentFrameManifolds[pairKey] = std::move(newManifold);
         }
@@ -114,8 +121,6 @@ void PhysicsEngine::detectAndResolveCollisions(const float& deltaTime) {
     prestepCollisionManifolds(m_contactManifolds, deltaTime);
 
     for (int iter = 0; iter < m_velocityIterations; ++iter) {
-
-        //#pragma omp parallel for
         for (int i = 0; i < m_contactManifolds.size(); i++) {
 			auto pair = m_contactManifolds.begin();
 			std::advance(pair, i);
@@ -126,7 +131,6 @@ void PhysicsEngine::detectAndResolveCollisions(const float& deltaTime) {
     }
 
     for (int i = 0; i < m_positionIterations; ++i) {
-        //#pragma omp parallel for
 		for (int i = 0; i < m_contactManifolds.size(); i++) {
             // Output omp thread id
 			auto pair = m_contactManifolds.begin();
@@ -400,3 +404,11 @@ void PhysicsEngine::matchAndTransferImpulses(CollisionManifold& newManifold, con
 std::pair<PhysicsObject*, PhysicsObject*> PhysicsEngine::makePairKey(PhysicsObject* objA, PhysicsObject* objB) {
     return (objA < objB) ? std::make_pair(objA, objB) : std::make_pair(objB, objA);
 }
+
+void PhysicsEngine::onStart() {
+	if (m_simulationDeltaTime <= 0.0f) {
+        m_simulationDeltaTime = m_fixedTimeStep;
+	}
+}
+
+void PhysicsEngine::onStop() {}

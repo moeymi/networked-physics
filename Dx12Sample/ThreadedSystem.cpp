@@ -6,19 +6,25 @@
 
 ThreadedSystem::~ThreadedSystem() { stop(); }
 
-void ThreadedSystem::setFixedTimeStep(const float& timeStep) { m_fixedTimeStep = timeStep; }
 
 void ThreadedSystem::setAffinity(const int& coreId) { m_coreAffinity = coreId; }
 int ThreadedSystem::getAffinity() const { return m_coreAffinity; }
 
-float ThreadedSystem::getFixedTimeStep() const { return m_fixedTimeStep; }
-float ThreadedSystem::getRealTimeStep() const { return m_realTimeStep; }
+int ThreadedSystem::getFrequency() const { return m_frequency; }
+float ThreadedSystem::getDeltaTime() const { return m_realTimeStep; }
 
 bool ThreadedSystem::isRunning() const { return m_running; }
+
+void ThreadedSystem::setFrequency(const int& freq) {
+    m_frequency = freq;
+    m_fixedTimeStep = 1.0f / static_cast<float>(m_frequency);
+}
 
 void ThreadedSystem::start() {
     if (!m_running) {
         m_running = true;
+		m_fixedTimeStep = 1.0f / static_cast<float>(m_frequency);
+		onStart();
         m_thread = std::thread([this]() { run(); });
 
         if (m_coreAffinity >= 0) {
@@ -29,6 +35,9 @@ void ThreadedSystem::start() {
 
 void ThreadedSystem::stop() {
     m_running = false;
+	if (m_thread.joinable()) {
+		onStop();
+	}
     if (m_thread.joinable()) {
         m_thread.join();
     }
@@ -57,11 +66,18 @@ void ThreadedSystem::run() {
 
 			realPreviousTime = realCurrentTime;
 
+            {
+                std::lock_guard<std::mutex> lock(m_listenersMutex);
+                for (const auto& listener : m_beforeUpdateListeners) {
+                    listener(m_fixedTimeStep);
+                }
+            }
+
             onUpdate(m_fixedTimeStep);
 
             {
                 std::lock_guard<std::mutex> lock(m_listenersMutex);
-                for (const auto& listener : m_updateListeners) {
+                for (const auto& listener : m_postUpdateListeners) {
                     listener(m_fixedTimeStep);
                 }
             }
@@ -83,12 +99,22 @@ void ThreadedSystem::run() {
     }
 }
 
-void ThreadedSystem::addUpdateListener(std::function<void(float)> listener) {
+void ThreadedSystem::addBeforeUpdateListener(std::function<void(float)> listener) {
 	std::lock_guard<std::mutex> lock(m_listenersMutex);
-	m_updateListeners.push_back(listener);
+	m_beforeUpdateListeners.push_back(listener);
 }
 
-void ThreadedSystem::removeUpdateListeners() {
+void ThreadedSystem::addPostUpdateListener(std::function<void(float)> listener) {
 	std::lock_guard<std::mutex> lock(m_listenersMutex);
-	m_updateListeners.clear();
+	m_postUpdateListeners.push_back(listener);
+}
+
+void ThreadedSystem::removeBeforeUpdateListeners() {
+	std::lock_guard<std::mutex> lock(m_listenersMutex);
+	m_beforeUpdateListeners.clear();
+}
+
+void ThreadedSystem::removePostUpdateListeners() {
+	std::lock_guard<std::mutex> lock(m_listenersMutex);
+	m_postUpdateListeners.clear();
 }

@@ -146,6 +146,14 @@ private:
 	PhysicsEngine m_PhysicsEngine;
 	NetworkEngine m_NetworkingEngine;
 
+	std::string m_lastError = "Error message";
+
+    std::vector<PhysicsObject*> m_ownedObjects{ nullptr };
+    std::array<PhysicsObject*, 40000> m_unownedObjects{ nullptr };
+
+    bool m_simulationScheduled = false;
+    double m_simulationStartTime;
+
     // Camera controller
     float m_Forward;
     float m_Backward;
@@ -163,7 +171,12 @@ private:
     int m_Width;
     int m_Height;
 
+	SharedData* m_sharedData = nullptr;
+
 	void ChangeScenario(int index);
 	void CreateEmptyScenario(std::vector<std::shared_ptr<PhysicsObject>>&&);
-	void UpdateSharedSimulationData();
+    void AssignOwnedNonOwnedObjects();
+	void BroadCastCurrentScenarioCreate();
+	void UpdatePostPhysicsSimulation();
+	void UpdateBeforePhysicsSimulation();
 };

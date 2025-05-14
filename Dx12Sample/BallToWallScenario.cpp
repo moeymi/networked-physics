@@ -19,7 +19,7 @@ void BallToWallScenario::onLoad(CommandList& commandList)
 	auto particle1 = std::make_shared<PhysicsObject>(static_cast<UINT>(4000), MeshType::Sphere, m_SphereMesh, GlobalData::g_customTexture);
 	auto sphereCollider = std::make_shared<SphereCollider>(.5f);
 	particle1->setCollider(sphereCollider);
-	particle1->setMaterial(material);
+	particle1->setPhysicsMaterial(material);
 	particle1->onLoad();
 	particle1->getTransform().SetPosition({ 0, 0, 2, 1 }, 0, true);
 	//particle1->setVelocity({ 3, 0, 0, 0 }, 1);
@@ -28,7 +28,7 @@ void BallToWallScenario::onLoad(CommandList& commandList)
 	auto wall = std::make_shared<PhysicsObject>(static_cast<UINT>(4000), MeshType::Plane, m_PlaneMesh, GlobalData::g_defaultTexture);
 	auto planeCollider = std::make_shared<BoxCollider>(DirectX::XMVectorSet(.5f, 0.01f, .5f, 0.0f));
 	wall->setCollider(planeCollider);
-	wall->setMaterial(material);
+	wall->setPhysicsMaterial(material);
 	wall->onLoad();
 	wall->getTransform().SetPosition({ 0.0f, -10.0f, 0.0f, 1 }, 0, true);
 	wall->getTransform().SetScale({ 20.0f, 1.0f, 20.0f, 1 }, 0, true);

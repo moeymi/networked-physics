@@ -76,12 +76,21 @@ PhysicsSimulation::PhysicsSimulation(const std::wstring& name, int width, int he
     , m_Height(0)
 {
     //m_PhysicsEngine.setAffinity(1); // Core 1
-	m_PhysicsEngine.setFixedTimeStep(1.0 / 120.0); // 120 FPS
-	m_NetworkingEngine.setFixedTimeStep(1.0 / 60.0); // 60 FPS
+	m_PhysicsEngine.setFrequency(120); // 120 FPS
+	m_NetworkingEngine.setFrequency(60); // 60 FPS
 	m_NetworkingEngine.setScnearioListener(
-		[this](std::vector<std::shared_ptr<PhysicsObject>>&& objects)
+		[this](std::vector<std::shared_ptr<PhysicsObject>>&& objects, float gravity)
 		{
 			CreateEmptyScenario(std::move(objects));
+            AssignOwnedNonOwnedObjects();
+			m_PhysicsEngine.setGravity(gravity);
+		}
+	);
+	m_NetworkingEngine.setStartSimulationListener(
+		[this](double time)
+		{
+			m_simulationScheduled = true;
+			m_simulationStartTime = time;
 		}
 	);
 }
@@ -92,6 +101,8 @@ PhysicsSimulation::~PhysicsSimulation()
 
 bool PhysicsSimulation::LoadContent()
 {
+	m_sharedData = m_NetworkingEngine.getSharedData();
+
     auto device = Application::Get().GetDevice();
     auto commandQueue = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY);
     auto commandList = commandQueue->GetCommandList();
@@ -118,12 +129,15 @@ bool PhysicsSimulation::LoadContent()
     commandQueue->WaitForFenceValue(fenceValue);
 
 	// Add update shared simulation data callback.
-	m_PhysicsEngine.addUpdateListener([this](float deltaTime)
+	m_PhysicsEngine.addPostUpdateListener([this](float deltaTime)
 	{
-		UpdateSharedSimulationData();
+		UpdatePostPhysicsSimulation();
 	});
 
-
+    m_PhysicsEngine.addBeforeUpdateListener([this](float deltaTime)
+	{
+		UpdateBeforePhysicsSimulation();
+	});
 
     return true;
 }
@@ -148,7 +162,6 @@ void PhysicsSimulation::UnloadContent()
     auto commandQueue = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY);
     auto commandList = commandQueue->GetCommandList();
 
-
     m_ScenarioMutex.lock();
 	if (m_CurrentScenario)
 	{
@@ -164,14 +177,8 @@ void PhysicsSimulation::UnloadContent()
 	GlobalData::g_boxMesh = nullptr;
 	GlobalData::g_planeMesh = nullptr;
 
-
     auto fenceValue = commandQueue->ExecuteCommandList(commandList);
     commandQueue->WaitForFenceValue(fenceValue);
-}
-
-namespace {
-    double g_renderingFPS = 0.0;
-	double g_physicsFPS = 0.0;
 }
 
 void PhysicsSimulation::OnUpdate(UpdateEventArgs& e)
@@ -181,20 +188,28 @@ void PhysicsSimulation::OnUpdate(UpdateEventArgs& e)
 
     super::OnUpdate(e);
 
+    if (m_simulationScheduled) {
+        double now = GlobalData::getTimestamp();
+        if (now >= m_simulationStartTime) {
+            m_PhysicsEngine.start();
+            m_simulationScheduled = false;
+        }
+    }
+
     totalTime += e.ElapsedTime;
     frameCount++;
 
     if (totalTime > 1.0)
     {
-        g_renderingFPS = static_cast<double>(frameCount) / totalTime;
-		g_physicsFPS = static_cast<double>(m_PhysicsEngine.getRealTimeStep());
-        if(g_physicsFPS > 0)
+        GlobalData::g_physicsFPS = static_cast<double>(frameCount) / totalTime;
+        GlobalData::g_physicsFPS = static_cast<double>(m_PhysicsEngine.getDeltaTime());
+        if(GlobalData::g_physicsFPS > 0)
 		{
-			g_physicsFPS = 1.0 / g_physicsFPS;
+            GlobalData::g_physicsFPS = 1.0 / GlobalData::g_physicsFPS;
 		}
 
         char buffer[512];
-        sprintf_s(buffer, "FPS: %f\n", g_renderingFPS);
+        sprintf_s(buffer, "FPS: %f\n", GlobalData::g_renderingFPS);
         OutputDebugStringA(buffer);
 
         frameCount = 0;
@@ -434,39 +449,61 @@ void PhysicsSimulation::OnGUI()
             ImGui::EndMenu();
         }
         {
+            // Add a new ImGui window to control the timestep of each engine.
+            ImGui::Begin("Engine Timesteps");
             char buffer[256];
-            sprintf_s(buffer, _countof(buffer), "FPS: %.2f (%.2f ms)  ", g_renderingFPS, 1.0 / g_renderingFPS * 1000.0);
-            auto fpsTextSize = ImGui::CalcTextSize(buffer);
-            ImGui::SameLine(ImGui::GetWindowWidth() - fpsTextSize.x);
-            ImGui::Text(buffer);
+            float dt;
+            float hz;
+            float ms;
+            {
+                sprintf_s(buffer, _countof(buffer), "FPS: %.2f (%.2f ms)  ", GlobalData::g_renderingFPS, 1.0 / GlobalData::g_renderingFPS * 1000.0);
+                ImGui::Text(buffer);
+            }
+            {
+                float physicsDeltaTime = m_PhysicsEngine.getSimulationDeltaTime();
+                if (ImGui::InputFloat("Physics delta time", &physicsDeltaTime, 0.005f, 0.01f, "%.3f")) {
+                    physicsDeltaTime = std::max(0.001f, std::min(0.1f, physicsDeltaTime));
+                    m_PhysicsEngine.setSimulationDeltaTime(physicsDeltaTime);
+                }
+            }
+            {
+                dt = m_PhysicsEngine.getDeltaTime();
+                hz = 1.0f / dt;
+                ms = dt * 1000.0f;
 
-			sprintf_s(buffer, _countof(buffer), "Physics FPS: %.2f (%.2f ms)  ", g_physicsFPS, 1.0 / g_physicsFPS * 1000.0);
-			auto physicsFPSTextSize = ImGui::CalcTextSize(buffer);
-			ImGui::SameLine(ImGui::GetWindowWidth() - physicsFPSTextSize.x - fpsTextSize.x);
-			ImGui::Text(buffer);
+                sprintf_s(buffer, _countof(buffer), "Physics FPS: %.2f (%.2f ms)", hz, ms);
+                ImGui::Text("%s", buffer);
+                int physicsFrequency = m_PhysicsEngine.getFrequency();
+                if (ImGui::InputInt("Physics Engine Timestep (s)", &physicsFrequency, 1, 2)) {
+					physicsFrequency = std::max(1, std::min(300, physicsFrequency));
+                    m_PhysicsEngine.setFrequency(physicsFrequency);
+                }
+            }
+            {
+				dt = m_NetworkingEngine.getDeltaTime();
+				hz = 1.0f / dt;
+				ms = dt * 1000.0f;
+
+				sprintf_s(buffer, _countof(buffer), "Network FPS: %.2f (%.2f ms)", hz, ms);
+				ImGui::Text("%s", buffer);
+				int networkFrequency = m_NetworkingEngine.getFrequency();
+                if (ImGui::InputInt("Network Engine Timestep (s)", &networkFrequency, 1, 2)) {
+                    networkFrequency = std::max(1, std::min(300, networkFrequency));
+                    m_NetworkingEngine.setFrequency(networkFrequency);
+                }
+            }
+            ImGui::End();
         }
+
 
         ImGui::EndMainMenuBar();
     }
-    
+
+    ImGui::Begin("Network");
     // Show two buttons to either start client or host
     if (!m_NetworkingEngine.isRunning()) {
-        
-        ImGui::Begin("Network Session");
-        static int port = GlobalData::g_listenPort;
-        if (ImGui::InputInt("Port", &port)) {
-			GlobalData::g_listenPort = port;
-        }
-		if (ImGui::Button("Start Host")) {
-            m_NetworkingEngine.initializeSockets(port);
-			m_NetworkingEngine.start();
-		}
-        ImGui::End();
-    }
-    else {
-		ImGui::Begin("Network");
 
-        if (ImGui::CollapsingHeader("Info")) {
+        if (ImGui::CollapsingHeader("Client Config")) {
 
             ImGui::Text("Client ID: %d", GlobalData::g_clientId);
 
@@ -479,29 +516,64 @@ void PhysicsSimulation::OnGUI()
             if (ImGui::ColorEdit4("Client Color", &clientColor.x)) {
                 GlobalData::g_clientColor = clientColor;
             }
+            static int port = GlobalData::g_listenPort;
+            if (ImGui::InputInt("Port", &port)) {
+                GlobalData::g_listenPort = port;
+            }
+            if (ImGui::Button("Start Host")) {
+                m_NetworkingEngine.initializeSockets(port);
+                m_NetworkingEngine.start();
+            }
+        }
+    }
+    else {
+        auto peers = m_NetworkingEngine.getPeersInfo();
+		if (peers.size() > 0)
+		{
+            ImGui::Text("Peer Info:");
+            for (auto& peer : peers)
+            {
+                auto color = ImColor(peer.color.x, peer.color.y, peer.color.z);
+                ImGui::TextColored(color, "Peer ID: %d, Client Name: %s", peer.peer_id, peer.client_name.c_str());
+            }
+            if (ImGui::Button("Disconnect")) {
+                m_NetworkingEngine.stop();
+            }
+		}
+		else {
+			ImGui::Text("Listening for peers..");
+		}
+        if (m_CurrentScenario && ImGui::Button("Broadcast Scenario")) {
+            BroadCastCurrentScenarioCreate();
+        }
+        if (!m_PhysicsEngine.isRunning()) {
+            if (!m_simulationScheduled && ImGui::Button("Start Simulation")) {
+                double localNow = GlobalData::getTimestamp();
+                double startTime = localNow + 2.0;
+
+                m_simulationScheduled = true;
+                m_simulationStartTime = startTime;
+
+                m_NetworkingEngine.scheduleSimulationStart(startTime);
+            }
+            else if (m_simulationScheduled) {
+                ImGui::Text("Simulation scheduled at %.2f", m_simulationStartTime - GlobalData::getTimestamp());
+            }
         }
 
-		// Show peers
-		ImGui::Text("Peer Info:");
-		auto peers = m_NetworkingEngine.getPeersInfo();
-        for (auto& peer : peers)
-        {
-			auto color = ImColor(peer.color.x, peer.color.y, peer.color.z);
-			ImGui::TextColored(color, "Peer ID: %d, Client Name: %s", peer.peer_id, peer.client_name.c_str());
-        }
-		ImGui::End();
+    }
+    ImGui::End();
 
-        // Connect to peer
-		ImGui::Begin("Peer Connection");
-        // Port to connect to
-		static int connectPort = 54000;
-		ImGui::InputInt("Port", &connectPort);
-        if (ImGui::Button("Connect")) {
-            m_NetworkingEngine.connectToPeer("127.0.0.1", connectPort);
-        }
-
+    /*
+    // Show last error at the top screen
+    if (!m_lastError.empty()) {
+        ImGui::SetNextWindowPos(ImVec2(0, m_Height - 30));
+        ImGui::SetNextWindowBgAlpha(0.5f);
+        ImGui::Begin("Error", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings);
+        ImGui::TextColored(ImColor(1.0f, 0.0f, 0.0f), "%s", m_lastError.c_str());
         ImGui::End();
     }
+    */
 
     if (showDemoWindow)
     {
@@ -585,9 +657,6 @@ void PhysicsSimulation::ChangeScenario(int index)
     m_ScenarioMutex.unlock();
     auto fenceValue = commandQueue->ExecuteCommandList(commandList);
     commandQueue->WaitForFenceValue(fenceValue);
-
-	// Inform peers about the new scenario
-	m_NetworkingEngine.broadcastScenarioCreate("Scenario", m_CurrentScenario->getPhysicsObjects());
 }
 
 void PhysicsSimulation::CreateEmptyScenario(std::vector <std::shared_ptr<PhysicsObject>>&& objects)
@@ -601,42 +670,111 @@ void PhysicsSimulation::CreateEmptyScenario(std::vector <std::shared_ptr<Physics
 		m_PhysicsEngine.clearBodies();
 	}
 	m_CurrentScenario = std::make_unique<EmptyScenario>(std::move(objects));
+	m_ownedObjects.clear();
 	if (m_CurrentScenario) {
 		m_CurrentScenario->onLoad(*commandList);
 		for (auto& body : m_CurrentScenario->getPhysicsObjects())
 		{
 			m_PhysicsEngine.addBody(body);
+			if (body->getOwnerId() == GlobalData::g_clientId)
+			{
+				m_ownedObjects.push_back(body.get());
+			}
+			else
+			{
+				m_unownedObjects[body->getId()] = body.get();
+			}
 		}
 	}
 	auto fenceValue = commandQueue->ExecuteCommandList(commandList);
 	commandQueue->WaitForFenceValue(fenceValue);
 }
 
-void PhysicsSimulation::UpdateSharedSimulationData()
+void PhysicsSimulation::AssignOwnedNonOwnedObjects()
 {
-    /*
-	// Update the shared simulation data with the current state of the physics engine.
-    m_sharedSimulationData.objects.clear();
-	for (const auto& body : m_Scenarios[m_CurrentScenario]->getPhysicsObjects())
+	m_ScenarioMutex.lock();
+	if (m_CurrentScenario)
 	{
-        DirectX::XMFLOAT3 position;
-		DirectX::XMFLOAT4 rotation;
-		DirectX::XMFLOAT3 velocity;
-		DirectX::XMFLOAT3 angularVelocity;
-		XMStoreFloat3(&position, body->getTransform().GetPosition(0));
-		XMStoreFloat4(&rotation, body->getTransform().GetRotationQuaternion(0));
-		XMStoreFloat3(&velocity, body->getVelocity(0));
-		XMStoreFloat3(&angularVelocity, body->getAngularVelocity(0));
-
-        m_sharedSimulationData.objects.push_back(CPPGameState{
-			body->getId(),
-			static_cast<USHORT>(body->getCollider()->getType()),
-            position,
-            rotation,
-            velocity,
-            angularVelocity,
-			body->getMaterial().Ambient,
-        });
+		auto objects = m_CurrentScenario->getPhysicsObjects();
+		for (size_t i = 0; i < objects.size(); ++i)
+		{
+			if (objects[i]->getId() == GlobalData::g_clientId)
+			{
+				m_ownedObjects[objects[i]->getId()] = objects[i].get();
+			}
+			else
+			{
+				m_unownedObjects[objects[i]->getId()] = objects[i].get();
+			}
+		}
 	}
-    */
+	m_ScenarioMutex.unlock();
 }
+
+
+void PhysicsSimulation::BroadCastCurrentScenarioCreate()
+{
+    if (m_PhysicsEngine.isRunning()) {
+		m_lastError = "Cannot create scenario while physics engine is running.";
+    }
+	if (m_CurrentScenario)
+	{
+		m_NetworkingEngine.assignOwnersAndBroadcastScenarioCreate("Scenario", m_CurrentScenario->getPhysicsObjects(), m_PhysicsEngine.getGravity(), m_ownedObjects, m_unownedObjects.data());
+	}
+}
+
+void PhysicsSimulation::UpdatePostPhysicsSimulation()
+{
+    m_sharedData->m_outgoingMutex.lock();
+    m_sharedData->m_outgoingObjectStates[1].clear();
+    for (auto& object : m_ownedObjects) {
+        if (object) {
+            ObjectUpdate objectUpdate;
+            auto id = object->getId();
+
+            DirectX::XMFLOAT3 position;
+			DirectX::XMFLOAT4 rotation;
+            DirectX::XMFLOAT3 velocity;
+			DirectX::XMFLOAT3 angularVelocity;
+
+			DirectX::XMStoreFloat3(&position, object->getTransform().GetPosition(1));
+			DirectX::XMStoreFloat4(&rotation, object->getTransform().GetRotationQuaternion(1));
+			DirectX::XMStoreFloat3(&velocity, object->getVelocity(1));
+			DirectX::XMStoreFloat3(&angularVelocity, object->getAngularVelocity(1));
+
+			objectUpdate.object_id = id;
+            objectUpdate.position = position;
+            objectUpdate.rotation = rotation;
+            objectUpdate.velocity = velocity;
+            objectUpdate.angular_velocity = angularVelocity;
+			m_sharedData->m_outgoingObjectStates[1].push_back(objectUpdate);
+        }
+    }
+    m_sharedData->m_ownedObjectsDirty = true;
+    m_sharedData->m_outgoingMutex.unlock();
+}
+
+void PhysicsSimulation::UpdateBeforePhysicsSimulation()
+{
+	m_sharedData->m_incomingMutex.lock();
+	if (m_sharedData->m_unownedObjectsDirty)
+	{
+		m_sharedData->m_incomingObjectStates[0] = m_sharedData->m_incomingObjectStates[1];
+        for (auto& object : m_sharedData->m_incomingObjectStates[0]) {
+            auto id = object.object_id;
+            auto objectPtr = m_unownedObjects[id];
+            if (objectPtr) {
+                objectPtr->getTransform().SetPosition(object.position, 0, true);
+                objectPtr->getTransform().SetRotationQuaternion(DirectX::XMVectorSet(object.rotation.x, object.rotation.y, object.rotation.z, object.rotation.w), 0, true);
+
+                objectPtr->setVelocity(DirectX::XMVectorSet(object.velocity.x, object.velocity.y, object.velocity.z, 0), 0);
+                objectPtr->setVelocity(DirectX::XMVectorSet(object.velocity.x, object.velocity.y, object.velocity.z, 0), 1);
+                objectPtr->setAngularVelocity(DirectX::XMVectorSet(object.angular_velocity.x, object.angular_velocity.y, object.angular_velocity.z, 0), 0);
+                objectPtr->setAngularVelocity(DirectX::XMVectorSet(object.angular_velocity.x, object.angular_velocity.y, object.angular_velocity.z, 0), 1);
+            }
+        }
+		m_sharedData->m_unownedObjectsDirty = false;
+	}
+    m_sharedData->m_incomingMutex.unlock();
+}
+

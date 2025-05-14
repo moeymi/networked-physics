@@ -59,6 +59,11 @@ void PhysicsObject::onRender(CommandList& commandList, const DirectX::XMMATRIX& 
 	m_mesh->Draw(commandList);
 }
 
+void PhysicsObject::setOwnerId(const uint32_t& ownerId)
+{
+	m_ownerId = ownerId;
+}
+
 void PhysicsObject::onCollision(CollisionManifold collisionManfold)
 {
 	std::cout << "Collision detected!" << std::endl;
@@ -73,7 +78,7 @@ void PhysicsObject::setStatic(const bool& isStatic)
 	m_transform.SetStatic(isStatic);
 }
 
-void PhysicsObject::setMaterial(const PhysicsMaterial& material)
+void PhysicsObject::setPhysicsMaterial(const PhysicsMaterial& material)
 {
 	m_physicsMaterial = material;
 }
@@ -113,6 +118,11 @@ bool PhysicsObject::isStatic() const
 UINT PhysicsObject::getId() const
 {
 	return m_id;
+}
+
+uint32_t PhysicsObject::getOwnerId() const
+{
+	return m_ownerId;
 }
 
 MeshType PhysicsObject::getMeshType() const

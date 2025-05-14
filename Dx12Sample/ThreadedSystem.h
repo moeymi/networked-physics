@@ -13,18 +13,23 @@ protected:
     std::thread m_thread;
     std::atomic<bool> m_running { false };
     int m_coreAffinity = -1;
-    float m_fixedTimeStep = 0.001f;
+    int m_frequency = 60;
 	float m_realTimeStep = 0.0f;
+    float m_fixedTimeStep;
 
     std::mutex m_listenersMutex;
-    std::vector<std::function<void(float)>> m_updateListeners;
+    std::vector<std::function<void(float)>> m_postUpdateListeners;
+	std::vector<std::function<void(float)>> m_beforeUpdateListeners;
 
     virtual void onUpdate(float deltaTime) = 0;
+	virtual void onStop() = 0;
+    virtual void onStart() = 0;
 
 public:
     virtual ~ThreadedSystem();
 
-    void setFixedTimeStep(const float& timeStep);
+    int getFrequency() const;
+    void setFrequency(const int& timeStep);
 
 	bool isRunning() const;
 
@@ -34,11 +39,13 @@ public:
     void start();
     void stop();
 
-	float getFixedTimeStep() const;
-	float getRealTimeStep() const;
+	float getDeltaTime() const;
 
-    void addUpdateListener(std::function<void(float)> listener);
-    void removeUpdateListeners();
+	void addBeforeUpdateListener(std::function<void(float)> listener);
+    void addPostUpdateListener(std::function<void(float)> listener);
+
+    void removeBeforeUpdateListeners();
+	void removePostUpdateListeners();
 
 protected:
     virtual void run();
