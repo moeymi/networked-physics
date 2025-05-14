@@ -297,8 +297,6 @@ void NetworkEngine::assignOwnersAndBroadcastScenarioCreate(std::string scenarioN
     std::vector<flatbuffers::Offset<NetSim::ObjectState>> objectStates;
     std::unordered_map<int, int> nonStaticObjects;
 
-	m_sharedData->m_incomingObjectStates[0].clear();
-    m_sharedData->m_incomingObjectStates[1].clear();
 	m_sharedData->m_outgoingObjectStates[0].clear();
     m_sharedData->m_outgoingObjectStates[1].clear();
 
@@ -373,12 +371,10 @@ void NetworkEngine::assignOwnersAndBroadcastScenarioCreate(std::string scenarioN
                 auto clientColor = m_peerInfoMap[m_peerSockets[peerIndex]].color;
                 colorVec3 = { clientColor.x, clientColor.y, clientColor.z };
 				unownedObjects[object->getId()] = object.get();
-				m_sharedData->m_incomingObjectStates[0].push_back({object->getId(), position, rotation, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}});
 			}
 			else {
 				peerId = GlobalData::g_clientId;
 				ownedObjects.push_back(object.get());
-                m_sharedData->m_outgoingObjectStates[0].push_back({ object->getId(), position, rotation, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f } });
             }
             object->setOwnerId(peerId);
         }
@@ -396,7 +392,6 @@ void NetworkEngine::assignOwnersAndBroadcastScenarioCreate(std::string scenarioN
     }
 
 	m_sharedData->m_outgoingObjectStates[1] = m_sharedData->m_outgoingObjectStates[0];
-	m_sharedData->m_incomingObjectStates[1] = m_sharedData->m_incomingObjectStates[0];
 
     auto objectsVector = builder.CreateVector(objectStates);
     auto scenarioId = builder.CreateString("Scenario");
@@ -465,7 +460,7 @@ void NetworkEngine::sendObjectUpdatesToPeers(const std::vector<ObjectUpdate>& up
 		NetSim::Vec3 vel(update.velocity.x, update.velocity.y, update.velocity.z);
 		NetSim::Vec3 angVel(update.angular_velocity.x, update.angular_velocity.y, update.angular_velocity.z);
 
-		auto offset = NetSim::CreateObjectUpdate(builder, update.object_id, &pos, &rot, &vel, &angVel);
+		auto offset = NetSim::CreateObjectUpdate(builder, update.object_id, GlobalData::g_simulationTime, &pos, &rot, &vel, &angVel);
         fbUpdates.push_back(offset);
     }
 
@@ -527,7 +522,7 @@ void NetworkEngine::handlePeerData(SOCKET peerSocket) {
         handleScenario(message->data_as_Scenario());
         break;
     case NetSim::MessageUnion_ObjectUpdateList:
-        handleObjectUpdate(message->data_as_ObjectUpdateList());
+        handleObjectUpdate(peerSocket, message->data_as_ObjectUpdateList());
         break;
 	case NetSim::MessageUnion_StartSimulation:
 		handleStartSimulation(peerSocket, message->data_as_StartSimulation());
@@ -703,20 +698,29 @@ void NetworkEngine::handleScenario(const NetSim::Scenario* scenario) {
 	}
 }
 
-void NetworkEngine::handleObjectUpdate(const NetSim::ObjectUpdateList* objectUpdateList) {
+void NetworkEngine::handleObjectUpdate(SOCKET from, const NetSim::ObjectUpdateList* objectUpdateList) {
 	if (!objectUpdateList) return;
     {
         std::lock_guard<std::mutex> lock(m_sharedData->m_incomingMutex);
-        m_sharedData->m_incomingObjectStates[1].clear();
         for (const auto* update : *objectUpdateList->updates()) {
-            uint32_t objectId = update->object_id();
-            DirectX::XMFLOAT3 position = { update->position()->x(), update->position()->y(), update->position()->z() };
-            DirectX::XMFLOAT4 rotation = { update->rotation()->x(), update->rotation()->y(), update->rotation()->z(), update->rotation()->w() };
-			DirectX::XMFLOAT3 velocity = { update->velocity()->x(), update->velocity()->y(), update->velocity()->z() };
-			DirectX::XMFLOAT3 angularVelocity = { update->angular_velocity()->x(), update->angular_velocity()->y(), update->angular_velocity()->z() };
-            m_sharedData->m_incomingObjectStates[1].push_back({ objectId, position, rotation, velocity, angularVelocity });
+            ObjectUpdate u;
+            u.object_id = update->object_id();
+            u.position = { update->position()->x(), update->position()->y(), update->position()->z() };
+            u.rotation = { update->rotation()->x(), update->rotation()->y(), update->rotation()->z(), update->rotation()->w() };
+			u.velocity = { update->velocity()->x(), update->velocity()->y(), update->velocity()->z() };
+			u.angular_velocity = { update->angular_velocity()->x(), update->angular_velocity()->y(), update->angular_velocity()->z() };
+			u.simulation_time = update->simulation_time() - m_peerClockOffsets[from];
+
+            auto& deque = m_sharedData->m_objectUpdateHistory[update->object_id()];
+            deque.push_back(u);
+
+            // Remove outdated snapshots
+            while (!deque.empty() && GlobalData::g_simulationTime - deque.front().simulation_time > m_sharedData->maxHistoryDuration) {
+                deque.pop_front();
+            }
         }
-		m_sharedData->m_unownedObjectsDirty = true;
+
+        m_sharedData->m_receivedNewAuthoritativeData = true;
     }
 }
 

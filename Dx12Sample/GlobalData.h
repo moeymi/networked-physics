@@ -15,6 +15,8 @@ namespace GlobalData {
 	extern double g_physicsFPS;
 	extern double g_networkFPS;
 
+	extern double g_simulationTime;
+
 	extern std::shared_ptr <Texture> g_customTexture;
 	extern std::shared_ptr <Texture> g_defaultTexture;
 

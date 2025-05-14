@@ -195,6 +195,11 @@ void PhysicsSimulation::OnUpdate(UpdateEventArgs& e)
             m_simulationScheduled = false;
         }
     }
+    else {
+        if (m_PhysicsEngine.isRunning()) {
+            GlobalData::g_networkFPS += e.ElapsedTime;
+        }
+    }
 
     totalTime += e.ElapsedTime;
     frameCount++;
@@ -589,6 +594,8 @@ void PhysicsSimulation::OnGUI()
 			bool gravityEnabled = m_PhysicsEngine.isGravityEnabled();
             bool reversed = gravity < 0;
 
+            ImGui::Checkbox("##Client Prediction", &m_clientPrediction);
+
 			ImGui::Text("Gravity");
 			ImGui::SameLine();
             if (ImGui::Checkbox("##Gravity Enabled", &gravityEnabled)) {
@@ -756,25 +763,86 @@ void PhysicsSimulation::UpdatePostPhysicsSimulation()
 
 void PhysicsSimulation::UpdateBeforePhysicsSimulation()
 {
-	m_sharedData->m_incomingMutex.lock();
-	if (m_sharedData->m_unownedObjectsDirty)
-	{
-		m_sharedData->m_incomingObjectStates[0] = m_sharedData->m_incomingObjectStates[1];
-        for (auto& object : m_sharedData->m_incomingObjectStates[0]) {
-            auto id = object.object_id;
-            auto objectPtr = m_unownedObjects[id];
-            if (objectPtr) {
-                objectPtr->getTransform().SetPosition(object.position, 0, true);
-                objectPtr->getTransform().SetRotationQuaternion(DirectX::XMVectorSet(object.rotation.x, object.rotation.y, object.rotation.z, object.rotation.w), 0, true);
+    double currentSimTime = GlobalData::g_simulationTime;
 
-                objectPtr->setVelocity(DirectX::XMVectorSet(object.velocity.x, object.velocity.y, object.velocity.z, 0), 0);
-                objectPtr->setVelocity(DirectX::XMVectorSet(object.velocity.x, object.velocity.y, object.velocity.z, 0), 1);
-                objectPtr->setAngularVelocity(DirectX::XMVectorSet(object.angular_velocity.x, object.angular_velocity.y, object.angular_velocity.z, 0), 0);
-                objectPtr->setAngularVelocity(DirectX::XMVectorSet(object.angular_velocity.x, object.angular_velocity.y, object.angular_velocity.z, 0), 1);
+    m_sharedData->m_incomingMutex.lock();
+    if (m_sharedData->m_receivedNewAuthoritativeData) {
+        for (auto& [id, history] : m_sharedData->m_objectUpdateHistory) {
+            auto* objectPtr = m_unownedObjects[id];
+            if (!objectPtr || history.size() < 1)
+                continue;
+            if (m_clientPrediction) {
+                // Find two updates surrounding current time
+                ObjectUpdate* prev = nullptr;
+                ObjectUpdate* next = nullptr;
+
+                for (size_t i = 1; i < history.size(); ++i) {
+                    if (history[i - 1].simulation_time <= currentSimTime &&
+                        history[i].simulation_time >= currentSimTime) {
+                        prev = &history[i - 1];
+                        next = &history[i];
+                        break;
+                    }
+                }
+
+                if (prev && next) {
+                    // Interpolate between prev and next (linear interpolation)
+                    float t = static_cast<float>((currentSimTime - prev->simulation_time) /
+                        (next->simulation_time - prev->simulation_time));
+
+                    // Interpolate position, rotation, velocity
+                    DirectX::XMVECTOR pos1 = XMLoadFloat3(&prev->position);
+                    DirectX::XMVECTOR pos2 = XMLoadFloat3(&next->position);
+                    DirectX::XMVECTOR interpolatedPos = DirectX::XMVectorLerp(pos1, pos2, t);
+
+                    DirectX::XMVECTOR rot1 = XMLoadFloat4(&prev->rotation);
+                    DirectX::XMVECTOR rot2 = XMLoadFloat4(&next->rotation);
+                    DirectX::XMVECTOR interpolatedRot = DirectX::XMQuaternionSlerp(rot1, rot2, t);
+
+					DirectX::XMVECTOR vel1 = XMLoadFloat3(&prev->velocity);
+					DirectX::XMVECTOR vel2 = XMLoadFloat3(&next->velocity);
+					DirectX::XMVECTOR interpolatedVel = DirectX::XMVectorLerp(vel1, vel2, t);
+
+                    objectPtr->getTransform().SetPosition(interpolatedPos, 0, true);
+                    objectPtr->getTransform().SetRotationQuaternion(interpolatedRot, 0, true);
+
+					DirectX::XMVECTOR angVel1 = XMLoadFloat3(&prev->angular_velocity);
+					DirectX::XMVECTOR angVel2 = XMLoadFloat3(&next->angular_velocity);
+					DirectX::XMVECTOR interpolatedAngVel = DirectX::XMVectorLerp(angVel1, angVel2, t);
+
+					objectPtr->setVelocity(interpolatedVel, 0);
+					objectPtr->setVelocity(interpolatedVel, 1);
+
+					objectPtr->setAngularVelocity(interpolatedAngVel, 0);
+					objectPtr->setAngularVelocity(interpolatedAngVel, 1);
+				}
+                else {
+                    const auto& latest = history.back();
+                    objectPtr->getTransform().SetPosition(XMLoadFloat3(&latest.position), 0, true);
+                    objectPtr->getTransform().SetRotationQuaternion(XMLoadFloat4(&latest.rotation), 0, true);
+
+                    objectPtr->setVelocity(XMLoadFloat3(&latest.velocity), 0);
+                    objectPtr->setVelocity(XMLoadFloat3(&latest.velocity), 1);
+
+                    objectPtr->setAngularVelocity(XMLoadFloat3(&latest.angular_velocity), 0);
+                    objectPtr->setAngularVelocity(XMLoadFloat3(&latest.angular_velocity), 1);
+                }
+            }
+            else {
+                // Extrapolate using the latest entry
+                const auto& latest = history.back();
+                objectPtr->getTransform().SetPosition(XMLoadFloat3(&latest.position), 0, true);
+                objectPtr->getTransform().SetRotationQuaternion(XMLoadFloat4(&latest.rotation), 0, true);
+
+				objectPtr->setVelocity(XMLoadFloat3(&latest.velocity), 0);
+                objectPtr->setVelocity(XMLoadFloat3(&latest.velocity), 1);
+				objectPtr->setAngularVelocity(XMLoadFloat3(&latest.angular_velocity), 0);
+                objectPtr->setAngularVelocity(XMLoadFloat3(&latest.angular_velocity), 1);
             }
         }
-		m_sharedData->m_unownedObjectsDirty = false;
-	}
+
+        m_sharedData->m_receivedNewAuthoritativeData = false;
+    }
     m_sharedData->m_incomingMutex.unlock();
 }
 

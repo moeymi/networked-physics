@@ -151,6 +151,7 @@ private:
     std::vector<PhysicsObject*> m_ownedObjects{ nullptr };
     std::array<PhysicsObject*, 40000> m_unownedObjects{ nullptr };
 
+	bool m_clientPrediction = false;
     bool m_simulationScheduled = false;
     double m_simulationStartTime;
 

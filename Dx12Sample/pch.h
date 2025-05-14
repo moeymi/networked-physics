@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <map>
 #include <memory>
+#include <deque>
 
 #include <DirectXMath.h>
 

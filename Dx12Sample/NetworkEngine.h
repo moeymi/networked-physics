@@ -5,7 +5,6 @@
 #include "ThreadedSystem.h"
 #include "game_state_generated.h"
 #include "Scenario.h"
-
 struct PeerInfo {
     SOCKET socket;
     uint32_t peer_id;
@@ -18,6 +17,7 @@ struct PeerInfo {
 struct ObjectUpdate
 {
     uint32_t object_id;
+	double simulation_time;
     DirectX::XMFLOAT3 position;
     DirectX::XMFLOAT4 rotation;
     DirectX::XMFLOAT3 velocity;
@@ -25,14 +25,20 @@ struct ObjectUpdate
 };
 
 struct SharedData {
+    // Outgoing (owned object state updates) remain double buffered
     std::vector<ObjectUpdate> m_outgoingObjectStates[2];
-    std::vector<ObjectUpdate> m_incomingObjectStates[2];
-
-	std::mutex m_outgoingMutex;
-	std::mutex m_incomingMutex;
-
+    std::mutex m_outgoingMutex;
     bool m_ownedObjectsDirty = false;
-    bool m_unownedObjectsDirty = false;
+
+    // History of incoming updates per object ID
+    std::unordered_map<uint32_t, std::deque<ObjectUpdate>> m_objectUpdateHistory;
+    std::mutex m_incomingMutex;
+
+    // A flag for triggering reconciliation logic
+    bool m_receivedNewAuthoritativeData = false;
+
+    // Control max buffer duration (in seconds)
+    double maxHistoryDuration = 0.5; // Keep only last 500ms of updates
 };
 
 
@@ -69,7 +75,7 @@ private:
     void handleRecognize(const NetSim::Recognize* recognize);
     void handlePeerList(const NetSim::PeerList* list);
 	void handleScenario(const NetSim::Scenario* scenario);
-	void handleObjectUpdate(const NetSim::ObjectUpdateList* objectUpdateList);
+	void handleObjectUpdate(SOCKET from, const NetSim::ObjectUpdateList* objectUpdateList);
     void handleStartSimulation(SOCKET peerSocket, const NetSim::StartSimulation* startSim);
 
 	void cleanDirtyOutgoingObjects();

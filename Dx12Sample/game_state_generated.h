@@ -596,13 +596,17 @@ struct ObjectUpdate FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   typedef ObjectUpdateBuilder Builder;
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_OBJECT_ID = 4,
-    VT_POSITION = 6,
-    VT_ROTATION = 8,
-    VT_VELOCITY = 10,
-    VT_ANGULAR_VELOCITY = 12
+    VT_SIMULATION_TIME = 6,
+    VT_POSITION = 8,
+    VT_ROTATION = 10,
+    VT_VELOCITY = 12,
+    VT_ANGULAR_VELOCITY = 14
   };
   uint32_t object_id() const {
     return GetField<uint32_t>(VT_OBJECT_ID, 0);
+  }
+  double simulation_time() const {
+    return GetField<double>(VT_SIMULATION_TIME, 0.0);
   }
   const NetSim::Vec3 *position() const {
     return GetStruct<const NetSim::Vec3 *>(VT_POSITION);
@@ -619,6 +623,7 @@ struct ObjectUpdate FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   bool Verify(::flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
            VerifyField<uint32_t>(verifier, VT_OBJECT_ID, 4) &&
+           VerifyField<double>(verifier, VT_SIMULATION_TIME, 8) &&
            VerifyField<NetSim::Vec3>(verifier, VT_POSITION, 4) &&
            VerifyField<NetSim::Vec4>(verifier, VT_ROTATION, 4) &&
            VerifyField<NetSim::Vec3>(verifier, VT_VELOCITY, 4) &&
@@ -633,6 +638,9 @@ struct ObjectUpdateBuilder {
   ::flatbuffers::uoffset_t start_;
   void add_object_id(uint32_t object_id) {
     fbb_.AddElement<uint32_t>(ObjectUpdate::VT_OBJECT_ID, object_id, 0);
+  }
+  void add_simulation_time(double simulation_time) {
+    fbb_.AddElement<double>(ObjectUpdate::VT_SIMULATION_TIME, simulation_time, 0.0);
   }
   void add_position(const NetSim::Vec3 *position) {
     fbb_.AddStruct(ObjectUpdate::VT_POSITION, position);
@@ -660,11 +668,13 @@ struct ObjectUpdateBuilder {
 inline ::flatbuffers::Offset<ObjectUpdate> CreateObjectUpdate(
     ::flatbuffers::FlatBufferBuilder &_fbb,
     uint32_t object_id = 0,
+    double simulation_time = 0.0,
     const NetSim::Vec3 *position = nullptr,
     const NetSim::Vec4 *rotation = nullptr,
     const NetSim::Vec3 *velocity = nullptr,
     const NetSim::Vec3 *angular_velocity = nullptr) {
   ObjectUpdateBuilder builder_(_fbb);
+  builder_.add_simulation_time(simulation_time);
   builder_.add_angular_velocity(angular_velocity);
   builder_.add_velocity(velocity);
   builder_.add_rotation(rotation);

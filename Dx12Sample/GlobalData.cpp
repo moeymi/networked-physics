@@ -12,6 +12,8 @@ namespace GlobalData {
 	double g_physicsFPS = 0.0;
 	double g_networkFPS = 0.0;
 
+	double g_simulationTime = 0.0;
+
 	std::shared_ptr<Texture> g_customTexture = nullptr;
 	std::shared_ptr<Texture> g_defaultTexture = nullptr;
 
