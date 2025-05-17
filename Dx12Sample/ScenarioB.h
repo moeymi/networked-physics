@@ -1,14 +1,13 @@
 #pragma once
 #include "pch.h"
-#include "Scenario.h"
+#include "RoomScenario.h"
 
-class ScenarioB : public Scenario
+class ScenarioB : public RoomScenario
 {
 public:
 	ScenarioB() = default;
 	virtual ~ScenarioB() override = default;
 
-	void onLoad(CommandList& commandList) override;
-	void onUnload(CommandList& commandList) override;
-	void onRender(CommandList& commandList, const DirectX::XMMATRIX& viewMatrix, const DirectX::XMMATRIX& viewProjectionMatrix) override;
+	void onLoadInternal(CommandList& commandList) override;
+	void drawImGui() override;
 };

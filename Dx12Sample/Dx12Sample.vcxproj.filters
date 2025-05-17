@@ -87,7 +87,7 @@
     <ClCompile Include="BallToCapsuleScenario.cpp">
       <Filter>Source Files\Scenarios</Filter>
     </ClCompile>
-    <ClCompile Include="ScenarioA.cpp">
+    <ClCompile Include="SpheresScenario.cpp">
       <Filter>Source Files\Scenarios</Filter>
     </ClCompile>
     <ClCompile Include="ScenarioB.cpp">
@@ -119,6 +119,9 @@
     </ClCompile>
     <ClCompile Include="FlatBufferHelper.cpp">
       <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="RoomScenario.cpp">
+      <Filter>Source Files\Scenarios</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -164,10 +167,10 @@
     <ClInclude Include="BallToCapsuleScenario.h">
       <Filter>Header Files\Scenarios</Filter>
     </ClInclude>
-    <ClInclude Include="ThreeByThreeCubeScenario.h">
+    <ClInclude Include="RoomScenario.h">
       <Filter>Header Files\Scenarios</Filter>
     </ClInclude>
-    <ClInclude Include="ScenarioA.h">
+    <ClInclude Include="SpheresScenario.h">
       <Filter>Header Files\Scenarios</Filter>
     </ClInclude>
     <ClInclude Include="ScenarioB.h">

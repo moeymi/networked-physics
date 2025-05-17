@@ -192,11 +192,12 @@
     <ClCompile Include="PhysicsSimulation.cpp" />
     <ClCompile Include="RenderingEngine.cpp" />
     <ClCompile Include="Scenario.cpp" />
-    <ClCompile Include="ScenarioA.cpp" />
+    <ClCompile Include="SpheresScenario.cpp" />
     <ClCompile Include="ScenarioB.cpp" />
     <ClCompile Include="SphereCollider.cpp" />
     <ClCompile Include="ThreadAffinity.cpp" />
     <ClCompile Include="ThreadedSystem.cpp" />
+    <ClCompile Include="RoomScenario.cpp" />
     <ClCompile Include="Transform.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -219,13 +220,13 @@
     <ClInclude Include="PhysicsSimulation.h" />
     <ClInclude Include="RenderingEngine.h" />
     <ClInclude Include="Scenario.h" />
-    <ClInclude Include="ScenarioA.h" />
+    <ClInclude Include="SpheresScenario.h" />
     <ClInclude Include="ScenarioB.h" />
     <ClInclude Include="SphereCollider.h" />
     <ClInclude Include="GlobalData.h" />
     <ClInclude Include="ThreadAffinity.h" />
     <ClInclude Include="ThreadedSystem.h" />
-    <ClInclude Include="ThreeByThreeCubeScenario.h" />
+    <ClInclude Include="RoomScenario.h" />
     <ClInclude Include="Transform.h" />
     <ClInclude Include="TransformHelpers.h" />
   </ItemGroup>

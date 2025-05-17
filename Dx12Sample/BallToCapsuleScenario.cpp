@@ -54,3 +54,7 @@ void BallToCapsuleScenario::onRender(CommandList& commandList, const DirectX::XM
 		physicsObject->onRender(commandList, viewMatrix, viewProjectionMatrix);
 	}
 }
+
+void BallToCapsuleScenario::drawImGui() {
+
+}

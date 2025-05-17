@@ -55,3 +55,7 @@ void BallToWallScenario::onRender(CommandList& commandList, const DirectX::XMMAT
 		physicsObject->onRender(commandList, viewMatrix, viewProjectionMatrix);
 	}
 }
+
+void BallToWallScenario::drawImGui() {
+
+}

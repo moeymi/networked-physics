@@ -28,7 +28,7 @@ using namespace DirectX;
 #endif
 #include "BallToWallScenario.h"
 #include "BallToCapsuleScenario.h"
-#include "ScenarioA.h"
+#include "SpheresScenario.h"
 #include "ScenarioB.h"
 #include <omp.h>
 #include "EmptyScenario.h"
@@ -553,6 +553,13 @@ void PhysicsSimulation::OnGUI()
         }
         if (!m_PhysicsEngine.isRunning()) {
             if (!m_simulationScheduled && ImGui::Button("Start Simulation")) {
+                if (m_CurrentScenario) {
+                    for (auto& body : m_CurrentScenario->getPhysicsObjects())
+                    {
+                        m_PhysicsEngine.addBody(body);
+                    }
+                }
+
                 double localNow = GlobalData::getTimestamp();
                 double startTime = localNow + 2.0;
 
@@ -626,6 +633,11 @@ void PhysicsSimulation::OnGUI()
 
         ImGui::End();
     }
+
+	if (m_CurrentScenario)
+	{
+		m_CurrentScenario->drawImGui();
+	}
 }
 
 void PhysicsSimulation::ChangeScenario(int index)
@@ -643,7 +655,7 @@ void PhysicsSimulation::ChangeScenario(int index)
     switch (index)
     {
 	case 0:
-		m_CurrentScenario = std::make_unique<ScenarioA>();
+		m_CurrentScenario = std::make_unique<SpheresScenario>();
 		break;
 	case 1:
 		m_CurrentScenario = std::make_unique<ScenarioB>();
@@ -651,15 +663,9 @@ void PhysicsSimulation::ChangeScenario(int index)
     default:
         break;
     }
-    if (m_CurrentScenario) {
 
+    if(m_CurrentScenario)
         m_CurrentScenario->onLoad(*commandList);
-
-        for (auto& body : m_CurrentScenario->getPhysicsObjects())
-        {
-            m_PhysicsEngine.addBody(body);
-        }
-    }
 
     m_ScenarioMutex.unlock();
     auto fenceValue = commandQueue->ExecuteCommandList(commandList);

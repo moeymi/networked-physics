@@ -1,12 +1,14 @@
-#include "ScenarioA.h"
+#include "RoomScenario.h"
+
 #include "BoxCollider.h"
 #include "SphereCollider.h"
 #include "GlobalData.h"
 
 #include <algorithm>
 #include <random>
+#include "CollisionSystem.h"
 
-void ScenarioA::onLoad(CommandList& commandList)
+void RoomScenario::onLoad(CommandList& commandList)
 {
 	std::normal_distribution<float> d{ 0.0, 1.0 };
 
@@ -71,49 +73,10 @@ void ScenarioA::onLoad(CommandList& commandList)
 	m_physicsObjects.push_back(plane4);
 	m_physicsObjects.push_back(plane5);
 	m_physicsObjects.push_back(plane6);
-
-	PhysicsMaterial material = {
-		0.02f,
-		0.02,
-		1
-	};
-	for (int i = 0; i < 50; i++)
-	{
-		int randNum = 0;// rand() % 2;
-		if (randNum) {
-			// Create a static box
-			auto box = std::make_shared<PhysicsObject>(static_cast<UINT>(i), MeshType::Box, GlobalData::g_boxMesh, GlobalData::g_defaultTexture);
-			auto sphereCollider = std::make_shared<BoxCollider>(DirectX::XMVectorReplicate(.5f));
-			box->setCollider(sphereCollider);
-			box->setPhysicsMaterial(material);
-			float x = std::clamp(d(m_randomEngine), -1.2f, 1.2f);
-			float y = std::clamp(d(m_randomEngine), -1.2f, 1.2f);
-			float z = std::clamp(d(m_randomEngine), -1.2f, 1.2f);
-			box->onLoad();
-			box->setStatic(true);
-			box->getTransform().SetPosition({ x, y, z, 1 }, 0, true);
-			m_physicsObjects.push_back(box);
-		}
-		else {
-			// Create a sphere
-			auto particle = std::make_shared<PhysicsObject>(static_cast<UINT>(i), MeshType::Sphere, GlobalData::g_sphereMesh, GlobalData::g_customTexture);
-			auto sphereCollider = std::make_shared<SphereCollider>(.5f);
-			particle->setCollider(sphereCollider);
-			particle->setPhysicsMaterial(material);
-			particle->getTransform().SetScale({ 0.25f, 0.25f, 0.25f, 1 }, 0, true);
-			float x = std::clamp(d(m_randomEngine), -1.2f, 1.2f);
-			float y = std::clamp(d(m_randomEngine), -1.2f, 1.2f);
-			float z = std::clamp(d(m_randomEngine), -1.2f, 1.2f);
-			particle->onLoad();
-			particle->getTransform().SetPosition({ x, y, z, 1 }, 0, true);
-			m_physicsObjects.push_back(particle);
-			//particle->setVelocity({ 5, 0, 0, 0 }, 0);
-			//particle->setVelocity({ 5, 0, 0, 0 }, 1);
-		}
-	}
+	onLoadInternal(commandList);
 }
 
-void ScenarioA::onUnload(CommandList& commandList)
+void RoomScenario::onUnload(CommandList& commandList)
 {
 	for (auto& physicsObject : m_physicsObjects)
 	{
@@ -122,7 +85,7 @@ void ScenarioA::onUnload(CommandList& commandList)
 	m_physicsObjects.clear();
 }
 
-void ScenarioA::onRender(CommandList& commandList, const DirectX::XMMATRIX& viewMatrix, const DirectX::XMMATRIX& viewProjectionMatrix)
+void RoomScenario::onRender(CommandList& commandList, const DirectX::XMMATRIX& viewMatrix, const DirectX::XMMATRIX& viewProjectionMatrix)
 {
 	for (const auto& physicsObject : m_physicsObjects)
 	{

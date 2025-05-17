@@ -22,3 +22,7 @@ void EmptyScenario::onRender(CommandList& commandList, const DirectX::XMMATRIX& 
 		physicsObject->onRender(commandList, viewMatrix, viewProjectionMatrix);
 	}
 }
+
+void EmptyScenario::drawImGui() {
+
+}
