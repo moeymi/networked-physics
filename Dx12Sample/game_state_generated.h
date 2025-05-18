@@ -36,6 +36,9 @@ struct ObjectUpdateBuilder;
 struct ObjectUpdateList;
 struct ObjectUpdateListBuilder;
 
+struct GravityChange;
+struct GravityChangeBuilder;
+
 struct PeerInfo;
 struct PeerInfoBuilder;
 
@@ -101,22 +104,24 @@ enum MessageUnion : uint8_t {
   MessageUnion_Recognize = 1,
   MessageUnion_Scenario = 2,
   MessageUnion_ObjectUpdateList = 3,
-  MessageUnion_RequestScenario = 4,
-  MessageUnion_StartSimulation = 5,
-  MessageUnion_PeerList = 6,
-  MessageUnion_Ping = 7,
-  MessageUnion_Pong = 8,
-  MessageUnion_DiscoveryBroadcast = 9,
+  MessageUnion_GravityChange = 4,
+  MessageUnion_RequestScenario = 5,
+  MessageUnion_StartSimulation = 6,
+  MessageUnion_PeerList = 7,
+  MessageUnion_Ping = 8,
+  MessageUnion_Pong = 9,
+  MessageUnion_DiscoveryBroadcast = 10,
   MessageUnion_MIN = MessageUnion_NONE,
   MessageUnion_MAX = MessageUnion_DiscoveryBroadcast
 };
 
-inline const MessageUnion (&EnumValuesMessageUnion())[10] {
+inline const MessageUnion (&EnumValuesMessageUnion())[11] {
   static const MessageUnion values[] = {
     MessageUnion_NONE,
     MessageUnion_Recognize,
     MessageUnion_Scenario,
     MessageUnion_ObjectUpdateList,
+    MessageUnion_GravityChange,
     MessageUnion_RequestScenario,
     MessageUnion_StartSimulation,
     MessageUnion_PeerList,
@@ -128,11 +133,12 @@ inline const MessageUnion (&EnumValuesMessageUnion())[10] {
 }
 
 inline const char * const *EnumNamesMessageUnion() {
-  static const char * const names[11] = {
+  static const char * const names[12] = {
     "NONE",
     "Recognize",
     "Scenario",
     "ObjectUpdateList",
+    "GravityChange",
     "RequestScenario",
     "StartSimulation",
     "PeerList",
@@ -164,6 +170,10 @@ template<> struct MessageUnionTraits<NetSim::Scenario> {
 
 template<> struct MessageUnionTraits<NetSim::ObjectUpdateList> {
   static const MessageUnion enum_value = MessageUnion_ObjectUpdateList;
+};
+
+template<> struct MessageUnionTraits<NetSim::GravityChange> {
+  static const MessageUnion enum_value = MessageUnion_GravityChange;
 };
 
 template<> struct MessageUnionTraits<NetSim::RequestScenario> {
@@ -735,6 +745,47 @@ inline ::flatbuffers::Offset<ObjectUpdateList> CreateObjectUpdateListDirect(
       updates__);
 }
 
+struct GravityChange FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef GravityChangeBuilder Builder;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_NEW_VALUE = 4
+  };
+  float new_value() const {
+    return GetField<float>(VT_NEW_VALUE, 0.0f);
+  }
+  bool Verify(::flatbuffers::Verifier &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyField<float>(verifier, VT_NEW_VALUE, 4) &&
+           verifier.EndTable();
+  }
+};
+
+struct GravityChangeBuilder {
+  typedef GravityChange Table;
+  ::flatbuffers::FlatBufferBuilder &fbb_;
+  ::flatbuffers::uoffset_t start_;
+  void add_new_value(float new_value) {
+    fbb_.AddElement<float>(GravityChange::VT_NEW_VALUE, new_value, 0.0f);
+  }
+  explicit GravityChangeBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  ::flatbuffers::Offset<GravityChange> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = ::flatbuffers::Offset<GravityChange>(end);
+    return o;
+  }
+};
+
+inline ::flatbuffers::Offset<GravityChange> CreateGravityChange(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    float new_value = 0.0f) {
+  GravityChangeBuilder builder_(_fbb);
+  builder_.add_new_value(new_value);
+  return builder_.Finish();
+}
+
 struct PeerInfo FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   typedef PeerInfoBuilder Builder;
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
@@ -1173,6 +1224,9 @@ struct NetworkMessage FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   const NetSim::ObjectUpdateList *data_as_ObjectUpdateList() const {
     return data_type() == NetSim::MessageUnion_ObjectUpdateList ? static_cast<const NetSim::ObjectUpdateList *>(data()) : nullptr;
   }
+  const NetSim::GravityChange *data_as_GravityChange() const {
+    return data_type() == NetSim::MessageUnion_GravityChange ? static_cast<const NetSim::GravityChange *>(data()) : nullptr;
+  }
   const NetSim::RequestScenario *data_as_RequestScenario() const {
     return data_type() == NetSim::MessageUnion_RequestScenario ? static_cast<const NetSim::RequestScenario *>(data()) : nullptr;
   }
@@ -1212,6 +1266,10 @@ template<> inline const NetSim::Scenario *NetworkMessage::data_as<NetSim::Scenar
 
 template<> inline const NetSim::ObjectUpdateList *NetworkMessage::data_as<NetSim::ObjectUpdateList>() const {
   return data_as_ObjectUpdateList();
+}
+
+template<> inline const NetSim::GravityChange *NetworkMessage::data_as<NetSim::GravityChange>() const {
+  return data_as_GravityChange();
 }
 
 template<> inline const NetSim::RequestScenario *NetworkMessage::data_as<NetSim::RequestScenario>() const {
@@ -1302,6 +1360,10 @@ inline bool VerifyMessageUnion(::flatbuffers::Verifier &verifier, const void *ob
     }
     case MessageUnion_ObjectUpdateList: {
       auto ptr = reinterpret_cast<const NetSim::ObjectUpdateList *>(obj);
+      return verifier.VerifyTable(ptr);
+    }
+    case MessageUnion_GravityChange: {
+      auto ptr = reinterpret_cast<const NetSim::GravityChange *>(obj);
       return verifier.VerifyTable(ptr);
     }
     case MessageUnion_RequestScenario: {

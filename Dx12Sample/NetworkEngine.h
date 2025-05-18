@@ -75,6 +75,7 @@ private:
     void handleRecognize(const NetSim::Recognize* recognize);
     void handlePeerList(const NetSim::PeerList* list);
 	void handleScenario(const NetSim::Scenario* scenario);
+	void handleGravityChange(const NetSim::GravityChange* gravityChange);
 	void handleObjectUpdate(SOCKET from, const NetSim::ObjectUpdateList* objectUpdateList);
     void handleStartSimulation(SOCKET peerSocket, const NetSim::StartSimulation* startSim);
 
@@ -102,6 +103,7 @@ public:
 	void setScnearioListener(std::function<void(std::vector<std::shared_ptr<PhysicsObject>>&&, const float&)> listener);
 	void setStartSimulationListener(std::function<void(double)> listener);
 	void scheduleSimulationStart(float time);
+	void changeGravity(const float& gravity);
 
     std::vector<PeerInfo> getPeersInfo() const;
 

@@ -1,3 +1,3 @@
 #include "Scenario.h"
 
-std::mt19937 Scenario::m_randomEngine{ std::random_device{}() };
+std::default_random_engine Scenario::m_randomEngine{ std::random_device{}() };

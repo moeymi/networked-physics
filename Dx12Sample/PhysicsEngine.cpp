@@ -7,21 +7,18 @@
 float PhysicsEngine::m_gravity = 9.81f;
 bool PhysicsEngine::m_gravityEnabled = true;
 float PhysicsEngine::m_simulationDeltaTime;
+std::vector<std::shared_ptr<PhysicsObject>> PhysicsEngine::m_bodies;
+CollisionSystem PhysicsEngine::m_collisionSystem;
 
 void PhysicsEngine::onUpdate(float) {
-    for (auto body : m_bodies) {
-        body->swapStates();
-    }
-
-    for (int i = 0; i < m_bodies.size(); i++) {
-        auto body = m_bodies[i].get();
+    for (const auto& body : m_bodies) {
         if (!body->isStatic()) {
             body->onUpdate(m_simulationDeltaTime);
         }
     }
 
     detectAndResolveCollisions(m_simulationDeltaTime);
-    for (auto body : m_bodies) {
+    for (const auto& body : m_bodies) {
         body->swapStates();
     }
 }
@@ -53,21 +50,8 @@ void PhysicsEngine::setGravity(const float& gravity) {
 	}
 }
 
-float PhysicsEngine::getGravity() const {
+float PhysicsEngine::getGravity() {
 	return m_gravity;
-}
-
-void PhysicsEngine::toggleGravity(const bool& toggle) {
-	if (m_gravityEnabled == toggle) return;
-	m_gravityEnabled = toggle;
-	if (toggle) {
-		setGravity(m_gravity);
-	}
-	else {
-		for (auto& body : m_bodies) {
-			body->resetConstantForces();
-		}
-	}
 }
 
 bool PhysicsEngine::isGravityEnabled() const {
@@ -86,8 +70,6 @@ void PhysicsEngine::detectAndResolveCollisions(const float& deltaTime) {
     auto candidates = broadPhase();
 
     std::map<std::pair<PhysicsObject*, PhysicsObject*>, CollisionManifold> currentFrameManifolds;
-
-    std::vector<CollisionManifold> collisions(candidates.size());
 
     //#pragma omp parallel for
     for (int i = 0; i < candidates.size(); i++) {
@@ -130,12 +112,8 @@ void PhysicsEngine::detectAndResolveCollisions(const float& deltaTime) {
         }
     }
 
-    for (int i = 0; i < m_positionIterations; ++i) {
-		for (int i = 0; i < m_contactManifolds.size(); i++) {
-            // Output omp thread id
-			auto pair = m_contactManifolds.begin();
-			std::advance(pair, i);
-            auto& manifold = pair->second;
+    for (int iter = 0; iter < m_positionIterations; ++iter) {
+		for (auto& [key, manifold] : m_contactManifolds) {
             if (manifold.contacts.empty()) continue;
             for (auto& contact : manifold.contacts) {
                 positionalCorrection(contact, manifold.objectA, manifold.objectB);
@@ -191,6 +169,9 @@ void PhysicsEngine::prestepCollisionManifolds(std::map<std::pair<PhysicsObject*,
             float invMassSum = invMassA + invMassB + angularA + angularB;
             c.normalMass = invMassSum > 0.0f ? 1.0f / invMassSum : 0.0f;
 
+            float invMassN = invMassA + invMassB + angularA + angularB;
+            //c.angularMass = invMassN > 0.f ? 1.f / invMassN : 0.f;
+
             XMVECTOR velA = XMVectorAdd(A->getVelocity(0), XMVector3Cross(A->getAngularVelocity(0), rA));
             XMVECTOR velB = XMVectorAdd(B->getVelocity(0),
                 XMVector3Cross(B->getAngularVelocity(0), rB));
@@ -234,8 +215,6 @@ void PhysicsEngine::resolveCollisionVelocity(
 	const float combinedAngularFriction = std::sqrt(matA.angularFriction * matB.angularFriction);
     const float combinedRestitution = abs((matA.restitution + matB.restitution) / 2.0f);
 
-    const float invMassA = A->isStatic() ? 0.0f : 1.0f / A->getMass();
-    const float invMassB = B->isStatic() ? 0.0f : 1.0f / B->getMass();
     const XMMATRIX invInertiaA = A->getInverseWorldInertiaTensor(0);
     const XMMATRIX invInertiaB = B->getInverseWorldInertiaTensor(0);
 
@@ -264,13 +243,14 @@ void PhysicsEngine::resolveCollisionVelocity(
 			continue;
 		}
 
-        float velocityBias = c.bias;
-        float restitutionTerm = 0.0f;
-        if (relVelNormal < -1.0f) {
-            restitutionTerm = -combinedRestitution * relVelNormal;
-        }
+        bool useRestitution = relVelNormal < -m_kRestitutionThreshold; 
+        float restitutionTerm = useRestitution ? -combinedRestitution * relVelNormal
+            : 0.0f;
 
         float deltaVelNormalTarget = -relVelNormal + restitutionTerm;
+        if (!useRestitution)
+            deltaVelNormalTarget += c.bias;
+
         float lambdaN = deltaVelNormalTarget * c.normalMass;
 
         float oldAccumulatedNormalImpulse = c.accumulatedNormalImpulse;
@@ -351,7 +331,7 @@ void PhysicsEngine::positionalCorrection(const ContactPoint& contact, PhysicsObj
 
     if (a->isStatic() && b->isStatic()) return;
 
-    const float percent = .18f;
+    const float percent = .2f;
     const float slop = 0.001f;
 
     const float penetrationDepth = contact.penetration - slop;

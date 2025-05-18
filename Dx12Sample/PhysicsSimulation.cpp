@@ -415,150 +415,132 @@ void PhysicsSimulation::OnGUI()
 {
     static bool showDemoWindow = false;
     static bool showOptions = true;
+    static bool showEngineStats = true;
+    static bool showNetworking = true;
+    static bool showSimulationControl = true;
 
+    // Main Menu Bar
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("File")) {
             if (ImGui::MenuItem("Exit", "Esc"))
-            {
                 Application::Get().Quit();
-            }
             ImGui::EndMenu();
         }
 
         if (ImGui::BeginMenu("View")) {
             ImGui::MenuItem("ImGui Demo", nullptr, &showDemoWindow);
             ImGui::MenuItem("Physics Options", nullptr, &showOptions);
-
+            ImGui::MenuItem("Engine Stats", nullptr, &showEngineStats);
+            ImGui::MenuItem("Networking", nullptr, &showNetworking);
+            ImGui::MenuItem("Simulation Control", nullptr, &showSimulationControl);
             ImGui::EndMenu();
         }
 
         if (ImGui::BeginMenu("Options")) {
             bool vSync = m_pWindow->IsVSync();
-            if (ImGui::MenuItem("V-Sync", "V", &vSync)) {
+            if (ImGui::MenuItem("V-Sync", "V", &vSync))
                 m_pWindow->SetVSync(vSync);
-            }
 
             bool fullscreen = m_pWindow->IsFullScreen();
-            if (ImGui::MenuItem("Full screen", "Alt+Enter", &fullscreen)) {
+            if (ImGui::MenuItem("Full screen", "Alt+Enter", &fullscreen))
                 m_pWindow->SetFullscreen(fullscreen);
-            }
 
-            // Change scenario
-			if (ImGui::MenuItem("Create Scenario A")) {
-				ChangeScenario(0);
-			}
-            if (ImGui::MenuItem("Create Scenario B")) {
-				ChangeScenario(1);
-            }
+            if (ImGui::MenuItem("Create Scenario A"))
+                ChangeScenario(0);
+            if (ImGui::MenuItem("Create Scenario B"))
+                ChangeScenario(1);
 
             ImGui::EndMenu();
         }
-        {
-            // Add a new ImGui window to control the timestep of each engine.
-            ImGui::Begin("Engine Timesteps");
-            char buffer[256];
-            float dt;
-            float hz;
-            float ms;
-            {
-                sprintf_s(buffer, _countof(buffer), "FPS: %.2f (%.2f ms)  ", GlobalData::g_renderingFPS, 1.0 / GlobalData::g_renderingFPS * 1000.0);
-                ImGui::Text(buffer);
-            }
-            {
-                float physicsDeltaTime = m_PhysicsEngine.getSimulationDeltaTime();
-                if (ImGui::InputFloat("Physics delta time", &physicsDeltaTime, 0.005f, 0.01f, "%.3f")) {
-                    physicsDeltaTime = std::max(0.001f, std::min(0.1f, physicsDeltaTime));
-                    m_PhysicsEngine.setSimulationDeltaTime(physicsDeltaTime);
-                }
-            }
-            {
-                dt = m_PhysicsEngine.getDeltaTime();
-                hz = 1.0f / dt;
-                ms = dt * 1000.0f;
-
-                sprintf_s(buffer, _countof(buffer), "Physics FPS: %.2f (%.2f ms)", hz, ms);
-                ImGui::Text("%s", buffer);
-                int physicsFrequency = m_PhysicsEngine.getFrequency();
-                if (ImGui::InputInt("Physics Engine Timestep (s)", &physicsFrequency, 1, 2)) {
-					physicsFrequency = std::max(1, std::min(300, physicsFrequency));
-                    m_PhysicsEngine.setFrequency(physicsFrequency);
-                }
-            }
-            {
-				dt = m_NetworkingEngine.getDeltaTime();
-				hz = 1.0f / dt;
-				ms = dt * 1000.0f;
-
-				sprintf_s(buffer, _countof(buffer), "Network FPS: %.2f (%.2f ms)", hz, ms);
-				ImGui::Text("%s", buffer);
-				int networkFrequency = m_NetworkingEngine.getFrequency();
-                if (ImGui::InputInt("Network Engine Timestep (s)", &networkFrequency, 1, 2)) {
-                    networkFrequency = std::max(1, std::min(300, networkFrequency));
-                    m_NetworkingEngine.setFrequency(networkFrequency);
-                }
-            }
-            ImGui::End();
-        }
-
 
         ImGui::EndMainMenuBar();
     }
 
-    ImGui::Begin("Network");
-    // Show two buttons to either start client or host
-    if (!m_NetworkingEngine.isRunning()) {
+    // Engine Stats
+    if (showEngineStats) {
+        ImGui::Begin("Engine Stats", &showEngineStats);
+        ImGui::Text("FPS: %.2f (%.2f ms)", GlobalData::g_renderingFPS, 1000.0 / GlobalData::g_renderingFPS);
 
-        if (ImGui::CollapsingHeader("Client Config")) {
+        auto ShowEngineData = [](const char* name, ThreadedSystem& engine) {
+            float dt = engine.getDeltaTime();
+            float hz = 1.0f / dt;
+            float ms = dt * 1000.0f;
+            ImGui::Text("%s FPS: %.2f (%.2f ms)", name, hz, ms);
+            int freq = engine.getFrequency();
+            if (ImGui::InputInt((std::string(name) + " Timestep (Hz)").c_str(), &freq, 1, 2)) {
+                freq = std::clamp(freq, 1, 300);
+                engine.setFrequency(freq);
+            }
+            };
 
-            ImGui::Text("Client ID: %d", GlobalData::g_clientId);
-
-            static char clientName[64] = "";
-            if (ImGui::InputText("Client Name", clientName, sizeof(clientName))) {
-                GlobalData::g_clientName = clientName;
-            }
-
-            DirectX::XMFLOAT4 clientColor = GlobalData::g_clientColor;
-            if (ImGui::ColorEdit4("Client Color", &clientColor.x)) {
-                GlobalData::g_clientColor = clientColor;
-            }
-            static int port = GlobalData::g_listenPort;
-            if (ImGui::InputInt("Port", &port)) {
-                GlobalData::g_listenPort = port;
-            }
-            if (ImGui::Button("Start Host")) {
-                m_NetworkingEngine.initializeSockets(port);
-                m_NetworkingEngine.start();
-            }
+        float physicsDeltaTime = m_PhysicsEngine.getSimulationDeltaTime();
+        if (ImGui::InputFloat("Physics delta time", &physicsDeltaTime, 0.005f, 0.01f, "%.3f")) {
+            physicsDeltaTime = std::clamp(physicsDeltaTime, 0.001f, 0.1f);
+            m_PhysicsEngine.setSimulationDeltaTime(physicsDeltaTime);
         }
+
+        ShowEngineData("Physics", m_PhysicsEngine);
+        ShowEngineData("Network", m_NetworkingEngine);
+        ImGui::End();
     }
-    else {
-        auto peers = m_NetworkingEngine.getPeersInfo();
-		if (peers.size() > 0)
-		{
-            ImGui::Text("Peer Info:");
-            for (auto& peer : peers)
-            {
-                auto color = ImColor(peer.color.x, peer.color.y, peer.color.z);
-                ImGui::TextColored(color, "Peer ID: %d, Client Name: %s", peer.peer_id, peer.client_name.c_str());
-            }
-            if (ImGui::Button("Disconnect")) {
-                m_NetworkingEngine.stop();
-            }
-		}
-		else {
-			ImGui::Text("Listening for peers..");
-		}
-        if (m_CurrentScenario && ImGui::Button("Broadcast Scenario")) {
-            BroadCastCurrentScenarioCreate();
-        }
-        if (!m_PhysicsEngine.isRunning()) {
-            if (!m_simulationScheduled && ImGui::Button("Start Simulation")) {
-                if (m_CurrentScenario) {
-                    for (auto& body : m_CurrentScenario->getPhysicsObjects())
-                    {
-                        m_PhysicsEngine.addBody(body);
-                    }
+
+    // Networking
+    if (showNetworking) {
+        ImGui::Begin("Networking", &showNetworking);
+        if (!m_NetworkingEngine.isRunning()) {
+            if (ImGui::CollapsingHeader("Client Config")) {
+                ImGui::Text("Client ID: %d", GlobalData::g_clientId);
+
+                static char clientName[64] = "";
+                if (ImGui::InputText("Client Name", clientName, sizeof(clientName)))
+                    GlobalData::g_clientName = clientName;
+
+                DirectX::XMFLOAT4 clientColor = GlobalData::g_clientColor;
+                if (ImGui::ColorEdit4("Client Color", &clientColor.x))
+                    GlobalData::g_clientColor = clientColor;
+
+                static int port = GlobalData::g_listenPort;
+                if (ImGui::InputInt("Port", &port))
+                    GlobalData::g_listenPort = port;
+
+                if (ImGui::Button("Start Host")) {
+                    m_NetworkingEngine.initializeSockets(port);
+                    m_NetworkingEngine.start();
                 }
+            }
+        }
+        else {
+            auto peers = m_NetworkingEngine.getPeersInfo();
+            if (!peers.empty()) {
+                ImGui::Text("Peer Info:");
+                for (const auto& peer : peers) {
+                    ImGui::TextColored(ImColor(peer.color.x, peer.color.y, peer.color.z), "Peer ID: %d, Client Name: %s", peer.peer_id, peer.client_name.c_str());
+                }
+                if (ImGui::Button("Disconnect"))
+                    m_NetworkingEngine.stop();
+            }
+            else {
+                ImGui::Text("Listening for peers...");
+            }
+
+            if (m_CurrentScenario && ImGui::Button("Broadcast Scenario"))
+                BroadCastCurrentScenarioCreate();
+        }
+        ImGui::End();
+    }
+
+    // Simulation Control
+    if (showSimulationControl && m_CurrentScenario) {
+        ImGui::Begin("Simulation Control", &showSimulationControl);
+        if (!m_PhysicsEngine.isRunning()) {
+            // Count of objects in the scenario
+
+			int objectCount = static_cast<int>(m_CurrentScenario->getPhysicsObjects().size());
+			ImGui::Text("Objects in scenario: %d", objectCount);
+
+            if (!m_simulationScheduled && ImGui::Button("Start Simulation")) {
+                for (auto& body : m_CurrentScenario->getPhysicsObjects())
+                    m_PhysicsEngine.addBody(body);
 
                 double localNow = GlobalData::getTimestamp();
                 double startTime = localNow + 2.0;
@@ -569,76 +551,56 @@ void PhysicsSimulation::OnGUI()
                 m_NetworkingEngine.scheduleSimulationStart(startTime);
             }
             else if (m_simulationScheduled) {
-                ImGui::Text("Simulation scheduled at %.2f", m_simulationStartTime - GlobalData::getTimestamp());
+                ImGui::Text("Simulation scheduled in: %.2f sec", m_simulationStartTime - GlobalData::getTimestamp());
             }
         }
-
-    }
-    ImGui::End();
-
-    /*
-    // Show last error at the top screen
-    if (!m_lastError.empty()) {
-        ImGui::SetNextWindowPos(ImVec2(0, m_Height - 30));
-        ImGui::SetNextWindowBgAlpha(0.5f);
-        ImGui::Begin("Error", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings);
-        ImGui::TextColored(ImColor(1.0f, 0.0f, 0.0f), "%s", m_lastError.c_str());
         ImGui::End();
     }
-    */
+
+    // Physics Options
+    if (showOptions) {
+        ImGui::Begin("Physics Options", &showOptions);
+        float gravity = m_PhysicsEngine.getGravity();
+        bool gravityEnabled = m_PhysicsEngine.isGravityEnabled();
+        bool reversed = gravity < 0;
+
+        ImGui::Checkbox("Client Prediction", &m_clientPrediction);
+
+        ImGui::Text("Gravity");
+
+        ImGui::SameLine();
+        ImGui::Text("Reversed");
+        ImGui::SameLine();
+        if (ImGui::Checkbox("##Gravity Reversed", &reversed)) {
+            gravity = -gravity;
+            m_PhysicsEngine.setGravity(gravity);
+			m_NetworkingEngine.changeGravity(gravity);
+        }
+
+        if (ImGui::SliderFloat("##Gravity", &gravity, 0.0f, 20.0f, "%.5f m/s^2")) {
+            m_PhysicsEngine.setGravity(gravity);
+            m_NetworkingEngine.changeGravity(gravity);
+        }
+
+        ImGui::SameLine();
+        ShowHelpMarker("Gravity acceleration in m/s^2");
+
+        if (ImGui::Button("Reset Camera")) {
+            m_RenderingEngine.ResetCamera();
+            m_Pitch = 0.0f;
+            m_Yaw = 0.0f;
+        }
+
+        ImGui::End();
+    }
 
     if (showDemoWindow)
-    {
         ImGui::ShowDemoWindow(&showDemoWindow);
-    }
 
-    if (showOptions)
-    {
-        ImGui::Begin("Physics Control", &showOptions);
-        {
-            // Gravity Control
-			float gravity = m_PhysicsEngine.getGravity();
-			bool gravityEnabled = m_PhysicsEngine.isGravityEnabled();
-            bool reversed = gravity < 0;
-
-            ImGui::Checkbox("##Client Prediction", &m_clientPrediction);
-
-			ImGui::Text("Gravity");
-			ImGui::SameLine();
-            if (ImGui::Checkbox("##Gravity Enabled", &gravityEnabled)) {
-                m_PhysicsEngine.toggleGravity(gravityEnabled);
-            }
-            ImGui::SameLine();
-            ImGui::Text("Reversed");
-
-			ImGui::SameLine();
-            if (ImGui::Checkbox("##Gravity Reversed", &reversed)) {
-				gravity = -gravity;
-                m_PhysicsEngine.setGravity(gravity);
-            }
-            if (ImGui::SliderFloat("##Gravity", &gravity, 0.0f, 20.0f, "%.5f m/s^2")) {
-                m_PhysicsEngine.setGravity(gravity);
-            }
-			
-			ImGui::SameLine();
-			ShowHelpMarker("Gravity acceleration in m/s^2");
-			// Reset camera
-			if (ImGui::Button("Reset Camera"))
-			{
-				m_RenderingEngine.ResetCamera();
-				m_Pitch = 0.0f;
-				m_Yaw = 0.0f;
-			}
-        }
-
-        ImGui::End();
-    }
-
-	if (m_CurrentScenario)
-	{
-		m_CurrentScenario->drawImGui();
-	}
+    if (m_CurrentScenario)
+        m_CurrentScenario->drawImGui();
 }
+
 
 void PhysicsSimulation::ChangeScenario(int index)
 {

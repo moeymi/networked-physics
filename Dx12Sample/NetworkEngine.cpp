@@ -9,6 +9,7 @@
 #include "CommandQueue.h"
 #include "CommandList.h"
 #include "GlobalData.h"
+#include "PhysicsEngine.h"
 
 NetworkEngine::NetworkEngine()
 	: m_listenSocket(INVALID_SOCKET),
@@ -55,6 +56,24 @@ void NetworkEngine::scheduleSimulationStart(float time) {
     for (SOCKET s : m_peerSockets) {
         sendMessage(s, builder);
     }
+}
+
+void NetworkEngine::changeGravity(const float& gravity) {
+	flatbuffers::FlatBufferBuilder builder;
+
+	auto msgType = builder.CreateString("ChangeGravity");
+
+	auto changeGravity = NetSim::CreateGravityChange(builder, gravity);
+	NetSim::NetworkMessageBuilder msg(builder);
+
+	msg.add_msg_type(msgType);
+	msg.add_data_type(NetSim::MessageUnion_GravityChange);
+	msg.add_data(changeGravity.Union());
+	builder.Finish(msg.Finish());
+
+	for (SOCKET s : m_peerSockets) {
+		sendMessage(s, builder);
+	}
 }
 
 void NetworkEngine::initializeSockets(unsigned short listenPort) {
@@ -533,6 +552,9 @@ void NetworkEngine::handlePeerData(SOCKET peerSocket) {
 	case NetSim::MessageUnion_Pong:
 		handlePong(peerSocket, message->data_as_Pong());
 		break;
+	case NetSim::MessageUnion_GravityChange:
+		handleGravityChange(message->data_as_GravityChange());
+		break;
     default:
         break;
     }
@@ -730,6 +752,12 @@ void NetworkEngine::handleStartSimulation(SOCKET peerSocket, const NetSim::Start
 
     double localStartTime = remoteTime - offset;
     m_startSimulation(localStartTime);
+}
+
+void NetworkEngine::handleGravityChange(const NetSim::GravityChange* gravityChange) {
+	if (!gravityChange) return;
+	float newGravity = gravityChange->new_value();
+	PhysicsEngine::setGravity(newGravity);
 }
 
 void NetworkEngine::onUpdate(float deltaTime) {

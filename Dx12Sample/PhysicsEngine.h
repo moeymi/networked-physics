@@ -6,14 +6,14 @@
 
 class PhysicsEngine : public ThreadedSystem {
 private:
-    std::vector<std::shared_ptr<PhysicsObject>> m_bodies;
-    CollisionSystem m_collisionSystem;
+    static std::vector<std::shared_ptr<PhysicsObject>> m_bodies;
+    static CollisionSystem m_collisionSystem;
 
     std::map <std::pair<PhysicsObject*, PhysicsObject*>, CollisionManifold> m_contactManifolds;
 
     static constexpr int m_velocityIterations = 8;
     static constexpr int m_positionIterations = 4;
-    static constexpr float m_kRestitutionThreshold = .5f;  // only bounce if closing speed > this
+    static constexpr float m_kRestitutionThreshold = 1.0f;  // only bounce if closing speed > this
 
     static constexpr float m_kPenetrationSlop = 0.001f;  // 1 mm of allowed overlap
     static constexpr float m_kBaumgarte = 0.2f;    // positional stabilization factor
@@ -28,14 +28,15 @@ public:
     void addBody(std::shared_ptr<PhysicsObject> body);
     void clearBodies();
 
-    void toggleGravity(const bool& toggle);
-    void setGravity(const float& gravity);
+    static void setGravity(const float& gravity);
 
-    float getGravity() const;
+    static float getGravity();
     bool isGravityEnabled() const;
 
     void setSimulationDeltaTime(const float& deltaTime);
     float getSimulationDeltaTime() const;
+
+     
 
 private:
     virtual void onUpdate(float deltaTime) override;

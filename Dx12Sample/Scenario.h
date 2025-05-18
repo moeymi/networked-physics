@@ -12,7 +12,7 @@ class Scenario
 {
 protected:
 	std::vector<std::shared_ptr<PhysicsObject>> m_physicsObjects;
-	static std::mt19937 m_randomEngine;
+	static std::default_random_engine m_randomEngine;
 
 public:
 	Scenario() = default;

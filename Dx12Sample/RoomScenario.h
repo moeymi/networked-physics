@@ -6,9 +6,12 @@ class RoomScenario : public Scenario
 {
 protected: 
 	std::array<float, 3> m_bounds;
+	std::vector<std::shared_ptr<PhysicsObject>> m_wallsObjects;
+
+	void createWalls(CommandList& commandList);
 
 public:
-	RoomScenario() = default;
+	RoomScenario() : m_bounds({ 10, 10, 10 }) {};
 	virtual ~RoomScenario() override = default;
 
 	void onLoad(CommandList& commandList) override;
