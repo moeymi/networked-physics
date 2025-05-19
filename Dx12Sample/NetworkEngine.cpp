@@ -104,7 +104,7 @@ void NetworkEngine::initializeSockets(unsigned short listenPort) {
     const uint16_t GROUP_PORT = GlobalData::g_broadcastPort;
 
     IPAddress groupAddr(GROUP_IP, GROUP_PORT);
-    IPAddress localIface = IPAddress::initializeLocal(0);
+    IPAddress localIface = IPAddress::initializeLocal(GROUP_PORT);   // pick your NIC
 
     m_multicastSocket = std::make_unique<MulticastSocket>(groupAddr, localIface);
 
