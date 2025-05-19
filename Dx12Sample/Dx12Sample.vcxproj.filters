@@ -126,6 +126,9 @@
     <ClCompile Include="IPAddress.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="MulticastSocket.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Camera.h">
@@ -213,6 +216,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="IPAddress.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="MulticastSocket.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

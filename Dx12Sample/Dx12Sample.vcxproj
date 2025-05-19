@@ -188,6 +188,7 @@
     <ClCompile Include="Light.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Material.cpp" />
+    <ClCompile Include="MulticastSocket.cpp" />
     <ClCompile Include="NetworkEngine.cpp" />
     <ClCompile Include="pch.cpp" />
     <ClCompile Include="PhysicsEngine.cpp" />
@@ -217,6 +218,7 @@
     <ClInclude Include="IPAddress.h" />
     <ClInclude Include="Light.h" />
     <ClInclude Include="Material.h" />
+    <ClInclude Include="MulticastSocket.h" />
     <ClInclude Include="NetworkEngine.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="PhysicsEngine.h" />

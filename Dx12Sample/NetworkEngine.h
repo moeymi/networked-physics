@@ -5,6 +5,7 @@
 #include "ThreadedSystem.h"
 #include "game_state_generated.h"
 #include "Scenario.h"
+#include "MulticastSocket.h"
 struct PeerInfo {
     SOCKET socket;
     uint32_t peer_id;
@@ -55,12 +56,14 @@ private:
     std::mutex m_peerMutex;
     std::thread m_networkThread;
 
+	std::unique_ptr<MulticastSocket> m_multicastSocket;
+
     std::string constructDiscoveryMessage();
 
     void removePeer(SOCKET peerSocket);
 
 	void broadcastDiscovery(unsigned short port);
-	void listenForDiscovery(unsigned short port);
+	void listenForDiscovery();
     void connectToPeer(const std::string& ip, unsigned short port);
 
 	void sendPing(SOCKET peerSocket);
