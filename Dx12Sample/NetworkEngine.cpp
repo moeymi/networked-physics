@@ -147,28 +147,26 @@ void NetworkEngine::removePeer(SOCKET peerSocket) {
 void NetworkEngine::broadcastDiscovery(unsigned short discoveryPort) {
     SOCKET udpSocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (udpSocket == INVALID_SOCKET) {
-        // Handle error
         return;
     }
 
-    // Enable broadcast option
-    int broadcastEnable = 1;
-    if (setsockopt(udpSocket, SOL_SOCKET, SO_BROADCAST, reinterpret_cast<const char*>(&broadcastEnable), sizeof(broadcastEnable)) < 0) {
-        // Handle error
+    // Set TTL for multicast (e.g., 1 limits it to local network)
+    int ttl = 1;
+    if (setsockopt(udpSocket, IPPROTO_IP, IP_MULTICAST_TTL, (char*)&ttl, sizeof(ttl)) < 0) {
         closesocket(udpSocket);
         return;
     }
 
-    sockaddr_in broadcastAddr{};
-    broadcastAddr.sin_family = AF_INET;
-    broadcastAddr.sin_port = htons(discoveryPort);
-    broadcastAddr.sin_addr.s_addr = INADDR_BROADCAST; // 255.255.255.255
+    // Set up the multicast address
+    sockaddr_in multicastAddr{};
+    multicastAddr.sin_family = AF_INET;
+    multicastAddr.sin_port = htons(discoveryPort);
+    inet_pton(AF_INET, "239.255.0.1", &multicastAddr.sin_addr);
 
-    // Construct discovery message (e.g., JSON or custom binary format)
     std::string discoveryMessage = constructDiscoveryMessage();
 
     sendto(udpSocket, discoveryMessage.c_str(), static_cast<int>(discoveryMessage.size()), 0,
-        reinterpret_cast<sockaddr*>(&broadcastAddr), sizeof(broadcastAddr));
+        reinterpret_cast<sockaddr*>(&multicastAddr), sizeof(multicastAddr));
 
     closesocket(udpSocket);
 }
@@ -176,17 +174,29 @@ void NetworkEngine::broadcastDiscovery(unsigned short discoveryPort) {
 void NetworkEngine::listenForDiscovery(unsigned short discoveryPort) {
     SOCKET udpSocket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (udpSocket == INVALID_SOCKET) {
-        // Handle error
         return;
     }
+
+    // Allow multiple sockets to bind to the same address/port
+    int reuse = 1;
+    setsockopt(udpSocket, SOL_SOCKET, SO_REUSEADDR, (char*)&reuse, sizeof(reuse));
 
     sockaddr_in recvAddr{};
     recvAddr.sin_family = AF_INET;
     recvAddr.sin_port = htons(discoveryPort);
-    recvAddr.sin_addr.s_addr = INADDR_ANY;
+    recvAddr.sin_addr.s_addr = htonl(INADDR_ANY);
 
     if (bind(udpSocket, reinterpret_cast<sockaddr*>(&recvAddr), sizeof(recvAddr)) == SOCKET_ERROR) {
-        // Handle error
+        closesocket(udpSocket);
+        return;
+    }
+
+    // Join multicast group
+    ip_mreq mreq{};
+    inet_pton(AF_INET, "239.255.0.1", &mreq.imr_multiaddr);
+    mreq.imr_interface.s_addr = htonl(INADDR_ANY); // Use default interface
+
+    if (setsockopt(udpSocket, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char*)&mreq, sizeof(mreq)) < 0) {
         closesocket(udpSocket);
         return;
     }
@@ -203,10 +213,10 @@ void NetworkEngine::listenForDiscovery(unsigned short discoveryPort) {
             if (message->data_type() == NetSim::MessageUnion_DiscoveryBroadcast) {
                 const NetSim::DiscoveryBroadcast* discovery = message->data_as_DiscoveryBroadcast();
                 if (discovery->peer_id() == GlobalData::g_clientId) {
-                    continue; // Ignore discovery from self
+                    continue;
                 }
                 if (discovery->protocol_version() != PROTOCOL_VERSION) {
-                    continue; // Skip incompatible versions
+                    continue;
                 }
 
                 char ipStr[INET_ADDRSTRLEN];
@@ -214,7 +224,6 @@ void NetworkEngine::listenForDiscovery(unsigned short discoveryPort) {
                 std::string senderIP = ipStr;
                 unsigned short senderPort = discovery->tcp_port();
 
-                // Initiate TCP connection back to the sender
                 connectToPeer(senderIP, senderPort);
             }
         }
