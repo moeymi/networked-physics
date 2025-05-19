@@ -162,7 +162,7 @@ void NetworkEngine::broadcastDiscovery(unsigned short discoveryPort) {
 void NetworkEngine::listenForDiscovery() {
     char buffer[1024];
     sockaddr_in senderAddr{};
-    while (true) {
+    while (m_running) {
         int bytesReceived = m_multicastSocket->receive(buffer, sizeof(buffer), &senderAddr);
         if (bytesReceived <= 0)
             continue;
