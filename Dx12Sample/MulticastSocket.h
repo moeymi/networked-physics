@@ -1,20 +1,21 @@
+// MulticastSocket.h
 #pragma once
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#include <string>
-#include <stdexcept>
+#include "Socket.h"
+#include "IPAddress.h"
+#include <iostream>
 
-class MulticastSocket {
+class MulticastSocket : public Socket
+{
 public:
-    MulticastSocket(const std::string& groupIp, unsigned short port, const std::string& localInterfaceIp);
-    ~MulticastSocket();
+    /*  group  – e.g. 239.255.42.42:5000 */
+    MulticastSocket(const IPAddress& group,
+        const IPAddress& iface);
+
+    ~MulticastSocket() override = default;
 
     void send(const char* data, int size);
-    int receive(char* buffer, int bufferSize, sockaddr_in* sender = nullptr);
-
-    SOCKET getSocket() const { return m_socket; }
+    int  receive(char* buffer, int bufSize, sockaddr_in* sender = nullptr);
 
 private:
-    SOCKET m_socket;
-    sockaddr_in m_groupAddr;
+    sockaddr_in m_groupSa{};
 };

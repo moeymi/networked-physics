@@ -4,11 +4,17 @@
 
 class IPAddress {
 public:
-    void initialize(const std::string& address);
-    void initializeLocal();
+	IPAddress(const std::string& host, uint16_t port);
+    static IPAddress initializeLocal(uint16_t);
 
     const std::string get();
 
+    const sockaddr_in toSockAddr() const;
+
+    uint16_t port() const { return m_port; }
+    std::string toString() const { return m_host + ":" + std::to_string(m_port); }
+
 private:
-    std::string m_Address;
+    std::string m_host;
+	uint16_t m_port = 0;
 };

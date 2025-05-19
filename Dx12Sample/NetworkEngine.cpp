@@ -79,45 +79,38 @@ void NetworkEngine::changeGravity(const float& gravity) {
 
 void NetworkEngine::initializeSockets(unsigned short listenPort) {
     WSADATA wsaData;
-    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
         throw std::runtime_error("WSAStartup failed");
-    }
 
-    m_listenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (m_listenSocket == INVALID_SOCKET) {
-        WSACleanup();
+    m_listenSocket = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (m_listenSocket == INVALID_SOCKET)
         throw std::runtime_error("Failed to create listen socket");
-    }
 
-    u_long nonBlocking = 1;
-    ioctlsocket(m_listenSocket, FIONBIO, &nonBlocking);
+    u_long nb = 1;
+    ::ioctlsocket(m_listenSocket, FIONBIO, &nb);
 
-    sockaddr_in addr{};
-    addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = INADDR_ANY;
-    addr.sin_port = htons(listenPort);
+    sockaddr_in saAny{};
+    saAny.sin_family = AF_INET;
+    saAny.sin_port = htons(listenPort);
+    saAny.sin_addr.s_addr = htonl(INADDR_ANY);
 
-    if (bind(m_listenSocket, (sockaddr*)&addr, sizeof(addr)) == SOCKET_ERROR) {
-        closesocket(m_listenSocket);
-        WSACleanup();
-        throw std::runtime_error("Bind failed");
-    }
+    if (::bind(m_listenSocket, reinterpret_cast<sockaddr*>(&saAny), sizeof(saAny)) != 0)
+        throw std::runtime_error("bind() failed");
 
-    if (listen(m_listenSocket, SOMAXCONN) == SOCKET_ERROR) {
-        closesocket(m_listenSocket);
-        WSACleanup();
-        throw std::runtime_error("Listen failed");
-    }
-    IPAddress localAddress;
-    localAddress.initializeLocal();
+    if (::listen(m_listenSocket, SOMAXCONN) != 0)
+        throw std::runtime_error("listen() failed");
 
-    // Join multicast group with unified socket
-    m_multicastSocket = std::make_unique<MulticastSocket>("239.255.42.42", GlobalData::g_broadcastPort, localAddress.get());
+    constexpr char GROUP_IP[] = "239.255.42.42";
+    const uint16_t GROUP_PORT = GlobalData::g_broadcastPort;
+
+    IPAddress groupAddr(GROUP_IP, GROUP_PORT);
+    IPAddress localIface = IPAddress::initializeLocal(0);
+
+    m_multicastSocket = std::make_unique<MulticastSocket>(groupAddr, localIface);
 
     std::thread(&NetworkEngine::listenForDiscovery, this).detach();
 
-    // Broadcast discovery message
-    broadcastDiscovery(GlobalData::g_broadcastPort);
+    broadcastDiscovery(GROUP_PORT);
 }
 
 void NetworkEngine::connectToPeer(const std::string& ip, unsigned short port) {

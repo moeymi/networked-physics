@@ -7,29 +7,17 @@
 
 #pragma comment(lib, "iphlpapi.lib") // Link against the IP Helper API library to resolve any linker issues.
 
-void IPAddress::initialize(const std::string& address) {
-	m_Address = address;
-	if (m_Address.empty()) {
-		initializeLocal();
-	}
-	else {
-		// Validate the IP address format
-		struct sockaddr_in sa;
-		int result = inet_pton(AF_INET, m_Address.c_str(), &(sa.sin_addr));
-		if (result <= 0) {
-			OutputDebugStringA("Invalid IP address format.\n");
-			initializeLocal();
-		}
-	}
-}
+IPAddress::IPAddress(const std::string& host, uint16_t port)
+	: m_host(host), m_port(port) {}
 
-void IPAddress::initializeLocal() {
+IPAddress IPAddress::initializeLocal(uint16_t port) {
     ULONG flags = GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST | GAA_FLAG_SKIP_DNS_SERVER;
     ULONG family = AF_INET;
     ULONG bufLen = 0;
+    std::string host;
     if (GetAdaptersAddresses(family, flags, nullptr, nullptr, &bufLen) != ERROR_BUFFER_OVERFLOW) {
-        m_Address = "127.0.0.1";
-        return;
+        host = "127.0.0.1";
+		return IPAddress(host, port);
     }
 
     std::vector<char> buffer(bufLen);
@@ -50,17 +38,23 @@ void IPAddress::initializeLocal() {
                 inet_ntop(AF_INET, &(sa_in->sin_addr), str, INET_ADDRSTRLEN);
                 std::string ip = str;
                 if (ip != "127.0.0.1") {
-                    m_Address = ip;
-                    OutputDebugStringA(("Local address: " + m_Address + "\n").c_str());
-                    return;
+                    host = ip;
+					return IPAddress(host, port);
                 }
             }
         }
     }
 
-    m_Address = "127.0.0.1";
+	return IPAddress("127.0.0.1", port); // Fallback to localhost if no valid IP found
 }
 
 const std::string IPAddress::get() {
-    return m_Address;
+    return m_host;
+}
+const sockaddr_in IPAddress::toSockAddr() const {
+    sockaddr_in addr = {};
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(m_port);
+    inet_pton(AF_INET, m_host.c_str(), &addr.sin_addr);
+    return addr;
 }

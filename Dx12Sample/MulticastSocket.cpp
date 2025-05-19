@@ -1,67 +1,65 @@
+// MulticastSocket.cpp
 #include "MulticastSocket.h"
-#include "MulticastSocket.h"
-#include <iostream>
 
-MulticastSocket::MulticastSocket(const std::string& groupIp, unsigned short port, const std::string& localInterfaceIp)
-    : m_socket(INVALID_SOCKET)
+MulticastSocket::MulticastSocket(const IPAddress& group,
+    const IPAddress& iface)
 {
-    m_socket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    if (m_socket == INVALID_SOCKET)
-        throw std::runtime_error("Failed to create socket");
+    sock_ = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (sock_ == INVALID_SOCKET)
+        throw std::runtime_error("socket() failed");
 
-    // Allow multiple sockets to bind to the same port
+    /* 1  allow several processes to share the same UDP port  */
     int reuse = 1;
-    if (setsockopt(m_socket, SOL_SOCKET, SO_REUSEADDR, (char*)&reuse, sizeof(reuse)) < 0)
-        throw std::runtime_error("setsockopt(SO_REUSEADDR) failed");
+    ::setsockopt(sock_, SOL_SOCKET, SO_REUSEADDR,
+        reinterpret_cast<char*>(&reuse), sizeof(reuse));
 
-    // Bind to local address
-    sockaddr_in localAddr{};
-    localAddr.sin_family = AF_INET;
-    localAddr.sin_port = htons(port);
-    localAddr.sin_addr.s_addr = htonl(INADDR_ANY);
+    /* 2  bind to 0.0.0.0:<group.port()> –  *never* bind to the
+          multicast address itself                            */
+    sockaddr_in any{};
+    any.sin_family = AF_INET;
+    any.sin_port = htons(group.port());     // network-order
+    any.sin_addr.s_addr = htonl(INADDR_ANY);
 
-    if (bind(m_socket, (sockaddr*)&localAddr, sizeof(localAddr)) < 0)
+    if (::bind(sock_, reinterpret_cast<sockaddr*>(&any), sizeof(any)) != 0)
         throw std::runtime_error("bind() failed");
 
-    // Join multicast group
+    /* 3  join the multicast group on the desired interface   */
     ip_mreq mreq{};
+    mreq.imr_multiaddr = group.toSockAddr().sin_addr;   // 239.x.x.x
+    mreq.imr_interface = iface.toSockAddr().sin_addr;   // 10.140.9.123 (or 0.0.0.0)
 
-    inet_pton(AF_INET, groupIp.c_str(), &mreq.imr_multiaddr);
-    inet_pton(AF_INET, localInterfaceIp.c_str(), &mreq.imr_interface);
-
-    if (setsockopt(m_socket, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char*)&mreq, sizeof(mreq)) < 0)
+    if (::setsockopt(sock_, IPPROTO_IP, IP_ADD_MEMBERSHIP,
+        reinterpret_cast<char*>(&mreq), sizeof(mreq)) != 0)
         throw std::runtime_error("setsockopt(IP_ADD_MEMBERSHIP) failed");
 
-    // Set default group address for sending
-    m_groupAddr.sin_family = AF_INET;
-    m_groupAddr.sin_port = htons(port);
-    inet_pton(AF_INET, groupIp.c_str(), &m_groupAddr.sin_addr);
+    /* 4  store the destination for fast sendto() calls       */
+    m_groupSa = group.toSockAddr();
 
-    // Set multicast TTL
+    /* 5  keep traffic on the LAN only                        */
     int ttl = 1;
-    setsockopt(m_socket, IPPROTO_IP, IP_MULTICAST_TTL, (char*)&ttl, sizeof(ttl));
+    ::setsockopt(sock_, IPPROTO_IP, IP_MULTICAST_TTL,
+        reinterpret_cast<char*>(&ttl), sizeof(ttl));
 }
 
-MulticastSocket::~MulticastSocket() {
-    if (m_socket != INVALID_SOCKET) {
-        closesocket(m_socket);
-    }
+void MulticastSocket::send(const char* data, int size)
+{
+    int n = ::sendto(sock_, data, size, 0,
+        reinterpret_cast<const sockaddr*>(&m_groupSa),
+        sizeof(m_groupSa));
+    if (n == SOCKET_ERROR)
+        std::cerr << "sendto failed: " << WSAGetLastError() << '\n';
 }
 
-void MulticastSocket::send(const char* data, int size) {
-    int result = sendto(m_socket, data, size, 0, (sockaddr*)&m_groupAddr, sizeof(m_groupAddr));
-    if (result == SOCKET_ERROR) {
-        int err = WSAGetLastError();
-        std::cerr << "sendto failed: " << err << std::endl;
-    }
-}
+int MulticastSocket::receive(char* buf, int bufSize, sockaddr_in* sender)
+{
+    sockaddr_in from{};
+    int         len = sizeof(from);
 
-int MulticastSocket::receive(char* buffer, int bufferSize, sockaddr_in* sender) {
-    int senderLen = sizeof(sockaddr_in);
-    sockaddr_in senderAddr{};
-    int bytes = recvfrom(m_socket, buffer, bufferSize, 0, (sockaddr*)&senderAddr, &senderLen);
-    if (bytes == SOCKET_ERROR) return -1;
+    int n = ::recvfrom(sock_, buf, bufSize, 0,
+        reinterpret_cast<sockaddr*>(&from), &len);
+    if (n == SOCKET_ERROR)
+        return -1;
 
-    if (sender) *sender = senderAddr;
-    return bytes;
+    if (sender) *sender = from;
+    return n;
 }

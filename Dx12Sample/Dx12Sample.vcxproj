@@ -196,6 +196,7 @@
     <ClCompile Include="PhysicsSimulation.cpp" />
     <ClCompile Include="RenderingEngine.cpp" />
     <ClCompile Include="Scenario.cpp" />
+    <ClCompile Include="Socket.cpp" />
     <ClCompile Include="SpheresScenario.cpp" />
     <ClCompile Include="ScenarioB.cpp" />
     <ClCompile Include="SphereCollider.cpp" />
@@ -225,7 +226,9 @@
     <ClInclude Include="PhysicsObject.h" />
     <ClInclude Include="PhysicsSimulation.h" />
     <ClInclude Include="RenderingEngine.h" />
+    <ClInclude Include="resource.h" />
     <ClInclude Include="Scenario.h" />
+    <ClInclude Include="Socket.h" />
     <ClInclude Include="SpheresScenario.h" />
     <ClInclude Include="ScenarioB.h" />
     <ClInclude Include="SphereCollider.h" />
@@ -252,6 +255,9 @@
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
     </FxCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="Dx12Simulation.rc" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
