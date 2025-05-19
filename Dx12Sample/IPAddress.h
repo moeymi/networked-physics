@@ -4,7 +4,8 @@
 
 class IPAddress {
 public:
-	IPAddress(const std::string& host, uint16_t port);
+	IPAddress() = default;
+	explicit IPAddress(const std::string& host, uint16_t port);
     static IPAddress initializeLocal(uint16_t);
 
     const std::string get();

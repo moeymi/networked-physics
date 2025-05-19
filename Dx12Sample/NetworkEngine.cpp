@@ -12,8 +12,7 @@
 #include "PhysicsEngine.h"
 #include "IPAddress.h"
 
-NetworkEngine::NetworkEngine()
-	: m_listenSocket(INVALID_SOCKET),
+NetworkEngine::NetworkEngine() :
 	m_sharedData(std::make_unique<SharedData>())
 {
     m_materialMap[0] = Material::White;
@@ -23,7 +22,7 @@ NetworkEngine::NetworkEngine()
 }
 
 NetworkEngine::~NetworkEngine() {
-    closesocket(m_listenSocket);
+    m_listenSocket->close();
     WSACleanup();
 }
 
@@ -54,8 +53,8 @@ void NetworkEngine::scheduleSimulationStart(float time) {
     msg.add_data(startSim.Union());
     builder.Finish(msg.Finish());
 
-    for (SOCKET s : m_peerSockets) {
-        sendMessage(s, builder);
+    for (const auto& s : m_peerSockets) {
+        sendMessage(s.get(), builder);
     }
 }
 
@@ -72,8 +71,8 @@ void NetworkEngine::changeGravity(const float& gravity) {
 	msg.add_data(changeGravity.Union());
 	builder.Finish(msg.Finish());
 
-	for (SOCKET s : m_peerSockets) {
-		sendMessage(s, builder);
+	for (const auto& s : m_peerSockets) {
+		sendMessage(s.get(), builder);
 	}
 }
 
@@ -82,23 +81,9 @@ void NetworkEngine::initializeSockets(unsigned short listenPort) {
     if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
         throw std::runtime_error("WSAStartup failed");
 
-    m_listenSocket = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (m_listenSocket == INVALID_SOCKET)
-        throw std::runtime_error("Failed to create listen socket");
-
-    u_long nb = 1;
-    ::ioctlsocket(m_listenSocket, FIONBIO, &nb);
-
-    sockaddr_in saAny{};
-    saAny.sin_family = AF_INET;
-    saAny.sin_port = htons(listenPort);
-    saAny.sin_addr.s_addr = htonl(INADDR_ANY);
-
-    if (::bind(m_listenSocket, reinterpret_cast<sockaddr*>(&saAny), sizeof(saAny)) != 0)
-        throw std::runtime_error("bind() failed");
-
-    if (::listen(m_listenSocket, SOMAXCONN) != 0)
-        throw std::runtime_error("listen() failed");
+    IPAddress listenAddr = IPAddress::initializeLocal(listenPort);
+    m_listenSocket = std::make_unique<TCPSocket>(listenAddr);   // passive ctor
+    m_listenSocket->setNonBlocking(true);
 
     constexpr char GROUP_IP[] = "239.255.42.42";
     const uint16_t GROUP_PORT = GlobalData::g_broadcastPort;
@@ -113,27 +98,24 @@ void NetworkEngine::initializeSockets(unsigned short listenPort) {
     broadcastDiscovery(GROUP_PORT);
 }
 
-void NetworkEngine::connectToPeer(const std::string& ip, unsigned short port) {
-    SOCKET peer = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (peer == INVALID_SOCKET) return;
-
-    sockaddr_in addr{};
-    addr.sin_family = AF_INET;
-    inet_pton(AF_INET, ip.c_str(), &addr.sin_addr);
-    addr.sin_port = htons(port);
-
-    if (connect(peer, (sockaddr*)&addr, sizeof(addr)) == SOCKET_ERROR) {
-        closesocket(peer);
-        return;
-    }
-
-    u_long nonBlocking = 1;
-    ioctlsocket(peer, FIONBIO, &nonBlocking);
+void NetworkEngine::connectToPeer(const std::string& ip, uint16_t port)
+{
+    try
     {
-        std::lock_guard<std::mutex> lock(m_peerMutex);
-        m_peerSockets.push_back(peer);
+        auto peer = std::make_unique<TCPSocket>(IPAddress(ip, port), true); // non-blocking
+        peer->setNonBlocking(true);
+
+        SOCKET s = peer->native();          // cache raw handle
+
+        {
+            std::lock_guard<std::mutex> lock(m_peerMutex);
+            m_peerSockets.push_back(std::move(peer));
+        }
+        sendRecognize(s);
     }
-    sendRecognize(peer);
+    catch (const std::exception&)  // connect() threw -> ignore / retry later
+    {
+    }
 }
 
 void NetworkEngine::removePeer(SOCKET peerSocket) {
@@ -209,7 +191,7 @@ std::string NetworkEngine::constructDiscoveryMessage() {
     return std::string(reinterpret_cast<const char*>(builder.GetBufferPointer()), builder.GetSize());
 }
 
-void NetworkEngine::sendPing(SOCKET peerSocket) {
+void NetworkEngine::sendPing(TCPSocket* peerSocket) {
     flatbuffers::FlatBufferBuilder builder;
     double now = GlobalData::getTimestamp();
     m_sentPingTimestamps[now] = now;
@@ -378,15 +360,15 @@ void NetworkEngine::assignOwnersAndBroadcastScenarioCreate(std::string scenarioN
     builder.Finish(message);
 
     std::lock_guard<std::mutex> lock(m_peerMutex);
-    for (SOCKET s : m_peerSockets) {
-        sendMessage(s, builder);
+    for (const auto& s : m_peerSockets) {
+        sendMessage(s.get(), builder);
     }
 }
 
-void NetworkEngine::sendMessage(SOCKET peerSocket, flatbuffers::FlatBufferBuilder& builder) {
+void NetworkEngine::sendMessage(TCPSocket* peerSocket, flatbuffers::FlatBufferBuilder& builder) {
     uint32_t size = htonl(static_cast<uint32_t>(builder.GetSize()));
-    send(peerSocket, reinterpret_cast<const char*>(&size), sizeof(size), 0);
-    send(peerSocket, reinterpret_cast<const char*>(builder.GetBufferPointer()), builder.GetSize(), 0);
+    peerSocket->send(reinterpret_cast<const char*>(&size), sizeof(size), 0);
+    peerSocket->send(reinterpret_cast<const char*>(builder.GetBufferPointer()), builder.GetSize(), 0);
 }
 
 void NetworkEngine::cleanDirtyOutgoingObjects() {
@@ -394,6 +376,13 @@ void NetworkEngine::cleanDirtyOutgoingObjects() {
 		m_sharedData->m_outgoingObjectStates[0] = m_sharedData->m_outgoingObjectStates[1];
 		m_sharedData->m_ownedObjectsDirty = false;
 	}
+}
+
+TCPSocket* NetworkEngine::socketPtrFromHandle(SOCKET h)
+{
+    for (auto& sp : m_peerSockets)
+        if (sp->native() == h) return sp.get();
+    return nullptr;
 }
 
 void NetworkEngine::sendPeerList(SOCKET to) {
@@ -455,17 +444,23 @@ void NetworkEngine::sendObjectUpdatesToPeers(const std::vector<ObjectUpdate>& up
     }
 }
 
-void NetworkEngine::handleNewConnection() {
-    SOCKET clientSocket = accept(m_listenSocket, nullptr, nullptr);
-    if (clientSocket == INVALID_SOCKET) return;
-
-    u_long nonBlocking = 1;
-    ioctlsocket(clientSocket, FIONBIO, &nonBlocking);
+void NetworkEngine::handleNewConnection()
+{
+    IPAddress peerAddr;
+    try
     {
-        std::lock_guard<std::mutex> lock(m_peerMutex);
-        m_peerSockets.push_back(clientSocket);
+        auto client = m_listenSocket->accept(&peerAddr);      // returns TCPSocket
+        client.setNonBlocking(true);
+
+        SOCKET s = client.native();
+
+        {
+            std::lock_guard<std::mutex> lock(m_peerMutex);
+            m_peerSockets.push_back(std::make_unique<TCPSocket>(std::move(client)));
+        }
+        sendRecognize(s);
     }
-    sendRecognize(clientSocket);
+    catch (...) { /* EWOULDBLOCK / etc. -> nothing to do */ }
 }
 
 void NetworkEngine::handlePeerData(SOCKET peerSocket) {
@@ -726,15 +721,17 @@ void NetworkEngine::onUpdate(float deltaTime) {
         lastPingTime = now;
     }
 
-    fd_set readSet;
-    FD_ZERO(&readSet);
-    FD_SET(m_listenSocket, &readSet);
-    SOCKET maxSocket = m_listenSocket;
+    fd_set readSet;  FD_ZERO(&readSet);
+    FD_SET(m_listenSocket->native(), &readSet);
+    SOCKET maxSock = m_listenSocket->native();
+
     {
         std::lock_guard<std::mutex> lock(m_peerMutex);
-        for (SOCKET s : m_peerSockets) {
+        for (auto& p : m_peerSockets)
+        {
+            SOCKET s = p->native();
             FD_SET(s, &readSet);
-            if (s > maxSocket) maxSocket = s;
+            if (s > maxSock) maxSock = s;
         }
     }
 
@@ -773,7 +770,9 @@ void NetworkEngine::onStop() {
 	}
 	m_peerSockets.clear();
 	m_peerInfoMap.clear();
-	closesocket(m_listenSocket);
+    m_listenSocket->close();
+    m_listenSocket.reset();
+    WSACleanup();
 	m_listenSocket = INVALID_SOCKET;
 	WSACleanup();
 }

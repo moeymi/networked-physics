@@ -6,6 +6,7 @@
 #include "game_state_generated.h"
 #include "Scenario.h"
 #include "MulticastSocket.h"
+#include "TCPSocket.h"
 struct PeerInfo {
     SOCKET socket;
     uint32_t peer_id;
@@ -51,8 +52,8 @@ private:
     void handleNewConnection();
     void handlePeerData(SOCKET peerSocket);
 
-    SOCKET m_listenSocket;
-    std::vector<SOCKET> m_peerSockets;
+    std::unique_ptr<TCPSocket> m_listenSocket;
+    std::vector<std::unique_ptr<TCPSocket>> m_peerSockets;
     std::mutex m_peerMutex;
     std::thread m_networkThread;
 
@@ -66,11 +67,11 @@ private:
 	void listenForDiscovery();
     void connectToPeer(const std::string& ip, unsigned short port);
 
-	void sendPing(SOCKET peerSocket);
-	void sendPong(SOCKET peerSocket, const NetSim::Ping* ping);
-    void sendRecognize(SOCKET peerSocket);
-    void sendMessage(SOCKET peerSocket, flatbuffers::FlatBufferBuilder& builder);
-    void sendPeerList(SOCKET peerSocket);
+	void sendPing(TCPSocket* peerSocket);
+	void sendPong(TCPSocket* peerSocket, const NetSim::Ping* ping);
+    void sendRecognize(TCPSocket* peerSocket);
+    void sendMessage(TCPSocket* peerSocket, flatbuffers::FlatBufferBuilder& builder);
+    void sendPeerList(TCPSocket* peerSocket);
     void sendObjectUpdatesToPeers(const std::vector<ObjectUpdate>& updates);
 
     void handlePing(SOCKET from, const NetSim::Ping* ping);
@@ -83,6 +84,7 @@ private:
     void handleStartSimulation(SOCKET peerSocket, const NetSim::StartSimulation* startSim);
 
 	void cleanDirtyOutgoingObjects();
+    TCPSocket* socketPtrFromHandle(SOCKET h);
 
     std::unordered_map<SOCKET, PeerInfo> m_peerInfoMap;
 	std::unordered_map<uint16_t, Material> m_materialMap;
@@ -92,6 +94,7 @@ private:
 	std::unique_ptr<SharedData> m_sharedData;
     std::unordered_map<SOCKET, double> m_peerClockOffsets;
     std::unordered_map<double, double> m_sentPingTimestamps;
+
 
 public:
     NetworkEngine();
