@@ -184,6 +184,7 @@
     <ClCompile Include="EmptyScenario.cpp" />
     <ClCompile Include="FlatBufferHelper.cpp" />
     <ClCompile Include="GlobalData.cpp" />
+    <ClCompile Include="IPAddress.cpp" />
     <ClCompile Include="Light.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Material.cpp" />
@@ -213,6 +214,7 @@
     <ClInclude Include="EmptyScenario.h" />
     <ClInclude Include="FlatBufferHelper.h" />
     <ClInclude Include="game_state_generated.h" />
+    <ClInclude Include="IPAddress.h" />
     <ClInclude Include="Light.h" />
     <ClInclude Include="Material.h" />
     <ClInclude Include="NetworkEngine.h" />

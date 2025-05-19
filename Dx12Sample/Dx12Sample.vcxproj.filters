@@ -123,6 +123,9 @@
     <ClCompile Include="RoomScenario.cpp">
       <Filter>Source Files\Scenarios</Filter>
     </ClCompile>
+    <ClCompile Include="IPAddress.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Camera.h">
@@ -207,6 +210,9 @@
       <Filter>Header Files\Scenarios</Filter>
     </ClInclude>
     <ClInclude Include="FlatBufferHelper.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="IPAddress.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

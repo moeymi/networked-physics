@@ -10,6 +10,7 @@
 #include "CommandList.h"
 #include "GlobalData.h"
 #include "PhysicsEngine.h"
+#include "IPAddress.h"
 
 NetworkEngine::NetworkEngine()
 	: m_listenSocket(INVALID_SOCKET),
@@ -194,7 +195,9 @@ void NetworkEngine::listenForDiscovery(unsigned short discoveryPort) {
     // Join multicast group
     ip_mreq mreq{};
     inet_pton(AF_INET, "239.255.0.1", &mreq.imr_multiaddr);
-    mreq.imr_interface.s_addr = htonl(INADDR_ANY); // Use default interface
+    IPAddress localAddress;// do this early in your engine startup
+	localAddress.initializeLocal();
+    inet_pton(AF_INET, localAddress.get().c_str(), &mreq.imr_interface.s_addr);
 
     if (setsockopt(udpSocket, IPPROTO_IP, IP_ADD_MEMBERSHIP, (char*)&mreq, sizeof(mreq)) < 0) {
         closesocket(udpSocket);
