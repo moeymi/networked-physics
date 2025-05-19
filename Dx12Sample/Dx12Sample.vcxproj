@@ -200,6 +200,7 @@
     <ClCompile Include="SpheresScenario.cpp" />
     <ClCompile Include="ScenarioB.cpp" />
     <ClCompile Include="SphereCollider.cpp" />
+    <ClCompile Include="TCPSocket.cpp" />
     <ClCompile Include="ThreadAffinity.cpp" />
     <ClCompile Include="ThreadedSystem.cpp" />
     <ClCompile Include="RoomScenario.cpp" />
@@ -233,6 +234,7 @@
     <ClInclude Include="ScenarioB.h" />
     <ClInclude Include="SphereCollider.h" />
     <ClInclude Include="GlobalData.h" />
+    <ClInclude Include="TCPSocket.h" />
     <ClInclude Include="ThreadAffinity.h" />
     <ClInclude Include="ThreadedSystem.h" />
     <ClInclude Include="RoomScenario.h" />
