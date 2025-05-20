@@ -1,40 +1,118 @@
+// TCPSocket.hpp
 #pragma once
 #include "Socket.h"
 #include "IPAddress.h"
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <system_error>
 #include <vector>
-#include <string_view>
 
-class TCPSocket : public Socket
-{
+class TCPSocket : public Socket {
 public:
-    enum class Mode { Active, Passive };
+    explicit TCPSocket(bool blocking = true) {
+        SOCKET s = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+        if (s == INVALID_SOCKET) {
+            throw std::system_error{
+                static_cast<int>(WSAGetLastError()),
+                std::system_category(),
+                "socket(AF_INET, SOCK_STREAM) failed"
+            };
+        }
+        sock_ = s;
+        setBlocking(blocking);
+    }
 
-    /* Active (client-side) constructor
-       - creates a blocking socket, then connects           */
-    explicit TCPSocket(const IPAddress& remote,
-        bool nonBlocking = false);
+    TCPSocket(SOCKET s, bool blocking = true)
+        : Socket(s)
+    {
+        setBlocking(blocking);
+    }
 
-    /* Passive (server-side) constructor
-       - creates a listening socket bound to localAddr      */
-    TCPSocket(const IPAddress& localAddr,
-        int backlog = SOMAXCONN,
-        bool nonBlocking = false);
+    void bind(const IPAddress& addr) {
+        auto saOpt = addr.toSockAddr();
+        if (!saOpt)
+            throw std::runtime_error("Invalid address");
 
-    /* Adopt an accepted socket (used by accept())          */
-    explicit TCPSocket(SOCKET accepted) : Socket(accepted) {}
+        // Extract the actual sockaddr_in out of the optional
+        const sockaddr_in& sin = *saOpt;
 
-    /* --- server only ------------------------------------ */
-    TCPSocket accept(IPAddress* peerAddr = nullptr);
+        // Cast to sockaddr* and use sizeof(sockaddr_in)
+        if (::bind(sock_,
+            reinterpret_cast<const sockaddr*>(&sin),
+            static_cast<int>(sizeof(sin))) != 0)
+        {
+            auto ec = WSAGetLastError();
+            throw std::system_error{ ec,
+                                     std::system_category(),
+                                     "bind() failed" };
+        }
+    }
 
-    /* --- client + server -------------------------------- */
-    size_t send(const void* data, size_t len, int flags = 0);
-    size_t recv(void* data, size_t len, int flags = 0);
+    /// Server: bind + listen
+    void listen(const IPAddress& addr, int backlog = SOMAXCONN) {
+        bind(addr);
+        if (::listen(sock_, backlog) != 0) {
+            throw std::system_error{
+                static_cast<int>(WSAGetLastError()),
+                std::system_category(),
+                "listen() failed"
+            };
+        }
+    }
 
-    /* utility helpers                                      */
-    void    setNonBlocking(bool on);
-    int     lastError() const { return ::WSAGetLastError(); }
+    TCPSocket accept() {
+        SOCKET client = ::accept(sock_, nullptr, nullptr);
+        if (client == INVALID_SOCKET) {
+            int ec = WSAGetLastError();
+            if (ec == WSAEWOULDBLOCK) {
+                return TCPSocket(INVALID_SOCKET, isBlocking());
+            }
+            throw std::system_error{ ec, std::system_category(), "accept() failed" };
+        }
+        return TCPSocket(client, isBlocking());
+    }
 
-private:
-    explicit TCPSocket(Mode m) : mode_(m) {}
-    Mode mode_;
+    void connect(const IPAddress& addr) {
+        auto saOpt = addr.toSockAddr();
+        if (!saOpt) throw std::runtime_error("Invalid address");
+        const sockaddr_in& sa = *saOpt;
+        int rc = ::connect(sock_, reinterpret_cast<const sockaddr*>(&sa), sizeof(sa));
+        if (rc != 0) {
+            int ec = WSAGetLastError();
+            if (!(ec == WSAEWOULDBLOCK || ec == WSAEINPROGRESS)) {
+                throw std::system_error{ ec, std::system_category(), "connect() failed" };
+            }
+        }
+    }
+
+    void sendAll(const void* data, size_t len) {
+        const char* ptr = static_cast<const char*>(data);
+        while (len > 0) {
+            int sent = ::send(sock_, ptr, static_cast<int>(len), 0);
+            if (sent == SOCKET_ERROR) {
+                int ec = WSAGetLastError();
+                if (ec == WSAEWOULDBLOCK) {
+                    // caller must wait for writability
+                    break;
+                }
+                throw std::system_error{ ec, std::system_category(), "send() failed" };
+            }
+            ptr += sent;
+            len -= sent;
+        }
+    }
+
+    int recv(void* buffer, size_t maxlen) {
+        int recvd = ::recv(sock_, static_cast<char*>(buffer), static_cast<int>(maxlen), 0);
+        if (recvd == SOCKET_ERROR) {
+            int ec = WSAGetLastError();
+            if (ec != WSAEWOULDBLOCK)
+                throw std::system_error{ ec, std::system_category(), "recv() failed" };
+        }
+        return recvd;
+    }
+
+    bool isBlocking() const {
+        return true;
+    }
 };

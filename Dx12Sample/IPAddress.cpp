@@ -7,6 +7,47 @@
 
 #pragma comment(lib, "iphlpapi.lib") // Link against the IP Helper API library to resolve any linker issues.
 
+static std::string getFirstLocalAddress() {
+    // 1) Get the local host name
+    char hostname[256];
+    if (gethostname(hostname, sizeof(hostname)) != 0) {
+        throw std::system_error(WSAGetLastError(), std::system_category(),
+            "gethostname failed");
+    }
+
+    // 2) Ask getaddrinfo for IPv4 addresses only
+    addrinfo hints = {};
+    hints.ai_family = AF_INET;     // <-- only IPv4 now
+    hints.ai_socktype = SOCK_STREAM; // doesn't really matter
+    hints.ai_flags = AI_CANONNAME;
+
+    addrinfo* result = nullptr;
+    int rc = getaddrinfo(hostname, nullptr, &hints, &result);
+    if (rc != 0) {
+        throw std::runtime_error(std::string("getaddrinfo failed: ")
+            + gai_strerrorA(rc));
+    }
+
+    // 3) Walk the list, skip loopback
+    std::string found;
+    for (addrinfo* p = result; p; p = p->ai_next) {
+        auto* sin = reinterpret_cast<sockaddr_in*>(p->ai_addr);
+        char addrbuf[INET_ADDRSTRLEN] = { 0 };
+        inet_ntop(AF_INET, &sin->sin_addr, addrbuf, sizeof(addrbuf));
+        if (std::strcmp(addrbuf, "127.0.0.1") == 0)
+            continue;
+        found = addrbuf;
+        break;
+    }
+
+    freeaddrinfo(result);
+    if (found.empty())
+        found = "127.0.0.1";
+    return found;
+}
+
+IPAddress::IPAddress() : m_host("0.0.0.0"), m_port(0) {}
+
 IPAddress::IPAddress(const std::string& host, uint16_t port)
 	: m_host(host), m_port(port) {}
 
@@ -18,50 +59,19 @@ IPAddress::IPAddress(const sockaddr_in& sa) {
 }
 
 IPAddress IPAddress::initializeLocal(uint16_t port) {
-    ULONG flags = GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST | GAA_FLAG_SKIP_DNS_SERVER;
-    ULONG family = AF_INET;
-    ULONG bufLen = 0;
-    std::string host;
-    if (GetAdaptersAddresses(family, flags, nullptr, nullptr, &bufLen) != ERROR_BUFFER_OVERFLOW) {
-        host = "127.0.0.1";
-		return IPAddress(host, port);
-    }
-
-    std::vector<char> buffer(bufLen);
-    IP_ADAPTER_ADDRESSES* adapters = reinterpret_cast<IP_ADAPTER_ADDRESSES*>(buffer.data());
-    if (GetAdaptersAddresses(family, flags, nullptr, adapters, &bufLen) == NO_ERROR) {
-        for (auto* adapter = adapters; adapter; adapter = adapter->Next) {
-            if (adapter->OperStatus != IfOperStatusUp)
-                continue;
-            if (adapter->IfType == IF_TYPE_SOFTWARE_LOOPBACK)
-                continue;
-            std::wstring friendlyName(adapter->FriendlyName);
-            if (friendlyName.find(L"vEthernet") != std::wstring::npos)
-                continue;
-
-            for (auto* unicast = adapter->FirstUnicastAddress; unicast; unicast = unicast->Next) {
-                SOCKADDR_IN* sa_in = reinterpret_cast<SOCKADDR_IN*>(unicast->Address.lpSockaddr);
-                char str[INET_ADDRSTRLEN];
-                inet_ntop(AF_INET, &(sa_in->sin_addr), str, INET_ADDRSTRLEN);
-                std::string ip = str;
-                if (ip != "127.0.0.1") {
-                    host = ip;
-					return IPAddress(host, port);
-                }
-            }
-        }
-    }
-
-	return IPAddress("127.0.0.1", port); // Fallback to localhost if no valid IP found
+    std::string host = getFirstLocalAddress();
+    return IPAddress(host, port);
 }
 
-const std::string IPAddress::get() {
+const std::string& IPAddress::host() const {
     return m_host;
 }
-const sockaddr_in IPAddress::toSockAddr() const {
+std::optional<sockaddr_in> IPAddress::toSockAddr() const {
     sockaddr_in addr = {};
     addr.sin_family = AF_INET;
     addr.sin_port = htons(m_port);
-    inet_pton(AF_INET, m_host.c_str(), &addr.sin_addr);
+	if (inet_pton(AF_INET, m_host.c_str(), &addr.sin_addr) <= 0) {
+		return std::nullopt; // Invalid address
+	}
     return addr;
 }

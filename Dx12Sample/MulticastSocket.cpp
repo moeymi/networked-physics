@@ -23,8 +23,18 @@ MulticastSocket::MulticastSocket(const IPAddress& group,
         throw std::runtime_error("bind() failed");
 
     ip_mreq mreq{};
-    mreq.imr_multiaddr = group.toSockAddr().sin_addr;   // 239.x.x.x
-    mreq.imr_interface = iface.toSockAddr().sin_addr;   // your NIC’s unicast IP
+
+	auto groupAddr = group.toSockAddr();
+	if (!groupAddr)
+		throw std::runtime_error("Invalid group address");
+
+	mreq.imr_multiaddr = groupAddr->sin_addr;           // 239.x.x.x
+
+	auto ifaceAddr = iface.toSockAddr();
+	if (!ifaceAddr)
+		throw std::runtime_error("Invalid interface address");
+
+	mreq.imr_interface = ifaceAddr->sin_addr;
 
     if (::setsockopt(sock_, IPPROTO_IP, IP_ADD_MEMBERSHIP,
         reinterpret_cast<char*>(&mreq), sizeof(mreq)) != 0)
@@ -37,7 +47,11 @@ MulticastSocket::MulticastSocket(const IPAddress& group,
         std::cerr << "IP_MULTICAST_IF failed: " << WSAGetLastError() << '\n';
     /* ------------------------------------------------------------------ */
 
-    m_groupSa = group.toSockAddr();
+	auto groupAdd = group.toSockAddr();
+	if (!groupAdd)
+		throw std::runtime_error("Invalid group address");
+
+    m_groupSa = groupAdd.value();
 
     int ttl = 1;
     ::setsockopt(sock_, IPPROTO_IP, IP_MULTICAST_TTL,

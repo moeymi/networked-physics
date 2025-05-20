@@ -84,8 +84,8 @@ void NetworkEngine::initializeSockets(unsigned short listenPort) {
         throw std::runtime_error("WSAStartup failed");
 
     IPAddress listenAddr = IPAddress::initializeLocal(listenPort);
-    m_listenSocket = std::make_unique<TCPSocket>(listenAddr, SOMAXCONN, true);   // passive ctor
-    m_listenSocket->setNonBlocking(true);
+    m_listenSocket = std::make_unique<TCPSocket>(false);   // passive ctor
+	m_listenSocket->bind(listenAddr);
 
     constexpr char GROUP_IP[] = "239.255.42.42";
     const uint16_t GROUP_PORT = GlobalData::g_broadcastPort;
@@ -104,8 +104,10 @@ void NetworkEngine::connectToPeer(const std::string& ip, uint16_t port)
 {
     try
     {
-        auto peer = std::make_unique<TCPSocket>(IPAddress(ip, port), true); // non-blocking
-        peer->setNonBlocking(true);
+        auto peer = std::make_unique<TCPSocket>(false); // non-blocking
+		peer->connect(IPAddress(ip, port));
+		if (peer->native() == INVALID_SOCKET)
+			throw std::runtime_error("Failed to create socket");
 
         sendRecognize(peer.get());
         {
@@ -380,8 +382,8 @@ void NetworkEngine::assignOwnersAndBroadcastScenarioCreate(std::string scenarioN
 
 void NetworkEngine::sendMessage(TCPSocket* peerSocket, flatbuffers::FlatBufferBuilder& builder) {
     uint32_t size = htonl(static_cast<uint32_t>(builder.GetSize()));
-    peerSocket->send(reinterpret_cast<const char*>(&size), sizeof(size), 0);
-    peerSocket->send(reinterpret_cast<const char*>(builder.GetBufferPointer()), builder.GetSize(), 0);
+    peerSocket->sendAll(reinterpret_cast<const char*>(&size), sizeof(size));
+    peerSocket->sendAll(reinterpret_cast<const char*>(builder.GetBufferPointer()), builder.GetSize());
 }
 
 void NetworkEngine::cleanDirtyOutgoingObjects() {
@@ -459,11 +461,9 @@ void NetworkEngine::sendObjectUpdatesToPeers(const std::vector<ObjectUpdate>& up
 
 void NetworkEngine::handleNewConnection()
 {
-    IPAddress peerAddr;
     try
     {
-        auto client = m_listenSocket->accept(&peerAddr);      // returns TCPSocket
-        client.setNonBlocking(true);
+        auto client = m_listenSocket->accept();      // returns TCPSocket
         SOCKET h = client.native();
         {
             std::lock_guard<std::mutex> lock(m_peerMutex);
