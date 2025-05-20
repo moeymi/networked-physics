@@ -8,26 +8,7 @@
 #include <vector>
 
 class TCPSocket : public Socket {
-public:
-    explicit TCPSocket(bool blocking = true) {
-        SOCKET s = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-        if (s == INVALID_SOCKET) {
-            throw std::system_error{
-                static_cast<int>(WSAGetLastError()),
-                std::system_category(),
-                "socket(AF_INET, SOCK_STREAM) failed"
-            };
-        }
-        sock_ = s;
-        setBlocking(blocking);
-    }
-
-    TCPSocket(SOCKET s, bool blocking = true)
-        : Socket(s)
-    {
-        setBlocking(blocking);
-    }
-
+private:
     void bind(const IPAddress& addr) {
         auto saOpt = addr.toSockAddr();
         if (!saOpt)
@@ -46,6 +27,25 @@ public:
                                      std::system_category(),
                                      "bind() failed" };
         }
+    }
+public:
+    explicit TCPSocket(bool blocking = true) {
+        SOCKET s = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+        if (s == INVALID_SOCKET) {
+            throw std::system_error{
+                static_cast<int>(WSAGetLastError()),
+                std::system_category(),
+                "socket(AF_INET, SOCK_STREAM) failed"
+            };
+        }
+        sock_ = s;
+        setBlocking(blocking);
+    }
+
+    TCPSocket(SOCKET s, bool blocking = true)
+        : Socket(s)
+    {
+        setBlocking(blocking);
     }
 
     /// Server: bind + listen

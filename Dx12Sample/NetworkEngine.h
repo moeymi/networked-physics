@@ -50,7 +50,7 @@ private:
     const uint32_t PROTOCOL_VERSION = 1;
 
     void handleNewConnection();
-    void handlePeerData(SOCKET peerSocket);
+    void handlePeerData(TCPSocket* peerSocket);
 
     std::unique_ptr<TCPSocket> m_listenSocket;
     std::vector<std::unique_ptr<TCPSocket>> m_peerSockets;
@@ -59,9 +59,12 @@ private:
 
 	std::unique_ptr<MulticastSocket> m_multicastSocket;
 
+    std::atomic<bool> m_broadcasting{ false };
+    std::thread m_broadcastThread;
+
     std::string constructDiscoveryMessage();
 
-    void removePeer(SOCKET peerSocket);
+    void removePeer(TCPSocket* peerSocket);
 
 	void broadcastDiscovery(unsigned short port);
 	void listenForDiscovery();
@@ -74,14 +77,14 @@ private:
     void sendPeerList(TCPSocket* peerSocket);
     void sendObjectUpdatesToPeers(const std::vector<ObjectUpdate>& updates);
 
-    void handlePing(SOCKET from, const NetSim::Ping* ping);
-    void handlePong(SOCKET from, const NetSim::Pong* pong);
+    void handlePing(TCPSocket* from, const NetSim::Ping* ping);
+    void handlePong(TCPSocket* from, const NetSim::Pong* pong);
     void handleRecognize(const NetSim::Recognize* recognize);
     void handlePeerList(const NetSim::PeerList* list);
 	void handleScenario(const NetSim::Scenario* scenario);
 	void handleGravityChange(const NetSim::GravityChange* gravityChange);
-	void handleObjectUpdate(SOCKET from, const NetSim::ObjectUpdateList* objectUpdateList);
-    void handleStartSimulation(SOCKET peerSocket, const NetSim::StartSimulation* startSim);
+	void handleObjectUpdate(TCPSocket* from, const NetSim::ObjectUpdateList* objectUpdateList);
+    void handleStartSimulation(TCPSocket* peerSocket, const NetSim::StartSimulation* startSim);
 
 	void cleanDirtyOutgoingObjects();
     TCPSocket* socketPtrFromHandle(SOCKET h);
