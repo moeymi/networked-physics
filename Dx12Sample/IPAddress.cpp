@@ -10,6 +10,13 @@
 IPAddress::IPAddress(const std::string& host, uint16_t port)
 	: m_host(host), m_port(port) {}
 
+IPAddress::IPAddress(const sockaddr_in& sa) {
+	char str[INET_ADDRSTRLEN];
+	inet_ntop(AF_INET, &(sa.sin_addr), str, INET_ADDRSTRLEN);
+	m_host = str;
+	m_port = ntohs(sa.sin_port);
+}
+
 IPAddress IPAddress::initializeLocal(uint16_t port) {
     ULONG flags = GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST | GAA_FLAG_SKIP_DNS_SERVER;
     ULONG family = AF_INET;

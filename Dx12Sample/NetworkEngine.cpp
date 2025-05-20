@@ -22,7 +22,9 @@ NetworkEngine::NetworkEngine() :
 }
 
 NetworkEngine::~NetworkEngine() {
-    m_listenSocket->close();
+	if (m_listenSocket) {
+		m_listenSocket->close();
+	}
     WSACleanup();
 }
 
@@ -82,7 +84,7 @@ void NetworkEngine::initializeSockets(unsigned short listenPort) {
         throw std::runtime_error("WSAStartup failed");
 
     IPAddress listenAddr = IPAddress::initializeLocal(listenPort);
-    m_listenSocket = std::make_unique<TCPSocket>(listenAddr);   // passive ctor
+    m_listenSocket = std::make_unique<TCPSocket>(listenAddr, SOMAXCONN, true);   // passive ctor
     m_listenSocket->setNonBlocking(true);
 
     constexpr char GROUP_IP[] = "239.255.42.42";
@@ -105,24 +107,35 @@ void NetworkEngine::connectToPeer(const std::string& ip, uint16_t port)
         auto peer = std::make_unique<TCPSocket>(IPAddress(ip, port), true); // non-blocking
         peer->setNonBlocking(true);
 
-        SOCKET s = peer->native();          // cache raw handle
-
+        sendRecognize(peer.get());
         {
             std::lock_guard<std::mutex> lock(m_peerMutex);
             m_peerSockets.push_back(std::move(peer));
         }
-        sendRecognize(s);
     }
-    catch (const std::exception&)  // connect() threw -> ignore / retry later
+    catch (const std::exception& e)  // connect() threw -> ignore / retry later
     {
+		auto string = std::string("Connect to peer failed: ") + e.what();
+		OutputDebugStringA(string.c_str());
+		return;
     }
 }
 
 void NetworkEngine::removePeer(SOCKET peerSocket) {
     std::lock_guard<std::mutex> lock(m_peerMutex);
-    closesocket(peerSocket);
-    m_peerSockets.erase(std::remove(m_peerSockets.begin(), m_peerSockets.end(), peerSocket), m_peerSockets.end());
-	m_peerInfoMap.erase(peerSocket);
+
+    auto newEnd = std::remove_if(m_peerSockets.begin(), m_peerSockets.end(),
+        [peerSocket](const std::unique_ptr<TCPSocket>& p)
+        {
+            if (p->native() == peerSocket)
+            {
+                p->close();
+                return true;
+            }
+            return false;
+        });
+    m_peerSockets.erase(newEnd, m_peerSockets.end());
+    m_peerInfoMap.erase(peerSocket);
 }
 
 void NetworkEngine::broadcastDiscovery(unsigned short discoveryPort) {
@@ -207,7 +220,7 @@ void NetworkEngine::sendPing(TCPSocket* peerSocket) {
     sendMessage(peerSocket, builder);
 }
 
-void NetworkEngine::sendPong(SOCKET peerSocket, const NetSim::Ping* ping) {
+void NetworkEngine::sendPong(TCPSocket* peerSocket, const NetSim::Ping* ping) {
     flatbuffers::FlatBufferBuilder builder;
     double now = GlobalData::getTimestamp();
 
@@ -223,7 +236,7 @@ void NetworkEngine::sendPong(SOCKET peerSocket, const NetSim::Ping* ping) {
     sendMessage(peerSocket, builder);
 }
 
-void NetworkEngine::sendRecognize(SOCKET peerSocket) {  
+void NetworkEngine::sendRecognize(TCPSocket* peerSocket) {
     flatbuffers::FlatBufferBuilder builder;
 
     auto client_name = builder.CreateString(GlobalData::g_clientName);
@@ -323,8 +336,8 @@ void NetworkEngine::assignOwnersAndBroadcastScenarioCreate(std::string scenarioN
             peerIndex = static_cast<uint16_t>(nonStaticObjects[i] / distrib);
             if (peerIndex > 0) {
                 peerIndex--;
-                peerId = m_peerInfoMap[m_peerSockets[peerIndex]].peer_id;
-                auto clientColor = m_peerInfoMap[m_peerSockets[peerIndex]].color;
+                peerId = m_peerInfoMap[m_peerSockets[peerIndex]->native()].peer_id;
+                auto clientColor = m_peerInfoMap[m_peerSockets[peerIndex]->native()].color;
                 colorVec3 = { clientColor.x, clientColor.y, clientColor.z };
 				unownedObjects[object->getId()] = object.get();
 			}
@@ -385,7 +398,7 @@ TCPSocket* NetworkEngine::socketPtrFromHandle(SOCKET h)
     return nullptr;
 }
 
-void NetworkEngine::sendPeerList(SOCKET to) {
+void NetworkEngine::sendPeerList(TCPSocket* to) {
     flatbuffers::FlatBufferBuilder builder;
 
     std::vector<flatbuffers::Offset<NetSim::PeerInfo>> peerList;
@@ -439,8 +452,8 @@ void NetworkEngine::sendObjectUpdatesToPeers(const std::vector<ObjectUpdate>& up
 
     // Send to all peers
     std::lock_guard<std::mutex> lock(m_peerMutex);
-    for (SOCKET s : m_peerSockets) {
-        sendMessage(s, builder);
+    for (const auto& s : m_peerSockets) {
+        sendMessage(s.get(), builder);
     }
 }
 
@@ -451,14 +464,12 @@ void NetworkEngine::handleNewConnection()
     {
         auto client = m_listenSocket->accept(&peerAddr);      // returns TCPSocket
         client.setNonBlocking(true);
-
-        SOCKET s = client.native();
-
+        SOCKET h = client.native();
         {
             std::lock_guard<std::mutex> lock(m_peerMutex);
-            m_peerSockets.push_back(std::make_unique<TCPSocket>(std::move(client)));
+            m_peerSockets.push_back(std::make_unique<TCPSocket>(std::move(h)));
         }
-        sendRecognize(s);
+        sendRecognize(m_peerSockets.back().get());
     }
     catch (...) { /* EWOULDBLOCK / etc. -> nothing to do */ }
 }
@@ -540,7 +551,8 @@ void NetworkEngine::handlePeerList(const NetSim::PeerList* list) {
 }
 
 void NetworkEngine::handlePing(SOCKET from, const NetSim::Ping* ping) {
-    sendPong(from, ping);
+	const auto& tcpSocket = socketPtrFromHandle(from);
+    sendPong(tcpSocket, ping);
 }
 
 void NetworkEngine::handlePong(SOCKET from, const NetSim::Pong* pong) {
@@ -565,26 +577,26 @@ void NetworkEngine::handleRecognize(const NetSim::Recognize* recognize) {
         return;
     }
 
-    SOCKET senderSocket = INVALID_SOCKET;
+    TCPSocket* senderSocket = nullptr;
     {
         std::lock_guard<std::mutex> lock(m_peerMutex);
-        for (SOCKET s : m_peerSockets) {
+        for (const auto& s : m_peerSockets) {
             // Map the recognize message to the correct socket
             // In real systems, you track current parsing socket explicitly
-            if (m_peerInfoMap.find(s) == m_peerInfoMap.end()) {
-                senderSocket = s;
+            if (m_peerInfoMap.find(s->native()) == m_peerInfoMap.end()) {
+                senderSocket = s.get();
                 break;
             }
         }
     }
 
-    if (senderSocket == INVALID_SOCKET) {
+    if (!senderSocket) {
         return;
     }
 
     // Store peer info
     PeerInfo info;
-    info.socket = senderSocket;
+    info.socket = senderSocket->native();
     info.peer_id = recognize->peer_id();
     info.client_name = recognize->client_name()->str();
     info.port = recognize->listen_port();
@@ -592,14 +604,14 @@ void NetworkEngine::handleRecognize(const NetSim::Recognize* recognize) {
 
     sockaddr_in addr;
     int len = sizeof(addr);
-    getpeername(senderSocket, (sockaddr*)&addr, &len);
+    getpeername(senderSocket->native(), (sockaddr*)&addr, &len);
 
     char ipBuffer[INET_ADDRSTRLEN];
     inet_ntop(AF_INET, &addr.sin_addr, ipBuffer, sizeof(ipBuffer));
     info.ip = ipBuffer;
     {
         std::lock_guard<std::mutex> lock(m_peerMutex);
-        m_peerInfoMap[senderSocket] = info;
+        m_peerInfoMap[senderSocket->native()] = info;
     }
 
     sendRecognize(senderSocket);
@@ -715,15 +727,15 @@ void NetworkEngine::onUpdate(float deltaTime) {
     double now = GlobalData::getTimestamp();
     if (now - lastPingTime > 5.0) {
         std::lock_guard<std::mutex> lock(m_peerMutex);
-        for (SOCKET s : m_peerSockets) {
-            sendPing(s);
+        for (const auto& s : m_peerSockets) {
+            sendPing(s.get());
         }
         lastPingTime = now;
     }
 
     fd_set readSet;  FD_ZERO(&readSet);
     FD_SET(m_listenSocket->native(), &readSet);
-    SOCKET maxSock = m_listenSocket->native();
+    SOCKET maxSocket = m_listenSocket->native();
 
     {
         std::lock_guard<std::mutex> lock(m_peerMutex);
@@ -731,7 +743,7 @@ void NetworkEngine::onUpdate(float deltaTime) {
         {
             SOCKET s = p->native();
             FD_SET(s, &readSet);
-            if (s > maxSock) maxSock = s;
+            if (s > maxSocket) maxSocket = s;
         }
     }
 
@@ -739,13 +751,13 @@ void NetworkEngine::onUpdate(float deltaTime) {
     int result = select(static_cast<int>(maxSocket + 1), &readSet, nullptr, nullptr, &timeout);
 
     if (result > 0) {
-        if (FD_ISSET(m_listenSocket, &readSet)) {
+        if (FD_ISSET(m_listenSocket->native(), &readSet)) {
             handleNewConnection();
         }
 
-        for (SOCKET s : m_peerSockets) {
-            if (FD_ISSET(s, &readSet)) {
-                handlePeerData(s);
+        for (const auto& s : m_peerSockets) {
+            if (FD_ISSET(s->native(), &readSet)) {
+                handlePeerData(s->native());
             }
         }
     }
@@ -765,16 +777,15 @@ void NetworkEngine::onUpdate(float deltaTime) {
 }
 
 void NetworkEngine::onStop() {
-	for (SOCKET s : m_peerSockets) {
-		closesocket(s);
+	for (const auto& s : m_peerSockets) {
+        s->close();
 	}
 	m_peerSockets.clear();
 	m_peerInfoMap.clear();
     m_listenSocket->close();
     m_listenSocket.reset();
     WSACleanup();
-	m_listenSocket = INVALID_SOCKET;
-	WSACleanup();
+	m_listenSocket = nullptr;
 }
 
 void NetworkEngine::onStart() {}

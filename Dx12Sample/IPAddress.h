@@ -5,7 +5,8 @@
 class IPAddress {
 public:
 	IPAddress() = default;
-	explicit IPAddress(const std::string& host, uint16_t port);
+	explicit IPAddress(const std::string& host, uint16_t port); 
+    IPAddress(const sockaddr_in& sa);
     static IPAddress initializeLocal(uint16_t);
 
     const std::string get();

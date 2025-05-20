@@ -12,6 +12,16 @@ public:
 
     Socket(const Socket&) = delete;
     Socket& operator=(const Socket&) = delete;
+    Socket& operator=(Socket&& other) noexcept
+    {
+        if (this != &other)
+        {
+            close();
+            sock_ = other.sock_;
+            other.sock_ = INVALID_SOCKET;
+        }
+        return *this;
+    }
 
     bool    isValid() const { return sock_ != INVALID_SOCKET; }
     SOCKET  native()  const { return sock_; }
