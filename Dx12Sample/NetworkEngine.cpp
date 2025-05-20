@@ -83,7 +83,7 @@ void NetworkEngine::initializeSockets(unsigned short listenPort) {
     if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
         throw std::runtime_error("WSAStartup failed");
 
-    IPAddress listenAddr = IPAddress::initializeLocal(listenPort);
+    IPAddress listenAddr = IPAddress("0.0.0.0", listenPort);
     m_listenSocket = std::make_unique<TCPSocket>(false);   // passive ctor
 	m_listenSocket->bind(listenAddr);
 
