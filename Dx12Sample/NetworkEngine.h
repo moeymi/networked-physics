@@ -86,6 +86,9 @@ private:
 	void cleanDirtyOutgoingObjects();
     TCPSocket* socketPtrFromHandle(SOCKET h);
     double getPeerRTT(SOCKET peerSocket) const;
+	bool isPeerConnected(TCPSocket* peerSocket);
+	bool isPeerConnected(const std::string& ip, unsigned short port);
+	bool isPeerConnected(const uint16_t peerId);
 
     std::unordered_map<SOCKET, PeerInfo> m_peerInfoMap;
 	std::unordered_map<uint16_t, Material> m_materialMap;

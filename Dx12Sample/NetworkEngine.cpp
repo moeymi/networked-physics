@@ -107,6 +107,9 @@ void NetworkEngine::connectToPeer(const std::string& ip, uint16_t port)
         if (peer->connect(IPAddress(ip, port)) != 0)
             return;
 
+		if (isPeerConnected(peer.get()))
+			return;
+
         sendRecognize(peer.get());
         {
             std::lock_guard<std::mutex> lock(m_peerMutex);
@@ -379,6 +382,49 @@ double NetworkEngine::getPeerRTT(SOCKET peerSocket) const
     return 0.0;
 }
 
+bool NetworkEngine::isPeerConnected(TCPSocket* peerSocket)
+{
+	char ipStr[INET_ADDRSTRLEN];
+	inet_ntop(AF_INET, &peerSocket->getSockAddr()->sin_addr, ipStr, sizeof(ipStr));
+
+    {
+        std::lock_guard<std::mutex> lk(m_peerMutex);
+        for (const auto& s : m_peerSockets) {
+
+            char curIp[INET_ADDRSTRLEN];
+            inet_ntop(AF_INET, &s->getSockAddr()->sin_addr, curIp, sizeof(curIp));
+
+            if (strcmp(ipStr, curIp) == 0) {
+                return true;
+            }
+        }
+    }
+	return false;
+}
+
+bool NetworkEngine::isPeerConnected(const std::string& ip, unsigned short port)
+{
+	for (const auto& s : m_peerSockets) {
+		char curIp[INET_ADDRSTRLEN];
+		inet_ntop(AF_INET, &s->getSockAddr()->sin_addr, curIp, sizeof(curIp));
+
+		if (strcmp(ip.c_str(), curIp) == 0 && s->getSockAddr()->sin_port == port) {
+			return true;
+		}
+	}
+	return false;
+}
+
+bool NetworkEngine::isPeerConnected(const uint16_t peerId)
+{
+	for (const auto& [s, info] : m_peerInfoMap) {
+		if (info.peer_id == peerId) {
+			return true;
+		}
+	}
+	return false;
+}
+
 void NetworkEngine::sendPeerList(TCPSocket* to) {
     flatbuffers::FlatBufferBuilder builder;
 
@@ -518,18 +564,7 @@ void NetworkEngine::handlePeerList(const NetSim::PeerList* list) {
         if (peerId == GlobalData::g_clientId) continue;
 
         // Already connected?
-        bool alreadyConnected = false;
-        {
-            std::lock_guard<std::mutex> lock(m_peerMutex);
-            for (const auto& [sock, info] : m_peerInfoMap) {
-                if (info.peer_id == peerId) {
-                    alreadyConnected = true;
-                    break;
-                }
-            }
-        }
-
-        if (!alreadyConnected) {
+        if (!isPeerConnected(ip, port)) {
             connectToPeer(ip, port);
         }
     }
@@ -720,20 +755,13 @@ void NetworkEngine::handleDiscoveryDatagrams()
         if (discovery->protocol_version() != PROTOCOL_VERSION)
             continue;
 
-		bool alreadyConnected = false;
+		if(!isPeerConnected(discovery->peer_id()))
         {
-            std::lock_guard<std::mutex> lock(m_peerMutex);
-            for (const auto& [_, info] : m_peerInfoMap)
-                if (info.peer_id == discovery->peer_id())
-                    alreadyConnected = true;          // already connected
+            char ipStr[INET_ADDRSTRLEN];
+            inet_ntop(AF_INET, &senderAddr.sin_addr, ipStr, sizeof(ipStr));
+            connectToPeer(ipStr, discovery->tcp_port());
         }
 
-		if (alreadyConnected)
-			continue;
-
-        char ipStr[INET_ADDRSTRLEN];
-        inet_ntop(AF_INET, &senderAddr.sin_addr, ipStr, sizeof(ipStr));
-        connectToPeer(ipStr, discovery->tcp_port());
 
     } while (bytesReceived > 0);
 }
@@ -806,23 +834,9 @@ void NetworkEngine::onUpdate(float deltaTime) {
                 char ipStr[INET_ADDRSTRLEN];
                 inet_ntop(AF_INET, &sockAdd->sin_addr, ipStr, sizeof(ipStr));
 
-                bool alreadyConnected = false;
-                {
-                    std::lock_guard<std::mutex> lk(m_peerMutex);
-                    for (const auto& s : m_peerSockets) {
-
-                        char curIp[INET_ADDRSTRLEN];
-                        inet_ntop(AF_INET, &s->getSockAddr()->sin_addr, ipStr, sizeof(ipStr));
-
-						if (strcmp(ipStr, curIp) == 0) {
-                            alreadyConnected = true;          // already connected
-                            break;
-                        }
-                    }
-                    if (!alreadyConnected) {
-                        auto uptr = std::make_unique<TCPSocket>(std::move(client));
-                        m_peerSockets.push_back(std::move(uptr));
-                    }
+                if (!isPeerConnected(&client)) {
+                    auto uptr = std::make_unique<TCPSocket>(std::move(client));
+                    m_peerSockets.push_back(std::move(uptr));
                 }
 
             }
