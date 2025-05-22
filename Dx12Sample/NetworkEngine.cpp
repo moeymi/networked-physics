@@ -304,7 +304,7 @@ void NetworkEngine::assignOwnersAndBroadcastScenarioCreate(std::string scenarioN
         NetSim::Vec3 colorVec3 = { GlobalData::g_clientColor.x, GlobalData::g_clientColor.y, GlobalData::g_clientColor.z };
 
         if (!object->isStatic()) {
-            int distrib = ceil(static_cast<float>(nonStaticObjects.size()) / static_cast<float>(m_peerSockets.size() + 1));
+            int distrib = ceil(static_cast<float>(nonStaticObjects.size()) / static_cast<float>(m_peerInfoMap.size() + 1));
             if (distrib == 0) distrib = 1;
             peerIndex = static_cast<uint16_t>(nonStaticObjects[i] / distrib);
             if (peerIndex > 0) {
@@ -799,11 +799,32 @@ void NetworkEngine::onUpdate(float deltaTime) {
     if (ready > 0) {
         if (FD_ISSET(listenSock, &readSet)) {
             TCPSocket client = m_listenSocket->accept();
+			auto sockAdd = client.getSockAddr();
 
             if (client.isValid()) {
-                auto uptr = std::make_unique<TCPSocket>(std::move(client));
-                std::lock_guard<std::mutex> lk(m_peerMutex);
-                m_peerSockets.push_back(std::move(uptr));
+
+                char ipStr[INET_ADDRSTRLEN];
+                inet_ntop(AF_INET, &sockAdd->sin_addr, ipStr, sizeof(ipStr));
+
+                bool alreadyConnected = false;
+                {
+                    std::lock_guard<std::mutex> lk(m_peerMutex);
+                    for (const auto& s : m_peerSockets) {
+
+                        char curIp[INET_ADDRSTRLEN];
+                        inet_ntop(AF_INET, &s->getSockAddr()->sin_addr, ipStr, sizeof(ipStr));
+
+						if (strcmp(ipStr, curIp) == 0) {
+                            alreadyConnected = true;          // already connected
+                            break;
+                        }
+                    }
+                    if (!alreadyConnected) {
+                        auto uptr = std::make_unique<TCPSocket>(std::move(client));
+                        m_peerSockets.push_back(std::move(uptr));
+                    }
+                }
+
             }
         }
 

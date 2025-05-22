@@ -26,6 +26,7 @@ private:
         }
         return rc;
     }
+
 public:
     explicit TCPSocket(bool blocking = true) {
         SOCKET s = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -121,6 +122,20 @@ public:
         }
         return recvd;
     }
+
+	std::optional<sockaddr_in> getSockAddr() const {
+		sockaddr_in addr;
+		int addrLen = sizeof(addr);
+		if (getsockname(sock_, reinterpret_cast<sockaddr*>(&addr), &addrLen) == SOCKET_ERROR) {
+			int ec = WSAGetLastError();
+			if (ec != WSAEWOULDBLOCK) {
+				auto err = std::string("getsockname() failed: ") + std::to_string(ec);
+				OutputDebugStringA(err.c_str());
+				return std::nullopt;
+			}
+		}
+		return addr;
+	}
 
     bool isBlocking() const {
         return true;
