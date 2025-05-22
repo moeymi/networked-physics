@@ -9,7 +9,7 @@
 
 class TCPSocket : public Socket {
 private:
-    int bind(const IPAddress& addr) {
+    void bind(const IPAddress& addr) {
         auto saOpt = addr.toSockAddr();
         if (!saOpt)
             throw std::runtime_error("Invalid address");
@@ -17,16 +17,17 @@ private:
         // Extract the actual sockaddr_in out of the optional
         const sockaddr_in& sin = *saOpt;
 
-		int rc = ::bind(sock_, reinterpret_cast<const sockaddr*>(&sin), sizeof(sin));
-        if (rc != 0)
+        // Cast to sockaddr* and use sizeof(sockaddr_in)
+        if (::bind(sock_,
+            reinterpret_cast<const sockaddr*>(&sin),
+            static_cast<int>(sizeof(sin))) != 0)
         {
             auto ec = WSAGetLastError();
-            auto err = std::string("bind() failed: ") + std::to_string(ec);
-            OutputDebugStringA(err.c_str());
+            throw std::system_error{ ec,
+                                     std::system_category(),
+                                     "bind() failed" };
         }
-        return rc;
     }
-
 public:
     explicit TCPSocket(bool blocking = true) {
         SOCKET s = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -47,18 +48,16 @@ public:
         setBlocking(blocking);
     }
 
-    int listen(const IPAddress& addr, int backlog = SOMAXCONN) {
-        int rc = bind(addr);
-		if (rc != 0) {
-			return rc;
-		}
-		rc = ::listen(sock_, backlog);
-        if (rc != 0) {
-            int ec = WSAGetLastError();
-            auto err = std::string("listen() failed: ") + std::to_string(ec);
-            OutputDebugStringA(err.c_str());
+    /// Server: bind + listen
+    void listen(const IPAddress& addr, int backlog = SOMAXCONN) {
+        bind(addr);
+        if (::listen(sock_, backlog) != 0) {
+            throw std::system_error{
+                static_cast<int>(WSAGetLastError()),
+                std::system_category(),
+                "listen() failed"
+            };
         }
-		return rc;
     }
 
     TCPSocket accept() {
@@ -66,14 +65,14 @@ public:
         if (client == INVALID_SOCKET) {
             int ec = WSAGetLastError();
             if (ec == WSAEWOULDBLOCK) {
-                auto err = std::string("accept() failed: ") + std::to_string(ec);
-                OutputDebugStringA(err.c_str());
+                return TCPSocket(INVALID_SOCKET, isBlocking());
             }
+            throw std::system_error{ ec, std::system_category(), "accept() failed" };
         }
         return TCPSocket(client, isBlocking());
     }
 
-    int connect(const IPAddress& addr) {
+    void connect(const IPAddress& addr) {
         auto saOpt = addr.toSockAddr();
         if (!saOpt) throw std::runtime_error("Invalid address");
         const sockaddr_in& sa = *saOpt;
@@ -81,16 +80,13 @@ public:
         if (rc != 0) {
             int ec = WSAGetLastError();
             if (!(ec == WSAEWOULDBLOCK || ec == WSAEINPROGRESS)) {
-                auto err = std::string("connect() failed: ") + std::to_string(ec);
-                OutputDebugStringA(err.c_str());
+                throw std::system_error{ ec, std::system_category(), "connect() failed" };
             }
         }
-		return rc;
     }
 
-    int sendAll(const void* data, size_t len) {
+    void sendAll(const void* data, size_t len) {
         const char* ptr = static_cast<const char*>(data);
-		int sentAll = 0;
         while (len > 0) {
             int sent = ::send(sock_, ptr, static_cast<int>(len), 0);
             if (sent == SOCKET_ERROR) {
@@ -99,15 +95,11 @@ public:
                     // caller must wait for writability
                     break;
                 }
-                auto err = std::string("send() failed: ") + std::to_string(ec);
-                OutputDebugStringA(err.c_str());
-				return sentAll;
+                throw std::system_error{ ec, std::system_category(), "send() failed" };
             }
-			sentAll += sent;
             ptr += sent;
             len -= sent;
         }
-		return sentAll;
     }
 
     int recv(void* buffer, size_t maxlen) {
@@ -115,10 +107,7 @@ public:
         if (recvd == SOCKET_ERROR) {
             int ec = WSAGetLastError();
             if (ec != WSAEWOULDBLOCK)
-            {
-				auto err = std::string("recv() failed: ") + std::to_string(ec);
-				OutputDebugStringA(err.c_str());
-			}
+                throw std::system_error{ ec, std::system_category(), "recv() failed" };
         }
         return recvd;
     }

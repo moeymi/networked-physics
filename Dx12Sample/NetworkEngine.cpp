@@ -86,8 +86,7 @@ void NetworkEngine::initializeSockets(unsigned short listenPort) {
 
     IPAddress listenAddr = IPAddress("0.0.0.0", listenPort);
     m_listenSocket = std::make_unique<TCPSocket>(false);   // passive ctor
-	if (m_listenSocket->listen(listenAddr) != 0)
-		throw std::runtime_error("Failed to create listen socket");
+    m_listenSocket->listen(listenAddr);
 
     constexpr char GROUP_IP[] = "239.255.42.42";
     const uint16_t GROUP_PORT = GlobalData::g_broadcastPort;
@@ -104,8 +103,7 @@ void NetworkEngine::connectToPeer(const std::string& ip, uint16_t port)
     try
     {
         auto peer = std::make_unique<TCPSocket>(false); // non-blocking
-        if (peer->connect(IPAddress(ip, port)) != 0)
-            return;
+        peer->connect(IPAddress(ip, port));
 
 		if (isPeerConnected(peer.get()))
 			return;
