@@ -17,9 +17,9 @@ void SpheresScenario::onLoadInternal(CommandList& commandList)
 	std::uniform_real_distribution<float> dr{ m_minimumDiameter, m_maximumDiameter };
 
 	PhysicsMaterial material = {
-		0.02f,
-		0.02,
-		1
+		m_friction,
+		m_angularFriction,
+		m_restitution
 	};
 	CollisionSystem collisionSystem;
 	for (int i = 0; i < m_spheresCount; i++)
@@ -56,7 +56,8 @@ void SpheresScenario::onLoadInternal(CommandList& commandList)
 		if (cnt <= 0) {
 			continue;
 		}
-		std::bernoulli_distribution makeStatic(0.5f);
+
+		std::bernoulli_distribution makeStatic(m_staticSpheresRatio);
 		obj->setStatic(makeStatic(m_randomEngine));
 
 		obj->onLoad();
@@ -67,25 +68,37 @@ void SpheresScenario::onLoadInternal(CommandList& commandList)
 void SpheresScenario::drawImGui() {
 	ImGui::Begin("Scenario");
 
-	// Bounds control
-	ImGui::DragFloat3("Bounds", m_bounds.data(), 0.1f, 0.0f, 100.0f);
+	if (ImGui::CollapsingHeader("Spawning")) {
+		ImGui::DragFloat3("Bounds", m_bounds.data(), 0.1f, 0.0f, 100.0f);
 
-	// Minimum and maximum radius control
-	ImGui::DragFloat("Minimum Radius", &m_minimumDiameter, 0.1f, 0.0f, 10.0f);
-	ImGui::DragFloat("Maximum Radius", &m_maximumDiameter, 0.1f, 0.0f, 10.0f);
+		ImGui::DragFloat("Minimum Radius", &m_minimumDiameter, 0.1f, 0.0f, 10.0f);
+		ImGui::DragFloat("Maximum Radius", &m_maximumDiameter, 0.1f, 0.0f, 10.0f);
 
-	// Sphere Count control
-	ImGui::DragInt("Count", &m_spheresCount, 1, 0, 10000);
+		if (ImGui::DragFloat("Static Spheres Ratio", &m_staticSpheresRatio, 0.01f, 0.0f, 1.0f)) {
+			m_staticSpheresRatio = std::clamp(m_staticSpheresRatio, 0.0f, 1.0f);
+		}
+
+		ImGui::DragInt("Count", &m_spheresCount, 1, 0, 10000);
+	}
+
+	if (ImGui::CollapsingHeader("Physics")) {
+		if (ImGui::DragFloat("Friction", &m_friction, 0.01f, 0.0f, 1.0f)) {
+			m_friction = std::clamp(m_friction, 0.0f, 1.0f);
+		}
+		if(ImGui::DragFloat("Angular Friction", &m_angularFriction, 0.01f, 0.0f, 1.0f)) {
+			m_angularFriction = std::clamp(m_angularFriction, 0.0f, 1.0f);
+		}
+		if (ImGui::DragFloat("Restitution", &m_restitution, 0.01f, 0.0f, 1.0f)) {
+			m_restitution = std::clamp(m_restitution, 0.0f, 1.0f);
+		}
+	}
 
 	if (ImGui::Button("Generate Spheres")) {
-
 		// Clear existing objects from index 6 and later
 		for (size_t i = 6; i < m_physicsObjects.size(); ++i) {
 			m_physicsObjects[i]->onUnload();
 		}
 		m_physicsObjects.erase(m_physicsObjects.begin() + 6, m_physicsObjects.end());
-
-
 
 		auto commandQueue = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY);
 		auto commandList = commandQueue->GetCommandList();

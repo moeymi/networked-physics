@@ -12,8 +12,8 @@ namespace GlobalData {
 	extern DirectX::XMFLOAT4 g_clientColor;
 
 	extern double g_renderingFPS;
-	extern double g_physicsFPS;
-	extern double g_networkFPS;
+	extern double g_physicsDt;
+	extern double g_networkDt;
 
 	extern double g_simulationTime;
 

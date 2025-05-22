@@ -139,7 +139,6 @@ protected:
     void OnGUI();
 
 private:
-	std::mutex m_ScenarioMutex;
     std::unique_ptr<Scenario> m_CurrentScenario;
 
 	RenderingEngine m_RenderingEngine;
@@ -148,8 +147,11 @@ private:
 
 	std::string m_lastError = "Error message";
 
-    std::vector<PhysicsObject*> m_ownedObjects{ nullptr };
+    std::vector<PhysicsObject*> m_ownedObjects;
     std::array<PhysicsObject*, 40000> m_unownedObjects{ nullptr };
+
+	std::thread m_postPhysicsThread;
+	std::thread m_postNetworkThread;
 
 	bool m_clientPrediction = false;
     bool m_simulationScheduled = false;

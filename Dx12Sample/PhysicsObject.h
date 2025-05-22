@@ -29,7 +29,7 @@ struct ContactPoint {
 	float normalMass = 0.0f;
 	float tangentMass = 0.0f;
 	float angularMass = 0.0f;
-	float bias = 0.0f;
+	float velocityBias = 0.0f;
 
 	float accumulatedNormalImpulse = 0.0f;
 	float accumulatedFrictionImpulse = 0.0f;

@@ -28,10 +28,11 @@ NetworkEngine::~NetworkEngine() {
     WSACleanup();
 }
 
-std::vector<PeerInfo> NetworkEngine::getPeersInfo() const {
-    std::vector<PeerInfo> peers(0);
+std::vector<std::tuple<PeerInfo, double>> NetworkEngine::getPeersInfo() const {
+    std::vector<std::tuple<PeerInfo, double>> peers(0);
     for (const auto& pair : m_peerInfoMap) {
-        peers.push_back(pair.second);
+		auto offset = getPeerRTT(pair.first);
+        peers.push_back(std::make_tuple(pair.second, offset));
     }
     return peers;
 }
@@ -85,7 +86,8 @@ void NetworkEngine::initializeSockets(unsigned short listenPort) {
 
     IPAddress listenAddr = IPAddress("0.0.0.0", listenPort);
     m_listenSocket = std::make_unique<TCPSocket>(false);   // passive ctor
-    m_listenSocket->listen(listenAddr);
+	if (m_listenSocket->listen(listenAddr) != 0)
+		throw std::runtime_error("Failed to create listen socket");
 
     constexpr char GROUP_IP[] = "239.255.42.42";
     const uint16_t GROUP_PORT = GlobalData::g_broadcastPort;
@@ -94,16 +96,7 @@ void NetworkEngine::initializeSockets(unsigned short listenPort) {
     IPAddress localIface = IPAddress::initializeLocal(GROUP_PORT);   // pick your NIC
 
     m_multicastSocket = std::make_unique<MulticastSocket>(groupAddr, localIface);
-
-    std::thread(&NetworkEngine::listenForDiscovery, this).detach();
-
-    m_broadcasting = true;
-    m_broadcastThread = std::thread([this, listenPort]() {
-        while (m_broadcasting) {
-            broadcastDiscovery(listenPort);
-            std::this_thread::sleep_for(std::chrono::seconds(2));
-        }
-        });
+	m_multicastSocket->setBlocking(false);
 }
 
 void NetworkEngine::connectToPeer(const std::string& ip, uint16_t port)
@@ -111,9 +104,8 @@ void NetworkEngine::connectToPeer(const std::string& ip, uint16_t port)
     try
     {
         auto peer = std::make_unique<TCPSocket>(false); // non-blocking
-		peer->connect(IPAddress(ip, port));
-		if (peer->native() == INVALID_SOCKET)
-			throw std::runtime_error("Failed to create socket");
+        if (peer->connect(IPAddress(ip, port)) != 0)
+            return;
 
         sendRecognize(peer.get());
         {
@@ -130,20 +122,19 @@ void NetworkEngine::connectToPeer(const std::string& ip, uint16_t port)
 }
 
 void NetworkEngine::removePeer(TCPSocket* peerSocket) {
-    std::lock_guard<std::mutex> lk(m_peerMutex);
-
-    // erase from info map
-    m_peerInfoMap.erase(peerSocket->native());
 
     // close the socket
     peerSocket->close();
+    {
+        std::lock_guard<std::mutex> lk(m_peerMutex);
+        m_peerInfoMap.erase(peerSocket->native());
 
-    // remove from the vector
-    auto it = std::remove_if(
-        m_peerSockets.begin(), m_peerSockets.end(),
-        [&](auto& up) { return up.get() == peerSocket; }
-    );
-    m_peerSockets.erase(it, m_peerSockets.end());
+        auto it = std::remove_if(
+            m_peerSockets.begin(), m_peerSockets.end(),
+            [&](auto& up) { return up.get() == peerSocket; }
+        );
+        m_peerSockets.erase(it, m_peerSockets.end());
+    }
 }
 
 void NetworkEngine::broadcastDiscovery(unsigned short discoveryPort) {
@@ -153,42 +144,6 @@ void NetworkEngine::broadcastDiscovery(unsigned short discoveryPort) {
     }
     std::string discoveryMessage = constructDiscoveryMessage();
     m_multicastSocket->send(discoveryMessage.c_str(), static_cast<int>(discoveryMessage.size()));
-}
-
-void NetworkEngine::listenForDiscovery() {
-    char buffer[1024];
-    sockaddr_in senderAddr{};
-    while (m_running) {
-        int bytesReceived = m_multicastSocket->receive(buffer, sizeof(buffer), &senderAddr);
-        if (bytesReceived <= 0)
-            continue;
-
-        const NetSim::NetworkMessage* message = NetSim::GetNetworkMessage(buffer);
-        if (message->data_type() == NetSim::MessageUnion_DiscoveryBroadcast) {
-            const NetSim::DiscoveryBroadcast* discovery = message->data_as_DiscoveryBroadcast();
-            if (discovery->peer_id() == GlobalData::g_clientId)
-                continue;
-            if (discovery->protocol_version() != PROTOCOL_VERSION)
-                continue;
-
-			// Check if the peer is already connected
-            {
-                std::lock_guard<std::mutex> lock(m_peerMutex);
-				for (const auto& [ peer, info] : m_peerInfoMap) {
-					if (info.peer_id == discovery->peer_id()) {
-						return; // Already connected
-					}
-				}
-            }
-
-            char ipStr[INET_ADDRSTRLEN];
-            inet_ntop(AF_INET, &senderAddr.sin_addr, ipStr, sizeof(ipStr));
-            std::string senderIP = ipStr;
-            unsigned short senderPort = discovery->tcp_port();
-
-            connectToPeer(senderIP, senderPort);
-        }
-    }
 }
 
 std::string NetworkEngine::constructDiscoveryMessage() {
@@ -374,7 +329,7 @@ void NetworkEngine::assignOwnersAndBroadcastScenarioCreate(std::string scenarioN
         auto physicsMaterial = object->getPhysicsMaterial();
 
 		NetSim::PhysicsMaterial material = { physicsMaterial.friction, physicsMaterial.angularFriction, physicsMaterial.restitution };
-        auto objectState = NetSim::CreateObjectState(builder, object->getId(), isStatic, static_cast<NetSim::MeshType>(type), &material, &colliderSizeVec3, &positionVec3, &rotationVec4, &scaleVec3, &colorVec3, peerId);
+        auto objectState = NetSim::CreateObjectState(builder, object->getId(), isStatic, static_cast<NetSim::MeshType>(type), object->getMass(), & material, &colliderSizeVec3, &positionVec3, &rotationVec4, &scaleVec3, &colorVec3, peerId);
         objectStates.push_back(objectState);
     }
 
@@ -389,10 +344,11 @@ void NetworkEngine::assignOwnersAndBroadcastScenarioCreate(std::string scenarioN
     msg_builder.add_data(scenario_offset.Union());
     auto message = msg_builder.Finish();
     builder.Finish(message);
-
-    std::lock_guard<std::mutex> lock(m_peerMutex);
-    for (const auto& s : m_peerSockets) {
-        sendMessage(s.get(), builder);
+    {
+        std::lock_guard<std::mutex> lock(m_peerMutex);
+        for (const auto& s : m_peerSockets) {
+            sendMessage(s.get(), builder);
+        }
     }
 }
 
@@ -414,6 +370,13 @@ TCPSocket* NetworkEngine::socketPtrFromHandle(SOCKET h)
     for (auto& sp : m_peerSockets)
         if (sp->native() == h) return sp.get();
     return nullptr;
+}
+double NetworkEngine::getPeerRTT(SOCKET peerSocket) const
+{
+    auto it = m_peerRTT.find(peerSocket);
+    if (it != m_peerRTT.end())
+        return it->second;
+    return 0.0;
 }
 
 void NetworkEngine::sendPeerList(TCPSocket* to) {
@@ -469,9 +432,11 @@ void NetworkEngine::sendObjectUpdatesToPeers(const std::vector<ObjectUpdate>& up
     builder.Finish(msg_builder.Finish());
 
     // Send to all peers
-    std::lock_guard<std::mutex> lock(m_peerMutex);
-    for (const auto& s : m_peerSockets) {
-        sendMessage(s.get(), builder);
+    {
+        std::lock_guard<std::mutex> lock(m_peerMutex);
+        for (const auto& s : m_peerSockets) {
+            sendMessage(s.get(), builder);
+        }
     }
 }
 
@@ -480,6 +445,9 @@ void NetworkEngine::handleNewConnection()
     try
     {
         auto client = m_listenSocket->accept();
+		if (!client.isValid()) {
+			throw std::runtime_error("Failed to accept new connection");
+		}
         {
             std::lock_guard<std::mutex> lk(m_peerMutex);
             m_peerSockets.push_back(
@@ -488,7 +456,7 @@ void NetworkEngine::handleNewConnection()
         }
         sendRecognize(m_peerSockets.back().get());
     }
-    catch (...) { /* EWOULDBLOCK / etc. -> nothing to do */ }
+    catch (...) {  }
 }
 
 void NetworkEngine::handlePeerData(TCPSocket* peerSocket) {
@@ -581,6 +549,7 @@ void NetworkEngine::handlePong(TCPSocket* from, const NetSim::Pong* pong) {
 
     double rtt = T_recv - T_send;
     double offset = T_remote - (T_send + rtt * 0.5);
+	m_peerRTT[from->native()] = rtt;
     m_peerClockOffsets[from->native()] = offset;
 
     m_sentPingTimestamps.erase(it);
@@ -682,6 +651,7 @@ void NetworkEngine::handleScenario(const NetSim::Scenario* scenario) {
 		physicsObject->getTransform().SetScale(scale, 0, true);
 		physicsObject->setStatic(object->is_static());
 		physicsObject->setOwnerId(object->authority_peer_id());
+		physicsObject->setMass(object->mass());
 		physicsObject->setPhysicsMaterial({ object->material()->friction(), object->material()->angular_friction(), object->material()->restitution() });
 
 		objects.push_back(physicsObject);
@@ -722,6 +692,53 @@ void NetworkEngine::handleObjectUpdate(TCPSocket* from, const NetSim::ObjectUpda
     }
 }
 
+void NetworkEngine::handleDiscoveryDatagrams()
+{
+    char buffer[1024];
+    sockaddr_in senderAddr{};
+    int bytesReceived = 0;
+
+    do {
+        bytesReceived = m_multicastSocket->receive(buffer, sizeof(buffer), &senderAddr);
+
+        if (bytesReceived <= 0)
+        {
+            if (WSAGetLastError() == WSAEWOULDBLOCK)
+                break;
+            else
+                return; // real error – silently drop
+        }
+
+        const NetSim::NetworkMessage* message = NetSim::GetNetworkMessage(buffer);
+        if (message->data_type() != NetSim::MessageUnion_DiscoveryBroadcast)
+            continue;
+
+        const auto* discovery = message->data_as_DiscoveryBroadcast();
+
+        if (discovery->peer_id() == GlobalData::g_clientId)
+            continue;
+        if (discovery->protocol_version() != PROTOCOL_VERSION)
+            continue;
+
+		bool alreadyConnected = false;
+        {
+            std::lock_guard<std::mutex> lock(m_peerMutex);
+            for (const auto& [_, info] : m_peerInfoMap)
+                if (info.peer_id == discovery->peer_id())
+                    alreadyConnected = true;          // already connected
+        }
+
+		if (alreadyConnected)
+			continue;
+
+        char ipStr[INET_ADDRSTRLEN];
+        inet_ntop(AF_INET, &senderAddr.sin_addr, ipStr, sizeof(ipStr));
+        connectToPeer(ipStr, discovery->tcp_port());
+
+    } while (bytesReceived > 0);
+}
+
+
 void NetworkEngine::handleStartSimulation(TCPSocket* peerSocket, const NetSim::StartSimulation* startSim) {
     double remoteTime = startSim->simulation_start_time();
     double offset = m_peerClockOffsets[peerSocket->native()];
@@ -737,12 +754,21 @@ void NetworkEngine::handleGravityChange(const NetSim::GravityChange* gravityChan
 }
 
 void NetworkEngine::onUpdate(float deltaTime) {
-    static double lastPingTime = 0.0;
+    static double lastBroadcast = 0.0;
     double now = GlobalData::getTimestamp();
+    if (now - lastBroadcast > 2.0)
+    {
+        broadcastDiscovery(GlobalData::g_listenPort);
+        lastBroadcast = now;
+    }
+
+    static double lastPingTime = 0.0;
     if (now - lastPingTime > 5.0) {
-        std::lock_guard<std::mutex> lock(m_peerMutex);
-        for (const auto& s : m_peerSockets) {
-            sendPing(s.get());
+        {
+            std::lock_guard<std::mutex> lock(m_peerMutex);
+            for (const auto& s : m_peerSockets) {
+                sendPing(s.get());
+            }
         }
         lastPingTime = now;
     }
@@ -751,9 +777,9 @@ void NetworkEngine::onUpdate(float deltaTime) {
     FD_ZERO(&readSet);
     SOCKET maxSock = 0;
 
-    auto listenSock = m_listenSocket.get();
-    FD_SET(listenSock->native(), &readSet);
-    maxSock = listenSock->native();
+    auto listenSock = m_listenSocket->native();
+    FD_SET(listenSock, &readSet);
+    maxSock = listenSock;
 
     {
         std::lock_guard<std::mutex> lk(m_peerMutex);
@@ -764,11 +790,14 @@ void NetworkEngine::onUpdate(float deltaTime) {
         }
     }
 
+    SOCKET multiSock = m_multicastSocket->native();
+    FD_SET(multiSock, &readSet);
+    if (multiSock > maxSock) maxSock = multiSock;
+
     timeval tv{ 0, 0 };
     int ready = select(int(maxSock + 1), &readSet, nullptr, nullptr, &tv);
     if (ready > 0) {
-        if (FD_ISSET(m_listenSocket->native(), &readSet)) {
-            // this returns a TCPSocket by value
+        if (FD_ISSET(listenSock, &readSet)) {
             TCPSocket client = m_listenSocket->accept();
 
             if (client.isValid()) {
@@ -776,6 +805,11 @@ void NetworkEngine::onUpdate(float deltaTime) {
                 std::lock_guard<std::mutex> lk(m_peerMutex);
                 m_peerSockets.push_back(std::move(uptr));
             }
+        }
+
+        if (FD_ISSET(multiSock, &readSet))
+        {
+            handleDiscoveryDatagrams();
         }
 
         std::vector<TCPSocket*> readyPeers;
@@ -797,20 +831,13 @@ void NetworkEngine::onUpdate(float deltaTime) {
 		if (m_sharedData->m_ownedObjectsDirty) {
 			cleanDirtyOutgoingObjects();
 		}
+        if (m_sharedData->m_outgoingObjectStates[1].size()) {
+            sendObjectUpdatesToPeers(m_sharedData->m_outgoingObjectStates[1]);
+        }
     }
-
-    m_sharedData->m_outgoingMutex.lock();
-    if (m_sharedData->m_outgoingObjectStates[1].size()) {
-        sendObjectUpdatesToPeers(m_sharedData->m_outgoingObjectStates[1]);
-    }
-	m_sharedData->m_outgoingMutex.unlock();
 }
 
 void NetworkEngine::onStop() {
-    m_broadcasting = false;
-    if (m_broadcastThread.joinable())
-        m_broadcastThread.join();
-
     for (auto& s : m_peerSockets) s->close();
     m_listenSocket->close();
     WSACleanup();

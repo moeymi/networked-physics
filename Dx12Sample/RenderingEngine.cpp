@@ -22,17 +22,10 @@ RenderingEngine::RenderingEngine() :
     XMVECTOR cameraUp = XMVectorSet(0, 1, 0, 0);
     m_Camera.set_LookAt(cameraPos, cameraTarget, cameraUp);
 
-    m_pAlignedCameraData = static_cast<CameraData*>(_aligned_malloc(sizeof(CameraData), 16));
-	if (!m_pAlignedCameraData) {
-		throw std::runtime_error("Failed to allocate aligned camera data");
-	}
+	m_pAlignedCameraData = std::make_unique<CameraData>();
 
     m_pAlignedCameraData->m_InitialCamPos = m_Camera.get_Translation();
     m_pAlignedCameraData->m_InitialCamRot = m_Camera.get_Rotation();
-}
-
-RenderingEngine::~RenderingEngine() {
-    UnloadContent();
 }
 
 void RenderingEngine::LoadContent(std::shared_ptr<CommandQueue>& commandQueue,
@@ -307,9 +300,4 @@ void RenderingEngine::UpdateLights(const float& deltaTime) {
         l.LinearAttenuation = 0.08f;
         l.QuadraticAttenuation = 0.0f;
     }
-}
-
-void RenderingEngine::UnloadContent() {
-    _aligned_free(m_pAlignedCameraData);
-    m_PipelineState.Reset();
 }

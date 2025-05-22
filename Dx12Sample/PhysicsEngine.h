@@ -17,6 +17,7 @@ private:
 
     static constexpr float m_kPenetrationSlop = 0.001f;  // 1 mm of allowed overlap
     static constexpr float m_kBaumgarte = 0.2f;    // positional stabilization factor
+    static constexpr float kTangentEpsSq = 1e-8f;
 
 	static float m_gravity;
 	static bool m_gravityEnabled;

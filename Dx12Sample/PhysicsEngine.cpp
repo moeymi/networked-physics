@@ -88,12 +88,6 @@ void PhysicsEngine::detectAndResolveCollisions(const float& deltaTime) {
             if (it != m_contactManifolds.end()) {
                 CollisionManifold& oldManifold = it->second;
                 matchAndTransferImpulses(newManifold, oldManifold);
-                
-                if (!newManifold.contacts.empty() && !oldManifold.contacts.empty()) {
-                    newManifold.contacts[0].accumulatedNormalImpulse = oldManifold.contacts[0].accumulatedNormalImpulse;
-                    newManifold.contacts[0].accumulatedFrictionImpulse = oldManifold.contacts[0].accumulatedFrictionImpulse;
-                    newManifold.contacts[0].accumulatedAngularFrictionImpulse = oldManifold.contacts[0].accumulatedAngularFrictionImpulse;
-                }
             }
             currentFrameManifolds[pairKey] = std::move(newManifold);
         }
@@ -161,16 +155,25 @@ void PhysicsEngine::prestepCollisionManifolds(std::map<std::pair<PhysicsObject*,
             XMVECTOR n = c.normal;
 
             XMVECTOR raCrossN = XMVector3Cross(rA, n);
+            XMVECTOR Ia_raCrossN = XMVector3Transform(raCrossN, invInertiaA);
+            XMVECTOR crossTermA = XMVector3Cross(Ia_raCrossN, rA);
+            float angularA = XMVectorGetX(XMVector3Dot(crossTermA, n));
+
             XMVECTOR rbCrossN = XMVector3Cross(rB, n);
-            float angularA = XMVectorGetX(
-                XMVector3Dot(XMVector3Transform(raCrossN, invInertiaA), raCrossN));
-            float angularB = XMVectorGetX(
-                XMVector3Dot(XMVector3Transform(rbCrossN, invInertiaB), rbCrossN));
+            XMVECTOR Ib_rbCrossN = XMVector3Transform(rbCrossN, invInertiaB);
+            XMVECTOR crossTermB = XMVector3Cross(Ib_rbCrossN, rB);
+            float angularB = XMVectorGetX(XMVector3Dot(crossTermB, n));
+
             float invMassSum = invMassA + invMassB + angularA + angularB;
             c.normalMass = invMassSum > 0.0f ? 1.0f / invMassSum : 0.0f;
 
-            float invMassN = invMassA + invMassB + angularA + angularB;
-            //c.angularMass = invMassN > 0.f ? 1.f / invMassN : 0.f;
+            float Ia_n = XMVectorGetX(
+                XMVector3Dot(XMVector3Transform(n, invInertiaA), n));
+            float Ib_n = XMVectorGetX(
+                XMVector3Dot(XMVector3Transform(n, invInertiaB), n));
+
+            float denom = Ia_n + Ib_n;
+            c.angularMass = (denom > 0.0f) ? 1.0f / denom : 0.0f;
 
             XMVECTOR velA = XMVectorAdd(A->getVelocity(0), XMVector3Cross(A->getAngularVelocity(0), rA));
             XMVECTOR velB = XMVectorAdd(B->getVelocity(0),
@@ -182,15 +185,43 @@ void PhysicsEngine::prestepCollisionManifolds(std::map<std::pair<PhysicsObject*,
 
             XMVECTOR raCrossT = XMVector3Cross(rA, t);
             XMVECTOR rbCrossT = XMVector3Cross(rB, t);
-            float angularTA = XMVectorGetX(
-                XMVector3Dot(XMVector3Transform(raCrossT, invInertiaA), raCrossT));
-            float angularTB = XMVectorGetX(
-                XMVector3Dot(XMVector3Transform(rbCrossT, invInertiaB), rbCrossT));
+
+            XMVECTOR Ia_raCrossT = XMVector3Transform(raCrossT, invInertiaA);
+            XMVECTOR crossTA = XMVector3Cross(Ia_raCrossT, rA);
+            float angularTA = XMVectorGetX(XMVector3Dot(crossTA, t));
+
+
+			XMVECTOR Ib_rbCrossT = XMVector3Transform(rbCrossT, invInertiaB);
+			XMVECTOR crossTB = XMVector3Cross(Ib_rbCrossT, rB);
+			float angularTB = XMVectorGetX(XMVector3Dot(crossTB, t));
+
             float invMassT = invMassA + invMassB + angularTA + angularTB;
             c.tangentMass = invMassT > 0.0f ? 1.0f / invMassT : 0.0f;
 
             float penetrationErr = max(c.penetration - m_kPenetrationSlop, 0.0f);
-            c.bias = (m_kBaumgarte / dt) * penetrationErr;
+            float baumgarteBias = (m_kBaumgarte / dt) * penetrationErr;
+
+            float vn = XMVectorGetX(XMVector3Dot(relVel, n));        // closing speed
+            float restitutionBias = 0.0f;
+
+            const PhysicsMaterial& matA = A->getPhysicsMaterial();
+            const PhysicsMaterial& matB = B->getPhysicsMaterial();
+            float combinedRestitution = 0.5f * std::abs(matA.restitution + matB.restitution);
+
+            if (vn < -m_kRestitutionThreshold)              // *fast* incoming impact
+            {
+                // apply restitution only
+                restitutionBias = -combinedRestitution * vn;
+                c.velocityBias = restitutionBias;
+            }
+            else                                             // slow / resting contact
+            {
+                // apply Baumgarte only
+                c.velocityBias = baumgarteBias;
+            }
+
+            // Optional safety clamp so bias can’t exceed 0.2 m/s
+            c.velocityBias = min(c.velocityBias, 0.20f / dt);
         }
     }
 }
@@ -203,17 +234,13 @@ void PhysicsEngine::resolveCollisionVelocity(
 
     PhysicsObject* A = manifold.objectA;
     PhysicsObject* B = manifold.objectB;
-
-    if (A->isStatic() && B->isStatic()) {
-        return;
-    }
+    if (A->isStatic() && B->isStatic()) return;
 
     const PhysicsMaterial& matA = A->getPhysicsMaterial();
     const PhysicsMaterial& matB = B->getPhysicsMaterial();
 
     const float combinedFriction = std::sqrt(matA.friction * matB.friction);
-	const float combinedAngularFriction = std::sqrt(matA.angularFriction * matB.angularFriction);
-    const float combinedRestitution = abs((matA.restitution + matB.restitution) / 2.0f);
+    const float combinedAngularFriction = std::sqrt(matA.angularFriction * matB.angularFriction);
 
     const XMMATRIX invInertiaA = A->getInverseWorldInertiaTensor(0);
     const XMMATRIX invInertiaB = B->getInverseWorldInertiaTensor(0);
@@ -221,109 +248,106 @@ void PhysicsEngine::resolveCollisionVelocity(
     const XMVECTOR comA = A->getTransform().GetPosition(0);
     const XMVECTOR comB = B->getTransform().GetPosition(0);
 
-    for (auto& c : manifold.contacts) {
-        XMVECTOR rA = XMVectorSubtract(c.position, comA);
-        XMVECTOR rB = XMVectorSubtract(c.position, comB);
+    for (auto& c : manifold.contacts)
+    {
+        XMVECTOR rA = c.position - comA;
+        XMVECTOR rB = c.position - comB;
+        XMVECTOR n = c.normal;
 
         XMVECTOR vA = A->getVelocity(iteration != 0);
         XMVECTOR wA = A->getAngularVelocity(iteration != 0);
         XMVECTOR vB = B->getVelocity(iteration != 0);
         XMVECTOR wB = B->getAngularVelocity(iteration != 0);
 
-        XMVECTOR velA_contact = XMVectorAdd(vA, XMVector3Cross(wA, rA));
-        XMVECTOR velB_contact = XMVectorAdd(vB, XMVector3Cross(wB, rB));
-        XMVECTOR relVelLinear = XMVectorSubtract(velB_contact, velA_contact);
+        XMVECTOR velA_contact = vA + XMVector3Cross(wA, rA);
+        XMVECTOR velB_contact = vB + XMVector3Cross(wB, rB);
+        XMVECTOR relVelLinear = velB_contact - velA_contact;
+        XMVECTOR relVelAngular = wB - wA;
 
-        XMVECTOR relVelAngular = XMVectorSubtract(wB, wA);
-
-        XMVECTOR n = c.normal;
         float relVelNormal = XMVectorGetX(XMVector3Dot(relVelLinear, n));
 
-		if (relVelNormal > 0.0f) {
-			continue;
-		}
+        float dVN = -relVelNormal + c.velocityBias;   // bias is constant
+        if (dVN < 0.0f) dVN = 0.0f;
 
-        bool useRestitution = relVelNormal < -m_kRestitutionThreshold; 
-        float restitutionTerm = useRestitution ? -combinedRestitution * relVelNormal
-            : 0.0f;
+        float lambdaN = dVN * c.normalMass;
 
-        float deltaVelNormalTarget = -relVelNormal + restitutionTerm;
-        if (!useRestitution)
-            deltaVelNormalTarget += c.bias;
+        float oldImpN = c.accumulatedNormalImpulse;
+        float newImpN = max(oldImpN + lambdaN, 0.0f);
+        float actualN = newImpN - oldImpN;
+        c.accumulatedNormalImpulse = newImpN;
 
-        float lambdaN = deltaVelNormalTarget * c.normalMass;
+        XMVECTOR Pn = n * actualN;
 
-        float oldAccumulatedNormalImpulse = c.accumulatedNormalImpulse;
-        c.accumulatedNormalImpulse = max(oldAccumulatedNormalImpulse + lambdaN, 0.0f);
-        float actualLambdaN = c.accumulatedNormalImpulse - oldAccumulatedNormalImpulse;
+        if (!A->isStatic()) A->applyImpulseAtPosition(-Pn, c.position);
+        if (!B->isStatic()) B->applyImpulseAtPosition(Pn, c.position);
 
-        XMVECTOR Pn_step = XMVectorScale(n, actualLambdaN);
-        if (!A->isStatic()) A->applyImpulseAtPosition(XMVectorNegate(Pn_step), c.position);
-        if (!B->isStatic()) B->applyImpulseAtPosition(Pn_step, c.position);
+        vA = A->getVelocity(iteration != 0);
+        wA = A->getAngularVelocity(iteration != 0);
+        vB = B->getVelocity(iteration != 0);
+        wB = B->getAngularVelocity(iteration != 0);
 
-        vA = A->getVelocity(iteration != 0); wA = A->getAngularVelocity(iteration != 0);
-        vB = B->getVelocity(iteration != 0); wB = B->getAngularVelocity(iteration != 0);
-        velA_contact = XMVectorAdd(vA, XMVector3Cross(wA, rA));
-        velB_contact = XMVectorAdd(vB, XMVector3Cross(wB, rB));
-        relVelLinear = XMVectorSubtract(velB_contact, velA_contact);
-        relVelAngular = XMVectorSubtract(wB, wA);
+        velA_contact = vA + XMVector3Cross(wA, rA);
+        velB_contact = vB + XMVector3Cross(wB, rB);
+        relVelLinear = velB_contact - velA_contact;
 
-
-        // --- Linear Friction Impulse ---
         XMVECTOR t = c.tangent;
-        if (c.tangentMass > 1e-9f) {
-            float relVelTangent = XMVectorGetX(XMVector3Dot(relVelLinear, t));
+        float relVelTangent = XMVectorGetX(XMVector3Dot(relVelLinear, t));
 
-            // Calculate impulse magnitude change needed (lambda_t) to stop tangent motion
-            float lambdaT = -relVelTangent * c.tangentMass;
+        float lambdaT = -relVelTangent * c.tangentMass;
+        float maxT = combinedFriction * c.accumulatedNormalImpulse;
 
-            float maxFriction = combinedFriction * c.accumulatedNormalImpulse;
-            float oldAccumulatedFrictionImpulse = c.accumulatedFrictionImpulse;
-            c.accumulatedFrictionImpulse = std::clamp(oldAccumulatedFrictionImpulse + lambdaT, -maxFriction, maxFriction);
-            float actualLambdaT = c.accumulatedFrictionImpulse - oldAccumulatedFrictionImpulse;
+        float oldAccumT = c.accumulatedFrictionImpulse;
+        c.accumulatedFrictionImpulse =
+            std::clamp(oldAccumT + lambdaT, -maxT, maxT);
+        float actualLambdaT = c.accumulatedFrictionImpulse - oldAccumT;
 
-            // Apply linear friction impulse for this step
-            XMVECTOR Pt_step = XMVectorScale(t, actualLambdaT);
-            if (!A->isStatic()) A->applyImpulseAtPosition(XMVectorNegate(Pt_step), c.position);
-            if (!B->isStatic()) B->applyImpulseAtPosition(Pt_step, c.position);
+        XMVECTOR Pt = t * actualLambdaT;
+        if (!A->isStatic()) A->applyImpulseAtPosition(-Pt, c.position);
+        if (!B->isStatic()) B->applyImpulseAtPosition(Pt, c.position);
 
-			auto angVelocityB = B->getAngularVelocity(1);
-			float angVelX = XMVectorGetX(angVelocityB);
-			float angVelY = XMVectorGetY(angVelocityB);
-			float angVelZ = XMVectorGetZ(angVelocityB);
+        if (c.angularMass > 1e-9f)
+        {
+            relVelAngular = B->getAngularVelocity(iteration != 0) -
+                A->getAngularVelocity(iteration != 0);
 
-			auto velB = B->getVelocity(1);
-			float velX = XMVectorGetX(velB);
-			float velY = XMVectorGetY(velB);
-			float velZ = XMVectorGetZ(velB);
+            float relOmegaN = XMVectorGetX(XMVector3Dot(relVelAngular, n));
+            float lambdaA = -relOmegaN * c.angularMass;
 
-            if (abs(angVelX) > 1 || abs(angVelY) > 1 || abs(angVelZ) > 1) {
-				std::cout << "Velocity: " << velY << std::endl;
-            }
-        }
+            float maxA = combinedAngularFriction * c.accumulatedNormalImpulse;
 
+            float oldAccumA = c.accumulatedAngularFrictionImpulse;
+            c.accumulatedAngularFrictionImpulse =
+                std::clamp(oldAccumA + lambdaA, -maxA, maxA);
+            float actualLambdaA =
+                c.accumulatedAngularFrictionImpulse - oldAccumA;
 
-        if (c.angularMass > 1e-9f) {
-            float relOmegaNormal = XMVectorGetX(XMVector3Dot(relVelAngular, n));
-
-            float lambdaA = -relOmegaNormal * c.angularMass;
-
-            float maxAngularFriction = combinedAngularFriction * c.accumulatedNormalImpulse;
-            float oldAccumulatedAngularImpulse = c.accumulatedAngularFrictionImpulse;
-            c.accumulatedAngularFrictionImpulse = std::clamp(oldAccumulatedAngularImpulse + lambdaA, -maxAngularFriction, maxAngularFriction);
-            float actualLambdaA = c.accumulatedAngularFrictionImpulse - oldAccumulatedAngularImpulse;
-
-            XMVECTOR Pa_step = XMVectorScale(n, actualLambdaA);
-            if (!A->isStatic()) A->applyAngularImpulse(XMVectorNegate(Pa_step));
-            if (!B->isStatic()) B->applyAngularImpulse(Pa_step);
+            XMVECTOR Pa = n * actualLambdaA;
+            if (!A->isStatic()) A->applyAngularImpulse(-Pa);
+            if (!B->isStatic()) B->applyAngularImpulse(Pa);
         }
     }
 }
 
 DirectX::XMVECTOR PhysicsEngine::computeTangent(DirectX::XMVECTOR relVel, DirectX::XMVECTOR normal) {
-    DirectX::XMVECTOR tangent = DirectX::XMVectorSubtract(relVel, DirectX::XMVectorScale(normal, DirectX::XMVectorGetX(DirectX::XMVector3Dot(relVel, normal))));
-    if (DirectX::XMVector3NearEqual(tangent, DirectX::XMVectorZero(), DirectX::XMVectorSplatEpsilon())) return tangent;
-    return DirectX::XMVector3Normalize(tangent);
+    using namespace DirectX;
+
+    XMVECTOR t = XMVectorSubtract(relVel,
+        XMVectorScale(normal, XMVectorGetX(XMVector3Dot(relVel, normal))));
+
+    if (XMVectorGetX(XMVector3LengthSq(t)) < kTangentEpsSq)
+    {
+        float nx = fabsf(XMVectorGetX(normal));
+        float ny = fabsf(XMVectorGetY(normal));
+        float nz = fabsf(XMVectorGetZ(normal));
+
+        XMVECTOR axis = (nx < 0.57735f) ? XMVectorSet(1, 0, 0, 0) :
+            (ny < 0.57735f) ? XMVectorSet(0, 1, 0, 0) :
+            XMVectorSet(0, 0, 1, 0);
+
+        t = XMVector3Cross(normal, axis);
+    }
+
+    return XMVector3Normalize(t);
 }
 
 void PhysicsEngine::positionalCorrection(const ContactPoint& contact, PhysicsObject* a, PhysicsObject* b) {

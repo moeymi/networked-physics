@@ -5,12 +5,12 @@ namespace GlobalData {
 	uint16_t g_clientId = 0;
 	uint16_t g_listenPort = 6001;
 	USHORT g_broadcastPort = 6005;
-	std::string g_clientName = "PhysicsSimulation";
+	std::string g_clientName = "Client A";
 	DirectX::XMFLOAT4 g_clientColor = { 1.0f, 0.0f, 0.0f, 1.0f };
 
 	double g_renderingFPS = 0.0;
-	double g_physicsFPS = 0.0;
-	double g_networkFPS = 0.0;
+	double g_physicsDt = 0.0;
+	double g_networkDt = 0.0;
 
 	double g_simulationTime = 0.0;
 

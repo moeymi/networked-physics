@@ -11,12 +11,14 @@ void Transform::SetStatic(bool value) {
 }
 
 void Transform::swapStates() {
+	{
+		std::unique_lock<std::mutex> lock(worldMatrixMutex[0], std::defer_lock);
+		std::unique_lock<std::mutex> lock2(worldMatrixMutex[1], std::defer_lock);
 
-	worldMatrixMutex[0].lock();
-	worldMatrixMutex[1].lock();
-	m_states[0] = m_states[1];
-	worldMatrixMutex[0].unlock();
-	worldMatrixMutex[1].unlock();
+		std::lock(lock, lock2);
+
+		m_states[0] = m_states[1];
+	}
 }
 
 void Transform::CalculateWorldMatrix(const int& bufferIndex, const bool& bothBuffers) {
@@ -58,15 +60,12 @@ void Transform::CleanDirty(const int& bufferIndex, const bool& bothBuffers) {
 }
 
 DirectX::XMMATRIX Transform::GetWorldMatrix(const int& bufferIndex) {
-	// Lock
-	worldMatrixMutex[bufferIndex].lock();
-	if (m_states[bufferIndex].worldMatrix.r->m128_f32[0] < -100) {
-		std::cout << "";
+	{
+		std::lock_guard<std::mutex> lock(worldMatrixMutex[bufferIndex]);
+		if (m_states[bufferIndex].positionScaleDirty || m_states[bufferIndex].rotationDirty) {
+			CleanDirty(bufferIndex, false);
+		}
 	}
-	if (m_states[bufferIndex].positionScaleDirty || m_states[bufferIndex].rotationDirty) {
-		CleanDirty(bufferIndex, false);
-	}
-	worldMatrixMutex[bufferIndex].unlock();
 	if (parent != nullptr) {
 		return m_states[bufferIndex].worldMatrix * parent->GetWorldMatrix(bufferIndex);
 	}

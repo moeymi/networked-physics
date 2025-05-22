@@ -302,13 +302,14 @@ struct ObjectState FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
     VT_ID = 4,
     VT_IS_STATIC = 6,
     VT_TYPE = 8,
-    VT_MATERIAL = 10,
-    VT_COLLIDER_SIZE = 12,
-    VT_POSITION = 14,
-    VT_ROTATION = 16,
-    VT_SCALE = 18,
-    VT_COLOR = 20,
-    VT_AUTHORITY_PEER_ID = 22
+    VT_MASS = 10,
+    VT_MATERIAL = 12,
+    VT_COLLIDER_SIZE = 14,
+    VT_POSITION = 16,
+    VT_ROTATION = 18,
+    VT_SCALE = 20,
+    VT_COLOR = 22,
+    VT_AUTHORITY_PEER_ID = 24
   };
   uint32_t id() const {
     return GetField<uint32_t>(VT_ID, 0);
@@ -318,6 +319,9 @@ struct ObjectState FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   }
   NetSim::MeshType type() const {
     return static_cast<NetSim::MeshType>(GetField<uint8_t>(VT_TYPE, 0));
+  }
+  float mass() const {
+    return GetField<float>(VT_MASS, 0.0f);
   }
   const NetSim::PhysicsMaterial *material() const {
     return GetStruct<const NetSim::PhysicsMaterial *>(VT_MATERIAL);
@@ -345,6 +349,7 @@ struct ObjectState FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
            VerifyField<uint32_t>(verifier, VT_ID, 4) &&
            VerifyField<uint8_t>(verifier, VT_IS_STATIC, 1) &&
            VerifyField<uint8_t>(verifier, VT_TYPE, 1) &&
+           VerifyField<float>(verifier, VT_MASS, 4) &&
            VerifyField<NetSim::PhysicsMaterial>(verifier, VT_MATERIAL, 4) &&
            VerifyField<NetSim::Vec3>(verifier, VT_COLLIDER_SIZE, 4) &&
            VerifyField<NetSim::Vec3>(verifier, VT_POSITION, 4) &&
@@ -368,6 +373,9 @@ struct ObjectStateBuilder {
   }
   void add_type(NetSim::MeshType type) {
     fbb_.AddElement<uint8_t>(ObjectState::VT_TYPE, static_cast<uint8_t>(type), 0);
+  }
+  void add_mass(float mass) {
+    fbb_.AddElement<float>(ObjectState::VT_MASS, mass, 0.0f);
   }
   void add_material(const NetSim::PhysicsMaterial *material) {
     fbb_.AddStruct(ObjectState::VT_MATERIAL, material);
@@ -406,6 +414,7 @@ inline ::flatbuffers::Offset<ObjectState> CreateObjectState(
     uint32_t id = 0,
     bool is_static = false,
     NetSim::MeshType type = NetSim::MeshType_Sphere,
+    float mass = 0.0f,
     const NetSim::PhysicsMaterial *material = nullptr,
     const NetSim::Vec3 *collider_size = nullptr,
     const NetSim::Vec3 *position = nullptr,
@@ -421,6 +430,7 @@ inline ::flatbuffers::Offset<ObjectState> CreateObjectState(
   builder_.add_position(position);
   builder_.add_collider_size(collider_size);
   builder_.add_material(material);
+  builder_.add_mass(mass);
   builder_.add_id(id);
   builder_.add_type(type);
   builder_.add_is_static(is_static);

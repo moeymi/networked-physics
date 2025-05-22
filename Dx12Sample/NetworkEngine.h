@@ -7,6 +7,7 @@
 #include "Scenario.h"
 #include "MulticastSocket.h"
 #include "TCPSocket.h"
+
 struct PeerInfo {
     SOCKET socket;
     uint32_t peer_id;
@@ -59,15 +60,11 @@ private:
 
 	std::unique_ptr<MulticastSocket> m_multicastSocket;
 
-    std::atomic<bool> m_broadcasting{ false };
-    std::thread m_broadcastThread;
-
     std::string constructDiscoveryMessage();
 
     void removePeer(TCPSocket* peerSocket);
 
 	void broadcastDiscovery(unsigned short port);
-	void listenForDiscovery();
     void connectToPeer(const std::string& ip, unsigned short port);
 
 	void sendPing(TCPSocket* peerSocket);
@@ -85,9 +82,10 @@ private:
 	void handleGravityChange(const NetSim::GravityChange* gravityChange);
 	void handleObjectUpdate(TCPSocket* from, const NetSim::ObjectUpdateList* objectUpdateList);
     void handleStartSimulation(TCPSocket* peerSocket, const NetSim::StartSimulation* startSim);
-
+    void handleDiscoveryDatagrams();
 	void cleanDirtyOutgoingObjects();
     TCPSocket* socketPtrFromHandle(SOCKET h);
+    double getPeerRTT(SOCKET peerSocket) const;
 
     std::unordered_map<SOCKET, PeerInfo> m_peerInfoMap;
 	std::unordered_map<uint16_t, Material> m_materialMap;
@@ -96,7 +94,9 @@ private:
 
 	std::unique_ptr<SharedData> m_sharedData;
     std::unordered_map<SOCKET, double> m_peerClockOffsets;
+    std::unordered_map<SOCKET, double> m_peerRTT;
     std::unordered_map<double, double> m_sentPingTimestamps;
+
 
 
 public:
@@ -114,7 +114,7 @@ public:
 	void scheduleSimulationStart(float time);
 	void changeGravity(const float& gravity);
 
-    std::vector<PeerInfo> getPeersInfo() const;
+    std::vector<std::tuple<PeerInfo, double>> getPeersInfo() const;
 
 	SharedData* getSharedData()
 	{

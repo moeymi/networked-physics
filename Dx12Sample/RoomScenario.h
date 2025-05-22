@@ -11,7 +11,7 @@ protected:
 	void createWalls(CommandList& commandList);
 
 public:
-	RoomScenario() : m_bounds({ 10, 10, 10 }) {};
+	RoomScenario() : m_bounds({ 5, 5, 5 }) {};
 	virtual ~RoomScenario() override = default;
 
 	void onLoad(CommandList& commandList) override;

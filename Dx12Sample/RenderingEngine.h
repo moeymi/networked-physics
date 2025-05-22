@@ -25,13 +25,12 @@ public:
     using GUICallback = std::function<void()>;
 
     RenderingEngine();
-    ~RenderingEngine();
 
     void LoadContent(std::shared_ptr<CommandQueue>& commandQueue,
         std::shared_ptr<CommandList>& commandList,
         Microsoft::WRL::ComPtr<ID3D12Device2>& device,
         Window* window);
-    void UnloadContent();
+
     void OnResize(uint32_t width, uint32_t height);
 	void UpdateCamera(const DirectX::XMVECTOR& cameraTranslate, const DirectX::XMVECTOR& cameraPan, const DirectX::XMVECTOR& cameraRotation);
     void AddFov(const float& fov);
@@ -54,7 +53,7 @@ private:
         DirectX::XMVECTOR m_InitialCamPos;
         DirectX::XMVECTOR m_InitialCamRot;
     };
-    CameraData* m_pAlignedCameraData;
+    std::unique_ptr<CameraData> m_pAlignedCameraData;
 
     RenderTarget m_RenderTarget;
     RootSignature m_RootSignature;
