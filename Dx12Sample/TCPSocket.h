@@ -67,12 +67,13 @@ public:
             if (ec == WSAEWOULDBLOCK) {
                 return TCPSocket(INVALID_SOCKET, isBlocking());
             }
-            throw std::system_error{ ec, std::system_category(), "accept() failed" };
+			std::string err = "accept() failed: " + std::to_string(ec);
+			OutputDebugStringA(err.c_str());
         }
         return TCPSocket(client, isBlocking());
     }
 
-    void connect(const IPAddress& addr) {
+    int connect(const IPAddress& addr) {
         auto saOpt = addr.toSockAddr();
         if (!saOpt) throw std::runtime_error("Invalid address");
         const sockaddr_in& sa = *saOpt;
@@ -80,13 +81,16 @@ public:
         if (rc != 0) {
             int ec = WSAGetLastError();
             if (!(ec == WSAEWOULDBLOCK || ec == WSAEINPROGRESS)) {
-                throw std::system_error{ ec, std::system_category(), "connect() failed" };
+				std::string err = "connect() failed: " + std::to_string(ec);
+				OutputDebugStringA(err.c_str());
             }
         }
+        return rc;
     }
 
-    void sendAll(const void* data, size_t len) {
+    int sendAll(const void* data, size_t len) {
         const char* ptr = static_cast<const char*>(data);
+        int sentAll = 0;
         while (len > 0) {
             int sent = ::send(sock_, ptr, static_cast<int>(len), 0);
             if (sent == SOCKET_ERROR) {
@@ -95,19 +99,24 @@ public:
                     // caller must wait for writability
                     break;
                 }
-                throw std::system_error{ ec, std::system_category(), "send() failed" };
+				std::string err = "send() failed: " + std::to_string(ec);
+				OutputDebugStringA(err.c_str());
             }
+			sentAll += sent;
             ptr += sent;
             len -= sent;
         }
+        return sentAll;
     }
 
     int recv(void* buffer, size_t maxlen) {
         int recvd = ::recv(sock_, static_cast<char*>(buffer), static_cast<int>(maxlen), 0);
         if (recvd == SOCKET_ERROR) {
             int ec = WSAGetLastError();
-            if (ec != WSAEWOULDBLOCK)
-                throw std::system_error{ ec, std::system_category(), "recv() failed" };
+            if (ec != WSAEWOULDBLOCK) {
+                std::string err = "recv() failed: " + std::to_string(ec);
+                OutputDebugStringA(err.c_str());
+            }
         }
         return recvd;
     }

@@ -82,7 +82,7 @@ PhysicsSimulation::PhysicsSimulation(const std::wstring& name, int width, int he
 		[this](std::vector<std::shared_ptr<PhysicsObject>>&& objects, float gravity)
 		{
 			CreateEmptyScenario(std::move(objects));
-            AssignOwnedNonOwnedObjects();
+            AssignNonOwnedObjects();
 			m_PhysicsEngine.setGravity(gravity);
 		}
 	);
@@ -196,6 +196,12 @@ void PhysicsSimulation::OnUpdate(UpdateEventArgs& e)
     static uint64_t frameCount = 0;
     static double totalTime = 0.0;
 
+    // Increase simulation time
+    if (m_PhysicsEngine.isRunning()) {
+		GlobalData::g_simulationTime += e.ElapsedTime;
+    }
+
+
     super::OnUpdate(e);
 
     if (m_simulationScheduled) {
@@ -203,11 +209,6 @@ void PhysicsSimulation::OnUpdate(UpdateEventArgs& e)
         if (now >= m_simulationStartTime) {
             m_PhysicsEngine.start();
             m_simulationScheduled = false;
-        }
-    }
-    else {
-        if (m_PhysicsEngine.isRunning()) {
-            GlobalData::g_networkDt += e.ElapsedTime;
         }
     }
 
@@ -567,6 +568,10 @@ void PhysicsSimulation::OnGUI()
             bool gravityEnabled = m_PhysicsEngine.isGravityEnabled();
             bool reversed = gravity < 0;
 
+            ImGui::Text("Simulation Time");
+			ImGui::SameLine();
+			ImGui::Text("%.2f sec", GlobalData::g_simulationTime);
+
             ImGui::Text("Gravity");
             ImGui::SameLine();
             ImGui::Text("Reversed");
@@ -671,21 +676,14 @@ void PhysicsSimulation::CreateEmptyScenario(std::vector <std::shared_ptr<Physics
     commandQueue->WaitForFenceValue(fenceValue);
 }
 
-void PhysicsSimulation::AssignOwnedNonOwnedObjects()
+void PhysicsSimulation::AssignNonOwnedObjects()
 {
     if (m_CurrentScenario)
     {
         auto objects = m_CurrentScenario->getPhysicsObjects();
         for (size_t i = 0; i < objects.size(); ++i)
         {
-            if (objects[i]->getId() == GlobalData::g_clientId)
-            {
-                m_ownedObjects[objects[i]->getId()] = objects[i].get();
-            }
-            else
-            {
-                m_unownedObjects[objects[i]->getId()] = objects[i].get();
-            }
+            m_unownedObjects[objects[i]->getId()] = objects[i].get();
         }
     }
 }
@@ -813,6 +811,10 @@ void PhysicsSimulation::UpdateBeforePhysicsSimulation()
                     else {
                         // Extrapolate using the latest entry
                         const auto& latest = history.back();
+                        // If old, discard the old data
+                        if (currentSimTime - latest.simulation_time > m_sharedData->maxHistoryDuration) {
+                            continue;
+                        }
                         objectPtr->getTransform().SetPosition(XMLoadFloat3(&latest.position), 0, true);
                         objectPtr->getTransform().SetRotationQuaternion(XMLoadFloat4(&latest.rotation), 0, true);
 

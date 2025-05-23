@@ -105,8 +105,11 @@ void NetworkEngine::connectToPeer(const std::string& ip, uint16_t port)
         auto peer = std::make_unique<TCPSocket>(false); // non-blocking
         peer->connect(IPAddress(ip, port));
 
-		if (isPeerConnected(peer.get()))
+        if (isPeerConnected(peer.get())) {
+            peer->close();
+			OutputDebugStringA("Peer already connected.\n");
 			return;
+        }
 
         sendRecognize(peer.get());
         {
@@ -124,8 +127,6 @@ void NetworkEngine::connectToPeer(const std::string& ip, uint16_t port)
 
 void NetworkEngine::removePeer(TCPSocket* peerSocket) {
 
-    // close the socket
-    peerSocket->close();
     {
         std::lock_guard<std::mutex> lk(m_peerMutex);
         m_peerInfoMap.erase(peerSocket->native());
@@ -136,6 +137,8 @@ void NetworkEngine::removePeer(TCPSocket* peerSocket) {
         );
         m_peerSockets.erase(it, m_peerSockets.end());
     }
+    // close the socket
+    peerSocket->close();
 }
 
 void NetworkEngine::broadcastDiscovery(unsigned short discoveryPort) {
@@ -486,38 +489,43 @@ void NetworkEngine::sendObjectUpdatesToPeers(const std::vector<ObjectUpdate>& up
 
 void NetworkEngine::handleNewConnection()
 {
-    try
-    {
-        auto client = m_listenSocket->accept();
-		if (!client.isValid()) {
-			throw std::runtime_error("Failed to accept new connection");
-		}
-        {
-            std::lock_guard<std::mutex> lk(m_peerMutex);
-            m_peerSockets.push_back(
-                std::make_unique<TCPSocket>(std::move(client))
-            );
+    TCPSocket client = m_listenSocket->accept();
+    auto sockAdd = client.getSockAddr();
+
+    if (client.isValid()) {
+
+        char ipStr[INET_ADDRSTRLEN];
+        inet_ntop(AF_INET, &sockAdd->sin_addr, ipStr, sizeof(ipStr));
+
+        if (!isPeerConnected(&client)) {
+            auto uptr = std::make_unique<TCPSocket>(std::move(client));
+            m_peerSockets.push_back(std::move(uptr));
         }
-        sendRecognize(m_peerSockets.back().get());
+
     }
-    catch (...) {  }
 }
 
 void NetworkEngine::handlePeerData(TCPSocket* peerSocket) {
     uint32_t netSize = 0;
     int got = peerSocket->recv(&netSize, sizeof(netSize));
-    if (got <= 0) {
+    if (got == 0) {
         removePeer(peerSocket);
         return;
     }
+	else if (got < 0) {
+		return;
+	}
 
     uint32_t size = ntohl(netSize);
     std::vector<char> buf(size);
     got = peerSocket->recv(buf.data(), buf.size());
-    if (got <= 0) {
+    if (got == 0) {
         removePeer(peerSocket);
         return;
     }
+	else if (got < 0) {
+		return;
+	}
 
     auto message = NetSim::GetNetworkMessage(buf.data());
     switch (message->data_type()) {
@@ -824,20 +832,7 @@ void NetworkEngine::onUpdate(float deltaTime) {
     int ready = select(int(maxSock + 1), &readSet, nullptr, nullptr, &tv);
     if (ready > 0) {
         if (FD_ISSET(listenSock, &readSet)) {
-            TCPSocket client = m_listenSocket->accept();
-			auto sockAdd = client.getSockAddr();
-
-            if (client.isValid()) {
-
-                char ipStr[INET_ADDRSTRLEN];
-                inet_ntop(AF_INET, &sockAdd->sin_addr, ipStr, sizeof(ipStr));
-
-                if (!isPeerConnected(&client)) {
-                    auto uptr = std::make_unique<TCPSocket>(std::move(client));
-                    m_peerSockets.push_back(std::move(uptr));
-                }
-
-            }
+			handleNewConnection();
         }
 
         if (FD_ISSET(multiSock, &readSet))

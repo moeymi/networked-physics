@@ -178,7 +178,7 @@ private:
 
 	void ChangeScenario(int index);
 	void CreateEmptyScenario(std::vector<std::shared_ptr<PhysicsObject>>&&);
-    void AssignOwnedNonOwnedObjects();
+    void AssignNonOwnedObjects();
 	void BroadCastCurrentScenarioCreate();
 	void UpdatePostPhysicsSimulation();
 	void UpdateBeforePhysicsSimulation();
