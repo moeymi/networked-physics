@@ -189,12 +189,14 @@
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Material.cpp" />
     <ClCompile Include="MulticastSocket.cpp" />
+    <ClCompile Include="NetworkedObject.cpp" />
     <ClCompile Include="NetworkEngine.cpp" />
     <ClCompile Include="pch.cpp" />
     <ClCompile Include="PhysicsEngine.cpp" />
     <ClCompile Include="PhysicsObject.cpp" />
     <ClCompile Include="PhysicsSimulation.cpp" />
     <ClCompile Include="RenderingEngine.cpp" />
+    <ClCompile Include="RingBufferSPSC.cpp" />
     <ClCompile Include="Scenario.cpp" />
     <ClCompile Include="Socket.cpp" />
     <ClCompile Include="SpheresScenario.cpp" />
@@ -221,6 +223,7 @@
     <ClInclude Include="Light.h" />
     <ClInclude Include="Material.h" />
     <ClInclude Include="MulticastSocket.h" />
+    <ClInclude Include="NetworkedObject.h" />
     <ClInclude Include="NetworkEngine.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="PhysicsEngine.h" />
@@ -228,6 +231,7 @@
     <ClInclude Include="PhysicsSimulation.h" />
     <ClInclude Include="RenderingEngine.h" />
     <ClInclude Include="resource.h" />
+    <ClInclude Include="RingBufferSPSC.h" />
     <ClInclude Include="Scenario.h" />
     <ClInclude Include="Socket.h" />
     <ClInclude Include="SpheresScenario.h" />

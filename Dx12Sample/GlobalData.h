@@ -12,10 +12,14 @@ namespace GlobalData {
 	extern DirectX::XMFLOAT4 g_clientColor;
 
 	extern double g_renderingFPS;
+
+	extern int g_physicsFreq;
 	extern double g_physicsDt;
+
+	extern int g_networkFreq;
 	extern double g_networkDt;
 
-	extern double g_simulationTime;
+	extern int g_tick;
 
 	extern std::shared_ptr <Texture> g_customTexture;
 	extern std::shared_ptr <Texture> g_defaultTexture;

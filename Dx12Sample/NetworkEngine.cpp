@@ -12,13 +12,8 @@
 #include "PhysicsEngine.h"
 #include "IPAddress.h"
 
-NetworkEngine::NetworkEngine() :
-	m_sharedData(std::make_unique<SharedData>())
-{
-    m_materialMap[0] = Material::White;
-	m_materialMap[1] = Material::Red;
-	m_materialMap[2] = Material::Green;
-	m_materialMap[3] = Material::Blue;
+NetworkEngine::NetworkEngine(RingBufferSPSC<Snapshot, 1024>* outgoingBuf, RingBufferSPSC<Snapshot, 1024>* incomingBuf) :
+    m_outgoingBuffer(outgoingBuf), m_incomingBuffer(incomingBuf) {
 }
 
 NetworkEngine::~NetworkEngine() {
@@ -37,7 +32,7 @@ std::vector<std::tuple<PeerInfo, double>> NetworkEngine::getPeersInfo() const {
     return peers;
 }
 
-void NetworkEngine::setScnearioListener(std::function<void(std::vector<std::shared_ptr<PhysicsObject>>&&, const float&)> listener) {
+void NetworkEngine::setScnearioListener(std::function<void(std::vector<std::shared_ptr<NetworkedObject>>&&, const float&)> listener) {
 	m_createScenario = listener;
 }
 
@@ -236,15 +231,12 @@ void NetworkEngine::sendRecognize(TCPSocket* peerSocket) {
     sendPing(peerSocket);
 }
 
-void NetworkEngine::assignOwnersAndBroadcastScenarioCreate(std::string scenarioName, const std::vector<std::shared_ptr<PhysicsObject>>& physicsObjects, const float& gravity,
-    std::vector<PhysicsObject*>& ownedObjects, PhysicsObject** unownedObjects) {
+void NetworkEngine::assignOwnersAndBroadcastScenarioCreate(const std::vector<std::shared_ptr<PhysicsObject>>& physicsObjects, const float& gravity,
+    std::vector<std::shared_ptr<NetworkedObject>>& outNetworkedObjects) {
     flatbuffers::FlatBufferBuilder builder;
 
-    std::vector<flatbuffers::Offset<NetSim::ObjectState>> objectStates;
+    std::vector<flatbuffers::Offset<NetSim::NetworkObjectCreation>> objectCreations;
     std::unordered_map<int, int> nonStaticObjects;
-
-	m_sharedData->m_outgoingObjectStates[0].clear();
-    m_sharedData->m_outgoingObjectStates[1].clear();
 
     int cnt = 0;
     for (int j = 0; j < physicsObjects.size(); j++) {
@@ -253,20 +245,29 @@ void NetworkEngine::assignOwnersAndBroadcastScenarioCreate(std::string scenarioN
         }
     }
 
+    int distrib = ceil(static_cast<float>(nonStaticObjects.size()) / static_cast<float>(m_peerInfoMap.size() + 1));
+    if (distrib == 0) distrib = 1;
+
     for (int i = 0; i < physicsObjects.size(); i++) {
-        auto& object = physicsObjects[i];
+        auto& phObj = physicsObjects[i];
+
+        bool isStatic = phObj->isStatic();
+
         DirectX::XMFLOAT3 position;
-        DirectX::XMStoreFloat3(&position, object->getTransform().GetPosition(0));
+        DirectX::XMStoreFloat3(&position, phObj->getTransform().GetPosition(0));
 
         DirectX::XMFLOAT4 rotation;
-        DirectX::XMStoreFloat4(&rotation, object->getTransform().GetRotationQuaternion(0));
+        DirectX::XMStoreFloat4(&rotation, phObj->getTransform().GetRotationQuaternion(0));
 
         DirectX::XMFLOAT3 scale;
-        DirectX::XMStoreFloat3(&scale, object->getTransform().GetScale(0));
+        DirectX::XMStoreFloat3(&scale, phObj->getTransform().GetScale(0));
+
+        auto physicsMaterial = phObj->getPhysicsMaterial();
 
         DirectX::XMFLOAT3 colliderSize;
-        auto collider = object->getCollider();
-        auto type = object->getMeshType();
+        auto collider = phObj->getCollider();
+        auto type = phObj->getMeshType();
+
         switch (type)
         {
         case MeshType::Sphere:
@@ -302,44 +303,40 @@ void NetworkEngine::assignOwnersAndBroadcastScenarioCreate(std::string scenarioN
         NetSim::Vec4 rotationVec4 = { rotation.x, rotation.y, rotation.z, rotation.w };
         NetSim::Vec3 scaleVec3 = { scale.x, scale.y, scale.z };
         NetSim::Vec3 colliderSizeVec3 = { colliderSize.x, colliderSize.y, colliderSize.z };
+        NetSim::PhysicsMaterial material = { physicsMaterial.friction, physicsMaterial.angularFriction, physicsMaterial.restitution };
 
         uint16_t peerIndex = 0;
         uint32_t peerId = GlobalData::g_clientId;
         NetSim::Vec3 colorVec3 = { GlobalData::g_clientColor.x, GlobalData::g_clientColor.y, GlobalData::g_clientColor.z };
 
-        if (!object->isStatic()) {
-            int distrib = ceil(static_cast<float>(nonStaticObjects.size()) / static_cast<float>(m_peerInfoMap.size() + 1));
-            if (distrib == 0) distrib = 1;
+        if (!isStatic) {
             peerIndex = static_cast<uint16_t>(nonStaticObjects[i] / distrib);
             if (peerIndex > 0) {
                 peerIndex--;
                 peerId = m_peerInfoMap[m_peerSockets[peerIndex]->native()].peer_id;
                 auto clientColor = m_peerInfoMap[m_peerSockets[peerIndex]->native()].color;
                 colorVec3 = { clientColor.x, clientColor.y, clientColor.z };
-				unownedObjects[object->getId()] = object.get();
 			}
-			else {
-				peerId = GlobalData::g_clientId;
-				ownedObjects.push_back(object.get());
-            }
-            object->setOwnerId(peerId);
         }
         else {
             // Static objects are always white
             colorVec3 = { 1.0f, 1.0f, 1.0f };
         }
-        bool isStatic = object->isStatic();
-        object->setColor({ colorVec3.x(), colorVec3.y(), colorVec3.z(), 1.0f });
-        auto physicsMaterial = object->getPhysicsMaterial();
 
-		NetSim::PhysicsMaterial material = { physicsMaterial.friction, physicsMaterial.angularFriction, physicsMaterial.restitution };
-        auto objectState = NetSim::CreateObjectState(builder, object->getId(), isStatic, static_cast<NetSim::MeshType>(type), object->getMass(), & material, &colliderSizeVec3, &positionVec3, &rotationVec4, &scaleVec3, &colorVec3, peerId);
-        objectStates.push_back(objectState);
+		auto ntObj = std::make_shared<NetworkedObject>(i, peerId, phObj);
+		OutputDebugStringA(std::to_string(peerId).c_str());
+        OutputDebugStringA("\n");
+		phObj->setUserData(ntObj.get());
+        outNetworkedObjects.push_back(std::move(ntObj));
+
+        phObj->setColor({ colorVec3.x(), colorVec3.y(), colorVec3.z(), 1.0f });
+		auto physicsObjectCreation = NetSim::CreatePhysicsObjectCreation(builder, isStatic, static_cast<NetSim::MeshType>(type), phObj->getMass(), &material, &colliderSizeVec3, &positionVec3, &rotationVec4, &scaleVec3, &colorVec3, peerId);
+        auto objectCreation = NetSim::CreateNetworkObjectCreation(builder, i, peerId, physicsObjectCreation);
+        
+        objectCreations.push_back(objectCreation);
     }
 
-	m_sharedData->m_outgoingObjectStates[1] = m_sharedData->m_outgoingObjectStates[0];
-
-    auto objectsVector = builder.CreateVector(objectStates);
+    auto objectsVector = builder.CreateVector(objectCreations);
     auto scenarioId = builder.CreateString("Scenario");
     auto scenario_offset = NetSim::CreateScenario(builder, GlobalData::g_clientId, objectsVector, gravity);
     NetSim::NetworkMessageBuilder msg_builder(builder);
@@ -360,13 +357,6 @@ void NetworkEngine::sendMessage(TCPSocket* peerSocket, flatbuffers::FlatBufferBu
     uint32_t size = htonl(static_cast<uint32_t>(builder.GetSize()));
     peerSocket->sendAll(reinterpret_cast<const char*>(&size), sizeof(size));
     peerSocket->sendAll(reinterpret_cast<const char*>(builder.GetBufferPointer()), builder.GetSize());
-}
-
-void NetworkEngine::cleanDirtyOutgoingObjects() {
-	if (m_sharedData->m_ownedObjectsDirty) {
-		m_sharedData->m_outgoingObjectStates[0] = m_sharedData->m_outgoingObjectStates[1];
-		m_sharedData->m_ownedObjectsDirty = false;
-	}
 }
 
 TCPSocket* NetworkEngine::socketPtrFromHandle(SOCKET h)
@@ -453,37 +443,48 @@ void NetworkEngine::sendPeerList(TCPSocket* to) {
     sendMessage(to, builder);
 }
 
-void NetworkEngine::sendObjectUpdatesToPeers(const std::vector<ObjectUpdate>& updates) {
-    flatbuffers::FlatBufferBuilder builder;
+void NetworkEngine::sendObjectUpdatesToPeers() {
+    Snapshot s;
+    flatbuffers::FlatBufferBuilder b;
 
-    std::vector<flatbuffers::Offset<NetSim::ObjectUpdate>> fbUpdates;
-    for (const auto& update : updates) {
-        NetSim::Vec3 pos(update.position.x, update.position.y, update.position.z);
-        NetSim::Vec4 rot(update.rotation.x, update.rotation.y, update.rotation.z, update.rotation.w);
-
-		NetSim::Vec3 vel(update.velocity.x, update.velocity.y, update.velocity.z);
-		NetSim::Vec3 angVel(update.angular_velocity.x, update.angular_velocity.y, update.angular_velocity.z);
-
-		auto offset = NetSim::CreateObjectUpdate(builder, update.object_id, GlobalData::g_simulationTime, &pos, &rot, &vel, &angVel);
-        fbUpdates.push_back(offset);
-    }
-
-    auto updateVec = builder.CreateVector(fbUpdates);
-    auto msgType = builder.CreateString("ObjectUpdate");
-    auto updatesOffset = NetSim::CreateObjectUpdateList(builder, updateVec); // you'll need this wrapper table
-
-    NetSim::NetworkMessageBuilder msg_builder(builder);
-    msg_builder.add_msg_type(msgType);
-    msg_builder.add_data_type(NetSim::MessageUnion_ObjectUpdateList);
-    msg_builder.add_data(updatesOffset.Union());
-    builder.Finish(msg_builder.Finish());
-
-    // Send to all peers
+    while (m_outgoingBuffer->pop(s))
     {
-        std::lock_guard<std::mutex> lock(m_peerMutex);
-        for (const auto& s : m_peerSockets) {
-            sendMessage(s.get(), builder);
+        b.Clear();
+
+        std::vector<NetSim::ObjectUpdate> fbUpdates;
+        fbUpdates.reserve(s.updates.size());
+
+        for (const auto& u : s.updates) {
+            fbUpdates.emplace_back(
+                u.object_id,
+                NetSim::Vec3(u.position.x, u.position.y, u.position.z),
+                NetSim::Vec4(u.rotation.x, u.rotation.y,
+                    u.rotation.z, u.rotation.w),
+                NetSim::Vec3(u.velocity.x, u.velocity.y, u.velocity.z),
+                NetSim::Vec3(u.angular_velocity.x,
+                    u.angular_velocity.y,
+                    u.angular_velocity.z));
         }
+
+        auto updatesVec = b.CreateVectorOfStructs<NetSim::ObjectUpdate>(fbUpdates);
+        auto snapOffset = NetSim::CreateSnapshot(b,
+            s.tick,
+            updatesVec);
+
+        auto typeStr = b.CreateString("Snapshot");
+        NetSim::NetworkMessageBuilder msgBuilder(b);
+        msgBuilder.add_msg_type(typeStr);
+        msgBuilder.add_data_type(NetSim::MessageUnion::MessageUnion_Snapshot);
+        msgBuilder.add_data(snapOffset.Union());
+        auto netMsg = msgBuilder.Finish();
+        b.Finish(netMsg);
+
+        const uint8_t* buf = b.GetBufferPointer();
+        const uint32_t len = b.GetSize();
+
+        std::lock_guard<std::mutex> lock(m_peerMutex);
+        for (const auto& peerSock : m_peerSockets)
+            sendMessage(peerSock.get(), b);
     }
 }
 
@@ -538,8 +539,8 @@ void NetworkEngine::handlePeerData(TCPSocket* peerSocket) {
     case NetSim::MessageUnion_Scenario:
         handleScenario(message->data_as_Scenario());
         break;
-    case NetSim::MessageUnion_ObjectUpdateList:
-        handleObjectUpdate(peerSocket, message->data_as_ObjectUpdateList());
+    case NetSim::MessageUnion_Snapshot:
+        handleSnapshot(peerSocket, message->data_as_Snapshot());
         break;
 	case NetSim::MessageUnion_StartSimulation:
 		handleStartSimulation(peerSocket, message->data_as_StartSimulation());
@@ -582,7 +583,7 @@ void NetworkEngine::handlePing(TCPSocket* from, const NetSim::Ping* ping) {
 
 void NetworkEngine::handlePong(TCPSocket* from, const NetSim::Pong* pong) {
     auto it = m_sentPingTimestamps.find(pong->ping_sent_time());
-    if (it == m_sentPingTimestamps.end()) return;
+    if (it == m_sentPingTimestamps.end()) return; // Old pong
 
     double T_send = it->second;
     double T_recv = GlobalData::getTimestamp();
@@ -648,16 +649,19 @@ void NetworkEngine::handleScenario(const NetSim::Scenario* scenario) {
     auto commandQueue = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT);
     auto commandList = commandQueue->GetCommandList();
 
-	std::vector<std::shared_ptr<PhysicsObject>> objects;
+	std::vector<std::shared_ptr<NetworkedObject>> objects;
 
 	for (const auto* object : *scenario->objects()) {
-		UINT objectId = object->id();
-		auto objectType = static_cast<MeshType>(object->type());
-		DirectX::XMFLOAT3 colliderSize = { object->collider_size()->x(), object->collider_size()->y(), object->collider_size()->z() };
-		DirectX::XMFLOAT3 position = { object->position()->x(), object->position()->y(), object->position()->z() };
-		DirectX::XMVECTOR rotation = DirectX::XMVectorSet(object->rotation()->x(), object->rotation()->y(), object->rotation()->z(), object->rotation()->w());
-		DirectX::XMVECTOR scale = DirectX::XMVectorSet( object->scale()->x(), object->scale()->y(), object->scale()->z(), 1);
-		DirectX::XMFLOAT4 color = { object->color()->x(), object->color()->y(), object->color()->z(), 1 };
+		uint16_t objectId = object->id();
+		uint16_t ownerId = object->owner_id();
+        auto objCreation = object->object_creation();
+        
+		auto objectType = static_cast<MeshType>(objCreation->type());
+		DirectX::XMFLOAT3 colliderSize = { objCreation->collider_size()->x(), objCreation->collider_size()->y(), objCreation->collider_size()->z() };
+		DirectX::XMFLOAT3 position = { objCreation->position()->x(), objCreation->position()->y(), objCreation->position()->z() };
+		DirectX::XMVECTOR rotation = DirectX::XMVectorSet(objCreation->rotation()->x(), objCreation->rotation()->y(), objCreation->rotation()->z(), objCreation->rotation()->w());
+		DirectX::XMVECTOR scale = DirectX::XMVectorSet(objCreation->scale()->x(), objCreation->scale()->y(), objCreation->scale()->z(), 1);
+		DirectX::XMFLOAT4 color = { objCreation->color()->x(), objCreation->color()->y(), objCreation->color()->z(), 1 };
 
         std::shared_ptr<Mesh> objectMesh;
         std::shared_ptr<Collider> collider;
@@ -684,18 +688,20 @@ void NetworkEngine::handleScenario(const NetSim::Scenario* scenario) {
 			throw std::runtime_error("Unknown object type");
         }
 
-		auto physicsObject = std::make_shared<PhysicsObject>(objectId, objectType, objectMesh, texture);
+		auto physicsObject = std::make_shared<PhysicsObject>(objectType, objectMesh, texture);
 		physicsObject->setCollider(collider);
 		physicsObject->setColor(color);
 		physicsObject->getTransform().SetPosition(position, 0, true);
 		physicsObject->getTransform().SetRotationQuaternion(rotation, 0, true);
 		physicsObject->getTransform().SetScale(scale, 0, true);
-		physicsObject->setStatic(object->is_static());
-		physicsObject->setOwnerId(object->authority_peer_id());
-		physicsObject->setMass(object->mass());
-		physicsObject->setPhysicsMaterial({ object->material()->friction(), object->material()->angular_friction(), object->material()->restitution() });
+		physicsObject->setStatic(objCreation->is_static());
+        physicsObject->setMass(objCreation->mass());
+        physicsObject->setPhysicsMaterial({ objCreation->material()->friction(), objCreation->material()->angular_friction(), objCreation->material()->restitution() });
 
-		objects.push_back(physicsObject);
+		auto networkedObject = std::make_shared<NetworkedObject>(objectId, ownerId, physicsObject);
+		physicsObject->setUserData(networkedObject.get());
+
+		objects.push_back(networkedObject);
 	}
 
     auto fenceValue = commandQueue->ExecuteCommandList(commandList);
@@ -707,29 +713,21 @@ void NetworkEngine::handleScenario(const NetSim::Scenario* scenario) {
 	}
 }
 
-void NetworkEngine::handleObjectUpdate(TCPSocket* from, const NetSim::ObjectUpdateList* objectUpdateList) {
+void NetworkEngine::handleSnapshot(TCPSocket* from, const NetSim::Snapshot* objectUpdateList) {
 	if (!objectUpdateList) return;
     {
-        std::lock_guard<std::mutex> lock(m_sharedData->m_incomingMutex);
-        for (const auto* update : *objectUpdateList->updates()) {
-            ObjectUpdate u;
-            u.object_id = update->object_id();
-            u.position = { update->position()->x(), update->position()->y(), update->position()->z() };
-            u.rotation = { update->rotation()->x(), update->rotation()->y(), update->rotation()->z(), update->rotation()->w() };
-			u.velocity = { update->velocity()->x(), update->velocity()->y(), update->velocity()->z() };
-			u.angular_velocity = { update->angular_velocity()->x(), update->angular_velocity()->y(), update->angular_velocity()->z() };
-			u.simulation_time = update->simulation_time() - m_peerClockOffsets[from->native()];
-
-            auto& deque = m_sharedData->m_objectUpdateHistory[update->object_id()];
-            deque.push_back(u);
-
-            // Remove outdated snapshots
-            while (!deque.empty() && GlobalData::g_simulationTime - deque.front().simulation_time > m_sharedData->maxHistoryDuration) {
-                deque.pop_front();
-            }
-        }
-
-        m_sharedData->m_receivedNewAuthoritativeData = true;
+		Snapshot snapshot;
+		snapshot.tick = objectUpdateList->tick();
+		for (const auto* update : *objectUpdateList->updates()) {
+			ObjectUpdate objUpdate;
+			objUpdate.object_id = update->object_id();
+			objUpdate.position = { update->position().x(), update->position().y(), update->position().z() };
+			objUpdate.rotation = { update->rotation().x(), update->rotation().y(), update->rotation().z(), update->rotation().w() };
+			objUpdate.velocity = { update->velocity().x(), update->velocity().y(), update->velocity().z() };
+			objUpdate.angular_velocity = { update->angular_velocity().x(), update->angular_velocity().y(), update->angular_velocity().z() };
+			snapshot.updates.push_back(objUpdate);
+		}
+		m_incomingBuffer->push(snapshot);
     }
 }
 
@@ -853,16 +851,7 @@ void NetworkEngine::onUpdate(float deltaTime) {
             handlePeerData(peer);
         }
     }
-
-    {
-        std::lock_guard<std::mutex> lock(m_sharedData->m_outgoingMutex);
-		if (m_sharedData->m_ownedObjectsDirty) {
-			cleanDirtyOutgoingObjects();
-		}
-        if (m_sharedData->m_outgoingObjectStates[1].size()) {
-            sendObjectUpdatesToPeers(m_sharedData->m_outgoingObjectStates[1]);
-        }
-    }
+    sendObjectUpdatesToPeers();
 }
 
 void NetworkEngine::onStop() {

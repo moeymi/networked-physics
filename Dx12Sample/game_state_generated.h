@@ -21,8 +21,11 @@ struct Vec4;
 
 struct PhysicsMaterial;
 
-struct ObjectState;
-struct ObjectStateBuilder;
+struct PhysicsObjectCreation;
+struct PhysicsObjectCreationBuilder;
+
+struct NetworkObjectCreation;
+struct NetworkObjectCreationBuilder;
 
 struct Scenario;
 struct ScenarioBuilder;
@@ -31,13 +34,24 @@ struct Recognize;
 struct RecognizeBuilder;
 
 struct ObjectUpdate;
-struct ObjectUpdateBuilder;
 
-struct ObjectUpdateList;
-struct ObjectUpdateListBuilder;
+struct Snapshot;
+struct SnapshotBuilder;
+
+struct TickSync;
+struct TickSyncBuilder;
+
+struct Ping;
+struct PingBuilder;
+
+struct Pong;
+struct PongBuilder;
 
 struct GravityChange;
 struct GravityChangeBuilder;
+
+struct StartSimulation;
+struct StartSimulationBuilder;
 
 struct PeerInfo;
 struct PeerInfoBuilder;
@@ -47,15 +61,6 @@ struct PeerListBuilder;
 
 struct RequestScenario;
 struct RequestScenarioBuilder;
-
-struct Ping;
-struct PingBuilder;
-
-struct Pong;
-struct PongBuilder;
-
-struct StartSimulation;
-struct StartSimulationBuilder;
 
 struct DiscoveryBroadcast;
 struct DiscoveryBroadcastBuilder;
@@ -103,24 +108,26 @@ enum MessageUnion : uint8_t {
   MessageUnion_NONE = 0,
   MessageUnion_Recognize = 1,
   MessageUnion_Scenario = 2,
-  MessageUnion_ObjectUpdateList = 3,
-  MessageUnion_GravityChange = 4,
-  MessageUnion_RequestScenario = 5,
-  MessageUnion_StartSimulation = 6,
-  MessageUnion_PeerList = 7,
-  MessageUnion_Ping = 8,
-  MessageUnion_Pong = 9,
-  MessageUnion_DiscoveryBroadcast = 10,
+  MessageUnion_Snapshot = 3,
+  MessageUnion_TickSync = 4,
+  MessageUnion_GravityChange = 5,
+  MessageUnion_RequestScenario = 6,
+  MessageUnion_StartSimulation = 7,
+  MessageUnion_PeerList = 8,
+  MessageUnion_Ping = 9,
+  MessageUnion_Pong = 10,
+  MessageUnion_DiscoveryBroadcast = 11,
   MessageUnion_MIN = MessageUnion_NONE,
   MessageUnion_MAX = MessageUnion_DiscoveryBroadcast
 };
 
-inline const MessageUnion (&EnumValuesMessageUnion())[11] {
+inline const MessageUnion (&EnumValuesMessageUnion())[12] {
   static const MessageUnion values[] = {
     MessageUnion_NONE,
     MessageUnion_Recognize,
     MessageUnion_Scenario,
-    MessageUnion_ObjectUpdateList,
+    MessageUnion_Snapshot,
+    MessageUnion_TickSync,
     MessageUnion_GravityChange,
     MessageUnion_RequestScenario,
     MessageUnion_StartSimulation,
@@ -133,11 +140,12 @@ inline const MessageUnion (&EnumValuesMessageUnion())[11] {
 }
 
 inline const char * const *EnumNamesMessageUnion() {
-  static const char * const names[12] = {
+  static const char * const names[13] = {
     "NONE",
     "Recognize",
     "Scenario",
-    "ObjectUpdateList",
+    "Snapshot",
+    "TickSync",
     "GravityChange",
     "RequestScenario",
     "StartSimulation",
@@ -168,8 +176,12 @@ template<> struct MessageUnionTraits<NetSim::Scenario> {
   static const MessageUnion enum_value = MessageUnion_Scenario;
 };
 
-template<> struct MessageUnionTraits<NetSim::ObjectUpdateList> {
-  static const MessageUnion enum_value = MessageUnion_ObjectUpdateList;
+template<> struct MessageUnionTraits<NetSim::Snapshot> {
+  static const MessageUnion enum_value = MessageUnion_Snapshot;
+};
+
+template<> struct MessageUnionTraits<NetSim::TickSync> {
+  static const MessageUnion enum_value = MessageUnion_TickSync;
 };
 
 template<> struct MessageUnionTraits<NetSim::GravityChange> {
@@ -296,24 +308,62 @@ FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(4) PhysicsMaterial FLATBUFFERS_FINAL_CLASS {
 };
 FLATBUFFERS_STRUCT_END(PhysicsMaterial, 12);
 
-struct ObjectState FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
-  typedef ObjectStateBuilder Builder;
-  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
-    VT_ID = 4,
-    VT_IS_STATIC = 6,
-    VT_TYPE = 8,
-    VT_MASS = 10,
-    VT_MATERIAL = 12,
-    VT_COLLIDER_SIZE = 14,
-    VT_POSITION = 16,
-    VT_ROTATION = 18,
-    VT_SCALE = 20,
-    VT_COLOR = 22,
-    VT_AUTHORITY_PEER_ID = 24
-  };
-  uint32_t id() const {
-    return GetField<uint32_t>(VT_ID, 0);
+/// State of a single object at a specific sim-tick
+FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(4) ObjectUpdate FLATBUFFERS_FINAL_CLASS {
+ private:
+  uint32_t object_id_;
+  NetSim::Vec3 position_;
+  NetSim::Vec4 rotation_;
+  NetSim::Vec3 velocity_;
+  NetSim::Vec3 angular_velocity_;
+
+ public:
+  ObjectUpdate()
+      : object_id_(0),
+        position_(),
+        rotation_(),
+        velocity_(),
+        angular_velocity_() {
   }
+  ObjectUpdate(uint32_t _object_id, const NetSim::Vec3 &_position, const NetSim::Vec4 &_rotation, const NetSim::Vec3 &_velocity, const NetSim::Vec3 &_angular_velocity)
+      : object_id_(::flatbuffers::EndianScalar(_object_id)),
+        position_(_position),
+        rotation_(_rotation),
+        velocity_(_velocity),
+        angular_velocity_(_angular_velocity) {
+  }
+  uint32_t object_id() const {
+    return ::flatbuffers::EndianScalar(object_id_);
+  }
+  const NetSim::Vec3 &position() const {
+    return position_;
+  }
+  const NetSim::Vec4 &rotation() const {
+    return rotation_;
+  }
+  const NetSim::Vec3 &velocity() const {
+    return velocity_;
+  }
+  const NetSim::Vec3 &angular_velocity() const {
+    return angular_velocity_;
+  }
+};
+FLATBUFFERS_STRUCT_END(ObjectUpdate, 56);
+
+struct PhysicsObjectCreation FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef PhysicsObjectCreationBuilder Builder;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_IS_STATIC = 4,
+    VT_TYPE = 6,
+    VT_MASS = 8,
+    VT_MATERIAL = 10,
+    VT_COLLIDER_SIZE = 12,
+    VT_POSITION = 14,
+    VT_ROTATION = 16,
+    VT_SCALE = 18,
+    VT_COLOR = 20,
+    VT_AUTHORITY_PEER_ID = 22
+  };
   bool is_static() const {
     return GetField<uint8_t>(VT_IS_STATIC, 0) != 0;
   }
@@ -346,7 +396,6 @@ struct ObjectState FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   }
   bool Verify(::flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
-           VerifyField<uint32_t>(verifier, VT_ID, 4) &&
            VerifyField<uint8_t>(verifier, VT_IS_STATIC, 1) &&
            VerifyField<uint8_t>(verifier, VT_TYPE, 1) &&
            VerifyField<float>(verifier, VT_MASS, 4) &&
@@ -361,57 +410,53 @@ struct ObjectState FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   }
 };
 
-struct ObjectStateBuilder {
-  typedef ObjectState Table;
+struct PhysicsObjectCreationBuilder {
+  typedef PhysicsObjectCreation Table;
   ::flatbuffers::FlatBufferBuilder &fbb_;
   ::flatbuffers::uoffset_t start_;
-  void add_id(uint32_t id) {
-    fbb_.AddElement<uint32_t>(ObjectState::VT_ID, id, 0);
-  }
   void add_is_static(bool is_static) {
-    fbb_.AddElement<uint8_t>(ObjectState::VT_IS_STATIC, static_cast<uint8_t>(is_static), 0);
+    fbb_.AddElement<uint8_t>(PhysicsObjectCreation::VT_IS_STATIC, static_cast<uint8_t>(is_static), 0);
   }
   void add_type(NetSim::MeshType type) {
-    fbb_.AddElement<uint8_t>(ObjectState::VT_TYPE, static_cast<uint8_t>(type), 0);
+    fbb_.AddElement<uint8_t>(PhysicsObjectCreation::VT_TYPE, static_cast<uint8_t>(type), 0);
   }
   void add_mass(float mass) {
-    fbb_.AddElement<float>(ObjectState::VT_MASS, mass, 0.0f);
+    fbb_.AddElement<float>(PhysicsObjectCreation::VT_MASS, mass, 0.0f);
   }
   void add_material(const NetSim::PhysicsMaterial *material) {
-    fbb_.AddStruct(ObjectState::VT_MATERIAL, material);
+    fbb_.AddStruct(PhysicsObjectCreation::VT_MATERIAL, material);
   }
   void add_collider_size(const NetSim::Vec3 *collider_size) {
-    fbb_.AddStruct(ObjectState::VT_COLLIDER_SIZE, collider_size);
+    fbb_.AddStruct(PhysicsObjectCreation::VT_COLLIDER_SIZE, collider_size);
   }
   void add_position(const NetSim::Vec3 *position) {
-    fbb_.AddStruct(ObjectState::VT_POSITION, position);
+    fbb_.AddStruct(PhysicsObjectCreation::VT_POSITION, position);
   }
   void add_rotation(const NetSim::Vec4 *rotation) {
-    fbb_.AddStruct(ObjectState::VT_ROTATION, rotation);
+    fbb_.AddStruct(PhysicsObjectCreation::VT_ROTATION, rotation);
   }
   void add_scale(const NetSim::Vec3 *scale) {
-    fbb_.AddStruct(ObjectState::VT_SCALE, scale);
+    fbb_.AddStruct(PhysicsObjectCreation::VT_SCALE, scale);
   }
   void add_color(const NetSim::Vec3 *color) {
-    fbb_.AddStruct(ObjectState::VT_COLOR, color);
+    fbb_.AddStruct(PhysicsObjectCreation::VT_COLOR, color);
   }
   void add_authority_peer_id(uint32_t authority_peer_id) {
-    fbb_.AddElement<uint32_t>(ObjectState::VT_AUTHORITY_PEER_ID, authority_peer_id, 0);
+    fbb_.AddElement<uint32_t>(PhysicsObjectCreation::VT_AUTHORITY_PEER_ID, authority_peer_id, 0);
   }
-  explicit ObjectStateBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+  explicit PhysicsObjectCreationBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
     start_ = fbb_.StartTable();
   }
-  ::flatbuffers::Offset<ObjectState> Finish() {
+  ::flatbuffers::Offset<PhysicsObjectCreation> Finish() {
     const auto end = fbb_.EndTable(start_);
-    auto o = ::flatbuffers::Offset<ObjectState>(end);
+    auto o = ::flatbuffers::Offset<PhysicsObjectCreation>(end);
     return o;
   }
 };
 
-inline ::flatbuffers::Offset<ObjectState> CreateObjectState(
+inline ::flatbuffers::Offset<PhysicsObjectCreation> CreatePhysicsObjectCreation(
     ::flatbuffers::FlatBufferBuilder &_fbb,
-    uint32_t id = 0,
     bool is_static = false,
     NetSim::MeshType type = NetSim::MeshType_Sphere,
     float mass = 0.0f,
@@ -422,7 +467,7 @@ inline ::flatbuffers::Offset<ObjectState> CreateObjectState(
     const NetSim::Vec3 *scale = nullptr,
     const NetSim::Vec3 *color = nullptr,
     uint32_t authority_peer_id = 0) {
-  ObjectStateBuilder builder_(_fbb);
+  PhysicsObjectCreationBuilder builder_(_fbb);
   builder_.add_authority_peer_id(authority_peer_id);
   builder_.add_color(color);
   builder_.add_scale(scale);
@@ -431,9 +476,70 @@ inline ::flatbuffers::Offset<ObjectState> CreateObjectState(
   builder_.add_collider_size(collider_size);
   builder_.add_material(material);
   builder_.add_mass(mass);
-  builder_.add_id(id);
   builder_.add_type(type);
   builder_.add_is_static(is_static);
+  return builder_.Finish();
+}
+
+struct NetworkObjectCreation FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef NetworkObjectCreationBuilder Builder;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_ID = 4,
+    VT_OWNER_ID = 6,
+    VT_OBJECT_CREATION = 8
+  };
+  uint16_t id() const {
+    return GetField<uint16_t>(VT_ID, 0);
+  }
+  uint32_t owner_id() const {
+    return GetField<uint32_t>(VT_OWNER_ID, 0);
+  }
+  const NetSim::PhysicsObjectCreation *object_creation() const {
+    return GetPointer<const NetSim::PhysicsObjectCreation *>(VT_OBJECT_CREATION);
+  }
+  bool Verify(::flatbuffers::Verifier &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyField<uint16_t>(verifier, VT_ID, 2) &&
+           VerifyField<uint32_t>(verifier, VT_OWNER_ID, 4) &&
+           VerifyOffset(verifier, VT_OBJECT_CREATION) &&
+           verifier.VerifyTable(object_creation()) &&
+           verifier.EndTable();
+  }
+};
+
+struct NetworkObjectCreationBuilder {
+  typedef NetworkObjectCreation Table;
+  ::flatbuffers::FlatBufferBuilder &fbb_;
+  ::flatbuffers::uoffset_t start_;
+  void add_id(uint16_t id) {
+    fbb_.AddElement<uint16_t>(NetworkObjectCreation::VT_ID, id, 0);
+  }
+  void add_owner_id(uint32_t owner_id) {
+    fbb_.AddElement<uint32_t>(NetworkObjectCreation::VT_OWNER_ID, owner_id, 0);
+  }
+  void add_object_creation(::flatbuffers::Offset<NetSim::PhysicsObjectCreation> object_creation) {
+    fbb_.AddOffset(NetworkObjectCreation::VT_OBJECT_CREATION, object_creation);
+  }
+  explicit NetworkObjectCreationBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  ::flatbuffers::Offset<NetworkObjectCreation> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = ::flatbuffers::Offset<NetworkObjectCreation>(end);
+    return o;
+  }
+};
+
+inline ::flatbuffers::Offset<NetworkObjectCreation> CreateNetworkObjectCreation(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    uint16_t id = 0,
+    uint32_t owner_id = 0,
+    ::flatbuffers::Offset<NetSim::PhysicsObjectCreation> object_creation = 0) {
+  NetworkObjectCreationBuilder builder_(_fbb);
+  builder_.add_object_creation(object_creation);
+  builder_.add_owner_id(owner_id);
+  builder_.add_id(id);
   return builder_.Finish();
 }
 
@@ -447,8 +553,8 @@ struct Scenario FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   uint32_t scenario_id() const {
     return GetField<uint32_t>(VT_SCENARIO_ID, 0);
   }
-  const ::flatbuffers::Vector<::flatbuffers::Offset<NetSim::ObjectState>> *objects() const {
-    return GetPointer<const ::flatbuffers::Vector<::flatbuffers::Offset<NetSim::ObjectState>> *>(VT_OBJECTS);
+  const ::flatbuffers::Vector<::flatbuffers::Offset<NetSim::NetworkObjectCreation>> *objects() const {
+    return GetPointer<const ::flatbuffers::Vector<::flatbuffers::Offset<NetSim::NetworkObjectCreation>> *>(VT_OBJECTS);
   }
   float gravity() const {
     return GetField<float>(VT_GRAVITY, 0.0f);
@@ -471,7 +577,7 @@ struct ScenarioBuilder {
   void add_scenario_id(uint32_t scenario_id) {
     fbb_.AddElement<uint32_t>(Scenario::VT_SCENARIO_ID, scenario_id, 0);
   }
-  void add_objects(::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<NetSim::ObjectState>>> objects) {
+  void add_objects(::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<NetSim::NetworkObjectCreation>>> objects) {
     fbb_.AddOffset(Scenario::VT_OBJECTS, objects);
   }
   void add_gravity(float gravity) {
@@ -491,7 +597,7 @@ struct ScenarioBuilder {
 inline ::flatbuffers::Offset<Scenario> CreateScenario(
     ::flatbuffers::FlatBufferBuilder &_fbb,
     uint32_t scenario_id = 0,
-    ::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<NetSim::ObjectState>>> objects = 0,
+    ::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<NetSim::NetworkObjectCreation>>> objects = 0,
     float gravity = 0.0f) {
   ScenarioBuilder builder_(_fbb);
   builder_.add_gravity(gravity);
@@ -503,9 +609,9 @@ inline ::flatbuffers::Offset<Scenario> CreateScenario(
 inline ::flatbuffers::Offset<Scenario> CreateScenarioDirect(
     ::flatbuffers::FlatBufferBuilder &_fbb,
     uint32_t scenario_id = 0,
-    const std::vector<::flatbuffers::Offset<NetSim::ObjectState>> *objects = nullptr,
+    const std::vector<::flatbuffers::Offset<NetSim::NetworkObjectCreation>> *objects = nullptr,
     float gravity = 0.0f) {
-  auto objects__ = objects ? _fbb.CreateVector<::flatbuffers::Offset<NetSim::ObjectState>>(*objects) : 0;
+  auto objects__ = objects ? _fbb.CreateVector<::flatbuffers::Offset<NetSim::NetworkObjectCreation>>(*objects) : 0;
   return NetSim::CreateScenario(
       _fbb,
       scenario_id,
@@ -612,147 +718,212 @@ inline ::flatbuffers::Offset<Recognize> CreateRecognizeDirect(
       color);
 }
 
-struct ObjectUpdate FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
-  typedef ObjectUpdateBuilder Builder;
+/// Batch of updates sampled in the same physics step
+struct Snapshot FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef SnapshotBuilder Builder;
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
-    VT_OBJECT_ID = 4,
-    VT_SIMULATION_TIME = 6,
-    VT_POSITION = 8,
-    VT_ROTATION = 10,
-    VT_VELOCITY = 12,
-    VT_ANGULAR_VELOCITY = 14
+    VT_TICK = 4,
+    VT_UPDATES = 6
   };
-  uint32_t object_id() const {
-    return GetField<uint32_t>(VT_OBJECT_ID, 0);
+  uint64_t tick() const {
+    return GetField<uint64_t>(VT_TICK, 0);
   }
-  double simulation_time() const {
-    return GetField<double>(VT_SIMULATION_TIME, 0.0);
-  }
-  const NetSim::Vec3 *position() const {
-    return GetStruct<const NetSim::Vec3 *>(VT_POSITION);
-  }
-  const NetSim::Vec4 *rotation() const {
-    return GetStruct<const NetSim::Vec4 *>(VT_ROTATION);
-  }
-  const NetSim::Vec3 *velocity() const {
-    return GetStruct<const NetSim::Vec3 *>(VT_VELOCITY);
-  }
-  const NetSim::Vec3 *angular_velocity() const {
-    return GetStruct<const NetSim::Vec3 *>(VT_ANGULAR_VELOCITY);
+  const ::flatbuffers::Vector<const NetSim::ObjectUpdate *> *updates() const {
+    return GetPointer<const ::flatbuffers::Vector<const NetSim::ObjectUpdate *> *>(VT_UPDATES);
   }
   bool Verify(::flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
-           VerifyField<uint32_t>(verifier, VT_OBJECT_ID, 4) &&
-           VerifyField<double>(verifier, VT_SIMULATION_TIME, 8) &&
-           VerifyField<NetSim::Vec3>(verifier, VT_POSITION, 4) &&
-           VerifyField<NetSim::Vec4>(verifier, VT_ROTATION, 4) &&
-           VerifyField<NetSim::Vec3>(verifier, VT_VELOCITY, 4) &&
-           VerifyField<NetSim::Vec3>(verifier, VT_ANGULAR_VELOCITY, 4) &&
-           verifier.EndTable();
-  }
-};
-
-struct ObjectUpdateBuilder {
-  typedef ObjectUpdate Table;
-  ::flatbuffers::FlatBufferBuilder &fbb_;
-  ::flatbuffers::uoffset_t start_;
-  void add_object_id(uint32_t object_id) {
-    fbb_.AddElement<uint32_t>(ObjectUpdate::VT_OBJECT_ID, object_id, 0);
-  }
-  void add_simulation_time(double simulation_time) {
-    fbb_.AddElement<double>(ObjectUpdate::VT_SIMULATION_TIME, simulation_time, 0.0);
-  }
-  void add_position(const NetSim::Vec3 *position) {
-    fbb_.AddStruct(ObjectUpdate::VT_POSITION, position);
-  }
-  void add_rotation(const NetSim::Vec4 *rotation) {
-    fbb_.AddStruct(ObjectUpdate::VT_ROTATION, rotation);
-  }
-  void add_velocity(const NetSim::Vec3 *velocity) {
-    fbb_.AddStruct(ObjectUpdate::VT_VELOCITY, velocity);
-  }
-  void add_angular_velocity(const NetSim::Vec3 *angular_velocity) {
-    fbb_.AddStruct(ObjectUpdate::VT_ANGULAR_VELOCITY, angular_velocity);
-  }
-  explicit ObjectUpdateBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
-        : fbb_(_fbb) {
-    start_ = fbb_.StartTable();
-  }
-  ::flatbuffers::Offset<ObjectUpdate> Finish() {
-    const auto end = fbb_.EndTable(start_);
-    auto o = ::flatbuffers::Offset<ObjectUpdate>(end);
-    return o;
-  }
-};
-
-inline ::flatbuffers::Offset<ObjectUpdate> CreateObjectUpdate(
-    ::flatbuffers::FlatBufferBuilder &_fbb,
-    uint32_t object_id = 0,
-    double simulation_time = 0.0,
-    const NetSim::Vec3 *position = nullptr,
-    const NetSim::Vec4 *rotation = nullptr,
-    const NetSim::Vec3 *velocity = nullptr,
-    const NetSim::Vec3 *angular_velocity = nullptr) {
-  ObjectUpdateBuilder builder_(_fbb);
-  builder_.add_simulation_time(simulation_time);
-  builder_.add_angular_velocity(angular_velocity);
-  builder_.add_velocity(velocity);
-  builder_.add_rotation(rotation);
-  builder_.add_position(position);
-  builder_.add_object_id(object_id);
-  return builder_.Finish();
-}
-
-struct ObjectUpdateList FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
-  typedef ObjectUpdateListBuilder Builder;
-  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
-    VT_UPDATES = 4
-  };
-  const ::flatbuffers::Vector<::flatbuffers::Offset<NetSim::ObjectUpdate>> *updates() const {
-    return GetPointer<const ::flatbuffers::Vector<::flatbuffers::Offset<NetSim::ObjectUpdate>> *>(VT_UPDATES);
-  }
-  bool Verify(::flatbuffers::Verifier &verifier) const {
-    return VerifyTableStart(verifier) &&
+           VerifyField<uint64_t>(verifier, VT_TICK, 8) &&
            VerifyOffset(verifier, VT_UPDATES) &&
            verifier.VerifyVector(updates()) &&
-           verifier.VerifyVectorOfTables(updates()) &&
            verifier.EndTable();
   }
 };
 
-struct ObjectUpdateListBuilder {
-  typedef ObjectUpdateList Table;
+struct SnapshotBuilder {
+  typedef Snapshot Table;
   ::flatbuffers::FlatBufferBuilder &fbb_;
   ::flatbuffers::uoffset_t start_;
-  void add_updates(::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<NetSim::ObjectUpdate>>> updates) {
-    fbb_.AddOffset(ObjectUpdateList::VT_UPDATES, updates);
+  void add_tick(uint64_t tick) {
+    fbb_.AddElement<uint64_t>(Snapshot::VT_TICK, tick, 0);
   }
-  explicit ObjectUpdateListBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+  void add_updates(::flatbuffers::Offset<::flatbuffers::Vector<const NetSim::ObjectUpdate *>> updates) {
+    fbb_.AddOffset(Snapshot::VT_UPDATES, updates);
+  }
+  explicit SnapshotBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
     start_ = fbb_.StartTable();
   }
-  ::flatbuffers::Offset<ObjectUpdateList> Finish() {
+  ::flatbuffers::Offset<Snapshot> Finish() {
     const auto end = fbb_.EndTable(start_);
-    auto o = ::flatbuffers::Offset<ObjectUpdateList>(end);
+    auto o = ::flatbuffers::Offset<Snapshot>(end);
     return o;
   }
 };
 
-inline ::flatbuffers::Offset<ObjectUpdateList> CreateObjectUpdateList(
+inline ::flatbuffers::Offset<Snapshot> CreateSnapshot(
     ::flatbuffers::FlatBufferBuilder &_fbb,
-    ::flatbuffers::Offset<::flatbuffers::Vector<::flatbuffers::Offset<NetSim::ObjectUpdate>>> updates = 0) {
-  ObjectUpdateListBuilder builder_(_fbb);
+    uint64_t tick = 0,
+    ::flatbuffers::Offset<::flatbuffers::Vector<const NetSim::ObjectUpdate *>> updates = 0) {
+  SnapshotBuilder builder_(_fbb);
+  builder_.add_tick(tick);
   builder_.add_updates(updates);
   return builder_.Finish();
 }
 
-inline ::flatbuffers::Offset<ObjectUpdateList> CreateObjectUpdateListDirect(
+inline ::flatbuffers::Offset<Snapshot> CreateSnapshotDirect(
     ::flatbuffers::FlatBufferBuilder &_fbb,
-    const std::vector<::flatbuffers::Offset<NetSim::ObjectUpdate>> *updates = nullptr) {
-  auto updates__ = updates ? _fbb.CreateVector<::flatbuffers::Offset<NetSim::ObjectUpdate>>(*updates) : 0;
-  return NetSim::CreateObjectUpdateList(
+    uint64_t tick = 0,
+    const std::vector<NetSim::ObjectUpdate> *updates = nullptr) {
+  auto updates__ = updates ? _fbb.CreateVectorOfStructs<NetSim::ObjectUpdate>(*updates) : 0;
+  return NetSim::CreateSnapshot(
       _fbb,
+      tick,
       updates__);
+}
+
+/// One-off message: authoritative mapping between myTick and yourTick
+struct TickSync FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef TickSyncBuilder Builder;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_LOCAL_TICK = 4,
+    VT_REMOTE_TICK = 6
+  };
+  uint64_t local_tick() const {
+    return GetField<uint64_t>(VT_LOCAL_TICK, 0);
+  }
+  uint64_t remote_tick() const {
+    return GetField<uint64_t>(VT_REMOTE_TICK, 0);
+  }
+  bool Verify(::flatbuffers::Verifier &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyField<uint64_t>(verifier, VT_LOCAL_TICK, 8) &&
+           VerifyField<uint64_t>(verifier, VT_REMOTE_TICK, 8) &&
+           verifier.EndTable();
+  }
+};
+
+struct TickSyncBuilder {
+  typedef TickSync Table;
+  ::flatbuffers::FlatBufferBuilder &fbb_;
+  ::flatbuffers::uoffset_t start_;
+  void add_local_tick(uint64_t local_tick) {
+    fbb_.AddElement<uint64_t>(TickSync::VT_LOCAL_TICK, local_tick, 0);
+  }
+  void add_remote_tick(uint64_t remote_tick) {
+    fbb_.AddElement<uint64_t>(TickSync::VT_REMOTE_TICK, remote_tick, 0);
+  }
+  explicit TickSyncBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  ::flatbuffers::Offset<TickSync> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = ::flatbuffers::Offset<TickSync>(end);
+    return o;
+  }
+};
+
+inline ::flatbuffers::Offset<TickSync> CreateTickSync(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    uint64_t local_tick = 0,
+    uint64_t remote_tick = 0) {
+  TickSyncBuilder builder_(_fbb);
+  builder_.add_remote_tick(remote_tick);
+  builder_.add_local_tick(local_tick);
+  return builder_.Finish();
+}
+
+struct Ping FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef PingBuilder Builder;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_SENT_TIME = 4
+  };
+  double sent_time() const {
+    return GetField<double>(VT_SENT_TIME, 0.0);
+  }
+  bool Verify(::flatbuffers::Verifier &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyField<double>(verifier, VT_SENT_TIME, 8) &&
+           verifier.EndTable();
+  }
+};
+
+struct PingBuilder {
+  typedef Ping Table;
+  ::flatbuffers::FlatBufferBuilder &fbb_;
+  ::flatbuffers::uoffset_t start_;
+  void add_sent_time(double sent_time) {
+    fbb_.AddElement<double>(Ping::VT_SENT_TIME, sent_time, 0.0);
+  }
+  explicit PingBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  ::flatbuffers::Offset<Ping> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = ::flatbuffers::Offset<Ping>(end);
+    return o;
+  }
+};
+
+inline ::flatbuffers::Offset<Ping> CreatePing(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    double sent_time = 0.0) {
+  PingBuilder builder_(_fbb);
+  builder_.add_sent_time(sent_time);
+  return builder_.Finish();
+}
+
+struct Pong FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef PongBuilder Builder;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_PING_SENT_TIME = 4,
+    VT_REMOTE_TIME = 6
+  };
+  double ping_sent_time() const {
+    return GetField<double>(VT_PING_SENT_TIME, 0.0);
+  }
+  double remote_time() const {
+    return GetField<double>(VT_REMOTE_TIME, 0.0);
+  }
+  bool Verify(::flatbuffers::Verifier &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyField<double>(verifier, VT_PING_SENT_TIME, 8) &&
+           VerifyField<double>(verifier, VT_REMOTE_TIME, 8) &&
+           verifier.EndTable();
+  }
+};
+
+struct PongBuilder {
+  typedef Pong Table;
+  ::flatbuffers::FlatBufferBuilder &fbb_;
+  ::flatbuffers::uoffset_t start_;
+  void add_ping_sent_time(double ping_sent_time) {
+    fbb_.AddElement<double>(Pong::VT_PING_SENT_TIME, ping_sent_time, 0.0);
+  }
+  void add_remote_time(double remote_time) {
+    fbb_.AddElement<double>(Pong::VT_REMOTE_TIME, remote_time, 0.0);
+  }
+  explicit PongBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  ::flatbuffers::Offset<Pong> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = ::flatbuffers::Offset<Pong>(end);
+    return o;
+  }
+};
+
+inline ::flatbuffers::Offset<Pong> CreatePong(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    double ping_sent_time = 0.0,
+    double remote_time = 0.0) {
+  PongBuilder builder_(_fbb);
+  builder_.add_remote_time(remote_time);
+  builder_.add_ping_sent_time(ping_sent_time);
+  return builder_.Finish();
 }
 
 struct GravityChange FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
@@ -793,6 +964,47 @@ inline ::flatbuffers::Offset<GravityChange> CreateGravityChange(
     float new_value = 0.0f) {
   GravityChangeBuilder builder_(_fbb);
   builder_.add_new_value(new_value);
+  return builder_.Finish();
+}
+
+struct StartSimulation FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef StartSimulationBuilder Builder;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_SIMULATION_START_TIME = 4
+  };
+  double simulation_start_time() const {
+    return GetField<double>(VT_SIMULATION_START_TIME, 0.0);
+  }
+  bool Verify(::flatbuffers::Verifier &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyField<double>(verifier, VT_SIMULATION_START_TIME, 8) &&
+           verifier.EndTable();
+  }
+};
+
+struct StartSimulationBuilder {
+  typedef StartSimulation Table;
+  ::flatbuffers::FlatBufferBuilder &fbb_;
+  ::flatbuffers::uoffset_t start_;
+  void add_simulation_start_time(double simulation_start_time) {
+    fbb_.AddElement<double>(StartSimulation::VT_SIMULATION_START_TIME, simulation_start_time, 0.0);
+  }
+  explicit StartSimulationBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  ::flatbuffers::Offset<StartSimulation> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = ::flatbuffers::Offset<StartSimulation>(end);
+    return o;
+  }
+};
+
+inline ::flatbuffers::Offset<StartSimulation> CreateStartSimulation(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    double simulation_start_time = 0.0) {
+  StartSimulationBuilder builder_(_fbb);
+  builder_.add_simulation_start_time(simulation_start_time);
   return builder_.Finish();
 }
 
@@ -976,139 +1188,6 @@ inline ::flatbuffers::Offset<RequestScenario> CreateRequestScenario(
   return builder_.Finish();
 }
 
-struct Ping FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
-  typedef PingBuilder Builder;
-  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
-    VT_SENT_TIME = 4
-  };
-  double sent_time() const {
-    return GetField<double>(VT_SENT_TIME, 0.0);
-  }
-  bool Verify(::flatbuffers::Verifier &verifier) const {
-    return VerifyTableStart(verifier) &&
-           VerifyField<double>(verifier, VT_SENT_TIME, 8) &&
-           verifier.EndTable();
-  }
-};
-
-struct PingBuilder {
-  typedef Ping Table;
-  ::flatbuffers::FlatBufferBuilder &fbb_;
-  ::flatbuffers::uoffset_t start_;
-  void add_sent_time(double sent_time) {
-    fbb_.AddElement<double>(Ping::VT_SENT_TIME, sent_time, 0.0);
-  }
-  explicit PingBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
-        : fbb_(_fbb) {
-    start_ = fbb_.StartTable();
-  }
-  ::flatbuffers::Offset<Ping> Finish() {
-    const auto end = fbb_.EndTable(start_);
-    auto o = ::flatbuffers::Offset<Ping>(end);
-    return o;
-  }
-};
-
-inline ::flatbuffers::Offset<Ping> CreatePing(
-    ::flatbuffers::FlatBufferBuilder &_fbb,
-    double sent_time = 0.0) {
-  PingBuilder builder_(_fbb);
-  builder_.add_sent_time(sent_time);
-  return builder_.Finish();
-}
-
-struct Pong FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
-  typedef PongBuilder Builder;
-  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
-    VT_PING_SENT_TIME = 4,
-    VT_REMOTE_TIME = 6
-  };
-  double ping_sent_time() const {
-    return GetField<double>(VT_PING_SENT_TIME, 0.0);
-  }
-  double remote_time() const {
-    return GetField<double>(VT_REMOTE_TIME, 0.0);
-  }
-  bool Verify(::flatbuffers::Verifier &verifier) const {
-    return VerifyTableStart(verifier) &&
-           VerifyField<double>(verifier, VT_PING_SENT_TIME, 8) &&
-           VerifyField<double>(verifier, VT_REMOTE_TIME, 8) &&
-           verifier.EndTable();
-  }
-};
-
-struct PongBuilder {
-  typedef Pong Table;
-  ::flatbuffers::FlatBufferBuilder &fbb_;
-  ::flatbuffers::uoffset_t start_;
-  void add_ping_sent_time(double ping_sent_time) {
-    fbb_.AddElement<double>(Pong::VT_PING_SENT_TIME, ping_sent_time, 0.0);
-  }
-  void add_remote_time(double remote_time) {
-    fbb_.AddElement<double>(Pong::VT_REMOTE_TIME, remote_time, 0.0);
-  }
-  explicit PongBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
-        : fbb_(_fbb) {
-    start_ = fbb_.StartTable();
-  }
-  ::flatbuffers::Offset<Pong> Finish() {
-    const auto end = fbb_.EndTable(start_);
-    auto o = ::flatbuffers::Offset<Pong>(end);
-    return o;
-  }
-};
-
-inline ::flatbuffers::Offset<Pong> CreatePong(
-    ::flatbuffers::FlatBufferBuilder &_fbb,
-    double ping_sent_time = 0.0,
-    double remote_time = 0.0) {
-  PongBuilder builder_(_fbb);
-  builder_.add_remote_time(remote_time);
-  builder_.add_ping_sent_time(ping_sent_time);
-  return builder_.Finish();
-}
-
-struct StartSimulation FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
-  typedef StartSimulationBuilder Builder;
-  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
-    VT_SIMULATION_START_TIME = 4
-  };
-  double simulation_start_time() const {
-    return GetField<double>(VT_SIMULATION_START_TIME, 0.0);
-  }
-  bool Verify(::flatbuffers::Verifier &verifier) const {
-    return VerifyTableStart(verifier) &&
-           VerifyField<double>(verifier, VT_SIMULATION_START_TIME, 8) &&
-           verifier.EndTable();
-  }
-};
-
-struct StartSimulationBuilder {
-  typedef StartSimulation Table;
-  ::flatbuffers::FlatBufferBuilder &fbb_;
-  ::flatbuffers::uoffset_t start_;
-  void add_simulation_start_time(double simulation_start_time) {
-    fbb_.AddElement<double>(StartSimulation::VT_SIMULATION_START_TIME, simulation_start_time, 0.0);
-  }
-  explicit StartSimulationBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
-        : fbb_(_fbb) {
-    start_ = fbb_.StartTable();
-  }
-  ::flatbuffers::Offset<StartSimulation> Finish() {
-    const auto end = fbb_.EndTable(start_);
-    auto o = ::flatbuffers::Offset<StartSimulation>(end);
-    return o;
-  }
-};
-
-inline ::flatbuffers::Offset<StartSimulation> CreateStartSimulation(
-    ::flatbuffers::FlatBufferBuilder &_fbb,
-    double simulation_start_time = 0.0) {
-  StartSimulationBuilder builder_(_fbb);
-  builder_.add_simulation_start_time(simulation_start_time);
-  return builder_.Finish();
-}
-
 struct DiscoveryBroadcast FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   typedef DiscoveryBroadcastBuilder Builder;
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
@@ -1231,8 +1310,11 @@ struct NetworkMessage FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   const NetSim::Scenario *data_as_Scenario() const {
     return data_type() == NetSim::MessageUnion_Scenario ? static_cast<const NetSim::Scenario *>(data()) : nullptr;
   }
-  const NetSim::ObjectUpdateList *data_as_ObjectUpdateList() const {
-    return data_type() == NetSim::MessageUnion_ObjectUpdateList ? static_cast<const NetSim::ObjectUpdateList *>(data()) : nullptr;
+  const NetSim::Snapshot *data_as_Snapshot() const {
+    return data_type() == NetSim::MessageUnion_Snapshot ? static_cast<const NetSim::Snapshot *>(data()) : nullptr;
+  }
+  const NetSim::TickSync *data_as_TickSync() const {
+    return data_type() == NetSim::MessageUnion_TickSync ? static_cast<const NetSim::TickSync *>(data()) : nullptr;
   }
   const NetSim::GravityChange *data_as_GravityChange() const {
     return data_type() == NetSim::MessageUnion_GravityChange ? static_cast<const NetSim::GravityChange *>(data()) : nullptr;
@@ -1274,8 +1356,12 @@ template<> inline const NetSim::Scenario *NetworkMessage::data_as<NetSim::Scenar
   return data_as_Scenario();
 }
 
-template<> inline const NetSim::ObjectUpdateList *NetworkMessage::data_as<NetSim::ObjectUpdateList>() const {
-  return data_as_ObjectUpdateList();
+template<> inline const NetSim::Snapshot *NetworkMessage::data_as<NetSim::Snapshot>() const {
+  return data_as_Snapshot();
+}
+
+template<> inline const NetSim::TickSync *NetworkMessage::data_as<NetSim::TickSync>() const {
+  return data_as_TickSync();
 }
 
 template<> inline const NetSim::GravityChange *NetworkMessage::data_as<NetSim::GravityChange>() const {
@@ -1368,8 +1454,12 @@ inline bool VerifyMessageUnion(::flatbuffers::Verifier &verifier, const void *ob
       auto ptr = reinterpret_cast<const NetSim::Scenario *>(obj);
       return verifier.VerifyTable(ptr);
     }
-    case MessageUnion_ObjectUpdateList: {
-      auto ptr = reinterpret_cast<const NetSim::ObjectUpdateList *>(obj);
+    case MessageUnion_Snapshot: {
+      auto ptr = reinterpret_cast<const NetSim::Snapshot *>(obj);
+      return verifier.VerifyTable(ptr);
+    }
+    case MessageUnion_TickSync: {
+      auto ptr = reinterpret_cast<const NetSim::TickSync *>(obj);
       return verifier.VerifyTable(ptr);
     }
     case MessageUnion_GravityChange: {

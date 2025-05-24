@@ -147,15 +147,15 @@ private:
 
 	std::string m_lastError = "Error message";
 
-    std::vector<PhysicsObject*> m_ownedObjects;
-    std::array<PhysicsObject*, 40000> m_unownedObjects{ nullptr };
-
-	std::thread m_postPhysicsThread;
-	std::thread m_postNetworkThread;
+    std::vector<std::shared_ptr<NetworkedObject>> m_allNetworkedObjects;
+    std::array<NetworkedObject*, 40000> m_unownedObjects{ nullptr };
 
 	bool m_clientPrediction = false;
     bool m_simulationScheduled = false;
     double m_simulationStartTime;
+
+	RingBufferSPSC<Snapshot, 1024> m_outgoingBuffer;
+	RingBufferSPSC<Snapshot, 1024> m_incomingBuffer;
 
     // Camera controller
     float m_Forward;
@@ -174,12 +174,7 @@ private:
     int m_Width;
     int m_Height;
 
-	SharedData* m_sharedData = nullptr;
-
 	void ChangeScenario(int index);
-	void CreateEmptyScenario(std::vector<std::shared_ptr<PhysicsObject>>&&);
-    void AssignNonOwnedObjects();
+	void CreateEmptyScenario(std::vector<std::shared_ptr<NetworkedObject>>&&);
 	void BroadCastCurrentScenarioCreate();
-	void UpdatePostPhysicsSimulation();
-	void UpdateBeforePhysicsSimulation();
 };

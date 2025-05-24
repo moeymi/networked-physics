@@ -25,7 +25,7 @@ void SpheresScenario::onLoadInternal(CommandList& commandList)
 	for (int i = 0; i < m_spheresCount; i++)
 	{
 		std::shared_ptr<PhysicsObject> obj = nullptr;
-		obj = std::make_shared<PhysicsObject>(static_cast<UINT>(i), MeshType::Sphere, GlobalData::g_sphereMesh, GlobalData::g_customTexture);
+		obj = std::make_shared<PhysicsObject>(MeshType::Sphere, GlobalData::g_sphereMesh, GlobalData::g_customTexture);
 		auto sphereCollider = std::make_shared<SphereCollider>(.5f);
 
 		obj->setCollider(sphereCollider);

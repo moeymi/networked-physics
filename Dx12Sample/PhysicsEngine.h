@@ -2,11 +2,19 @@
 #include "pch.h"
 #include "CollisionSystem.h"
 #include "ThreadedSystem.h"
+#include "NetworkedObject.h"
+#include "RingBufferSPSC.h"
+
 #include <shared_mutex>
 
 class PhysicsEngine : public ThreadedSystem {
 private:
-    static std::vector<std::shared_ptr<PhysicsObject>> m_bodies;
+    static std::unordered_map<uint16_t, std::shared_ptr<NetworkedObject>> m_ownedNetworkedObjects;
+	static std::unordered_map<uint16_t, std::shared_ptr<NetworkedObject>> m_nonOwnedNetworkedObjects;
+    static std::vector<std::shared_ptr<PhysicsObject>> m_ownedBodies;
+	static std::vector<std::shared_ptr<PhysicsObject>> m_nonOwnedBodies;
+	static std::vector<PhysicsObject*> m_bodies;
+
     static CollisionSystem m_collisionSystem;
 
     std::map <std::pair<PhysicsObject*, PhysicsObject*>, CollisionManifold> m_contactManifolds;
@@ -14,6 +22,7 @@ private:
     static constexpr int m_velocityIterations = 8;
     static constexpr int m_positionIterations = 4;
     static constexpr float m_kRestitutionThreshold = 1.0f;  // only bounce if closing speed > this
+	static constexpr int m_kDelayTicks = 2;  // number of ticks to delay ghost updates
 
     static constexpr float m_kPenetrationSlop = 0.001f;  // 1 mm of allowed overlap
     static constexpr float m_kBaumgarte = 0.2f;    // positional stabilization factor
@@ -24,20 +33,32 @@ private:
 
 	static float m_simulationDeltaTime;
 
+	static std::mutex m_ghostModeMutex;
+    static std::atomic<bool> m_ghostMode;
+	static float m_simTimeAccumulator;
+	static float m_nextTickTime;
+
+	RingBufferSPSC<Snapshot, 1024>* m_outgoingBuffer;
+	RingBufferSPSC<Snapshot, 1024>* m_incomingBuffer;
+
 public:
-	PhysicsEngine() = default;
-    void addBody(std::shared_ptr<PhysicsObject> body);
+    PhysicsEngine(RingBufferSPSC<Snapshot, 1024>* outgoingBuf,
+        RingBufferSPSC<Snapshot, 1024>* incomingBuf);
+
+    void addOwnedBody(const std::shared_ptr<PhysicsObject>& body);
+	void addBody(const std::shared_ptr<NetworkedObject>& object);
     void clearBodies();
 
     static void setGravity(const float& gravity);
-
     static float getGravity();
+
+    static bool ghostModeEnabled();
+    static void setGhostMode(bool enabled);
+
     bool isGravityEnabled() const;
 
     void setSimulationDeltaTime(const float& deltaTime);
     float getSimulationDeltaTime() const;
-
-     
 
 private:
     virtual void onUpdate(float deltaTime) override;
@@ -56,5 +77,7 @@ private:
 
     // Helper to create a canonical key for a pair of objects
     std::pair<PhysicsObject*, PhysicsObject*> makePairKey(PhysicsObject* objA, PhysicsObject* objB);
+
+    bool canAlter(NetworkedObject* object) const;
 
 };

@@ -7,8 +7,7 @@
 #include "Material.h"
 #include "PhysicsSimulation.h"
 
-PhysicsObject::PhysicsObject(const UINT& id, const MeshType& meshType, std::shared_ptr<Mesh> mesh, std::shared_ptr<Texture> texture)
-	: m_id(id),
+PhysicsObject::PhysicsObject(const MeshType& meshType, std::shared_ptr<Mesh> mesh, std::shared_ptr<Texture> texture) :
     m_mesh(mesh),
 	m_meshType(meshType),
     m_texture(texture),
@@ -20,6 +19,9 @@ PhysicsObject::PhysicsObject(const UINT& id, const MeshType& meshType, std::shar
 	m_integrateMotion(&PhysicsObject::integrateSemiImplicitEuler)
 {
 };
+
+void PhysicsObject::setUserData(void* userData) { m_userData = userData; }
+void* PhysicsObject::getUserData() const { return m_userData; }
 
 void PhysicsObject::onLoad()
 {
@@ -36,7 +38,6 @@ void PhysicsObject::onUnload()
 void PhysicsObject::onUpdate(float deltaTime)
 {
     if (m_transform.IsStatic()) return;
-
 
     updateInertiaTensor();
 
@@ -57,11 +58,6 @@ void PhysicsObject::onRender(CommandList& commandList, const DirectX::XMMATRIX& 
     commandList.SetShaderResourceView(RootParameters::Textures, 0, *m_texture, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
 	m_mesh->Draw(commandList);
-}
-
-void PhysicsObject::setOwnerId(const uint32_t& ownerId)
-{
-	m_ownerId = ownerId;
 }
 
 void PhysicsObject::onCollision(CollisionManifold collisionManfold)
@@ -113,16 +109,6 @@ Collider* PhysicsObject::getCollider() const
 bool PhysicsObject::isStatic() const
 {
 	return m_transform.IsStatic();
-}
-
-UINT PhysicsObject::getId() const
-{
-	return m_id;
-}
-
-uint32_t PhysicsObject::getOwnerId() const
-{
-	return m_ownerId;
 }
 
 MeshType PhysicsObject::getMeshType() const
@@ -184,9 +170,19 @@ void PhysicsObject::setVelocity(const DirectX::XMVECTOR& velocity, const USHORT&
     m_states[bufferIndex].m_velocity = velocity;
 }
 
+void PhysicsObject::setVelocity(const DirectX::XMFLOAT3& velocity, const USHORT& bufferIndex)
+{
+	m_states[bufferIndex].m_velocity = DirectX::XMLoadFloat3(&velocity);
+}
+
 void PhysicsObject::setAngularVelocity(const DirectX::XMVECTOR& angularVelocity, const USHORT& bufferIndex)
 {
     m_states[bufferIndex].m_angularVelocity = angularVelocity;
+}
+
+void PhysicsObject::setAngularVelocity(const DirectX::XMFLOAT3& angularVelocity, const USHORT& bufferIndex)
+{
+	m_states[bufferIndex].m_angularVelocity = DirectX::XMLoadFloat3(&angularVelocity);
 }
 
 void PhysicsObject::setIntegrationType(const MotionIntegrationType& integrationType)

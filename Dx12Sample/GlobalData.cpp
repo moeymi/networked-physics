@@ -9,10 +9,14 @@ namespace GlobalData {
 	DirectX::XMFLOAT4 g_clientColor = { 1.0f, 0.0f, 0.0f, 1.0f };
 
 	double g_renderingFPS = 0.0;
+
+	int g_physicsFreq = 120.0; // Hz
 	double g_physicsDt = 0.0;
+
+	int g_networkFreq = 60; // Hz
 	double g_networkDt = 0.0;
 
-	double g_simulationTime = 0.0;
+	int g_tick = 0;
 
 	std::shared_ptr<Texture> g_customTexture = nullptr;
 	std::shared_ptr<Texture> g_defaultTexture = nullptr;

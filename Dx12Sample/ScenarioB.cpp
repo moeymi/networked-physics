@@ -17,7 +17,7 @@ void ScenarioB::onLoadInternal(CommandList& commandList)
 		int randNum = 0;// rand() % 2;
 		if (randNum) {
 			// Create a static box
-			auto box = std::make_shared<PhysicsObject>(static_cast<UINT>(4000), MeshType::Box, GlobalData::g_boxMesh, GlobalData::g_defaultTexture);
+			auto box = std::make_shared<PhysicsObject>(MeshType::Box, GlobalData::g_boxMesh, GlobalData::g_defaultTexture);
 			auto sphereCollider = std::make_shared<BoxCollider>(DirectX::XMVectorReplicate(.5f));
 			box->setCollider(sphereCollider);
 			box->setPhysicsMaterial(material);
@@ -31,7 +31,7 @@ void ScenarioB::onLoadInternal(CommandList& commandList)
 		}
 		else {
 			// Create a sphere
-			auto particle = std::make_shared<PhysicsObject>(static_cast<UINT>(4000), MeshType::Sphere, GlobalData::g_sphereMesh, GlobalData::g_customTexture);
+			auto particle = std::make_shared<PhysicsObject>(MeshType::Sphere, GlobalData::g_sphereMesh, GlobalData::g_customTexture);
 			auto sphereCollider = std::make_shared<SphereCollider>(.5f);
 			particle->setCollider(sphereCollider);
 			particle->setPhysicsMaterial(material);

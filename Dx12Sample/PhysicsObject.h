@@ -53,8 +53,11 @@ public:
 		RK4,
 		Verlet
 	};
-	PhysicsObject(const UINT& id, const MeshType& meshType, std::shared_ptr<Mesh> mesh, std::shared_ptr<Texture> texture);
+	PhysicsObject(const MeshType& meshType, std::shared_ptr<Mesh> mesh, std::shared_ptr<Texture> texture);
 	~PhysicsObject() = default;
+
+	void setUserData(void* userData);
+	void* getUserData() const;
 
 	void onLoad();
 	void onUnload();
@@ -64,7 +67,6 @@ public:
 
 	void updateInertiaTensor();
 
-	void setOwnerId(const uint32_t& ownerId);
 	void setIntegrationType(const MotionIntegrationType& integrationType);
 
 	void applyConstantForce(const DirectX::XMVECTOR& force);
@@ -74,7 +76,9 @@ public:
 	void resetConstantForces();
 
 	void setVelocity(const DirectX::XMVECTOR& velocity, const USHORT& bufferIndex);
+	void setVelocity(const DirectX::XMFLOAT3& velocity, const USHORT& bufferIndex);
 	void setAngularVelocity(const DirectX::XMVECTOR& angularVelocity, const USHORT& bufferIndex);
+	void setAngularVelocity(const DirectX::XMFLOAT3& angularVelocity, const USHORT& bufferIndex);
 
 	void setCollider(std::shared_ptr<Collider> collider);
 	void setMass(const float& mass);
@@ -84,8 +88,6 @@ public:
 
 	bool isStatic() const;
 	float getMass() const;
-	UINT getId() const;
-	uint32_t getOwnerId() const;
 	MeshType getMeshType() const;
 	DirectX::XMVECTOR getCenterOfMass() const;
 	DirectX::XMVECTOR getVelocity(const USHORT& bufferIndex) const;
@@ -100,8 +102,6 @@ public:
 	void swapStates();
 
 private:
-	UINT m_id = 0u;
-	uint32_t m_ownerId;
 	Transform m_transform;
 	MeshType m_meshType;
 	std::shared_ptr<Mesh> m_mesh;
@@ -109,10 +109,14 @@ private:
 	std::shared_ptr<Collider> m_collider;
 	Material m_material = Material::White;
 
+	void* m_userData = nullptr;
+
 	struct State {
 		DirectX::XMVECTOR m_velocity =			{ 0, 0, 0, 0 };
 		DirectX::XMVECTOR m_angularVelocity =	{ 0, 0, 0, 0 };
 	} m_states[2];
+
+	std::unordered_map<uint16_t, std::function<void()>> m_onDirtifyCallbacks;
 
 	float m_mass = 1.0f;
 	PhysicsMaterial m_physicsMaterial;
@@ -125,7 +129,6 @@ private:
 	MotionIntegrationType m_integrationType = MotionIntegrationType::SemiImplicitEuler;
 
 	DirectX::XMVECTOR calculateForces(const DirectX::XMVECTOR& position, const DirectX::XMVECTOR& velocity);
-
 	void integrateMotion(const float& deltaTime);
 	void integrateAngularMotion(const float& deltaTime);
 

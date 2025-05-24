@@ -224,6 +224,11 @@ void Transform::SetRotationQuaternion(const DirectX::XMVECTOR& rot, const int& b
 	}
 }
 
+void Transform::SetRotationQuaternion(const DirectX::XMFLOAT4& rot, const int& bufferIndex, const bool& bothBuffers) {
+	if (isStatic) return;
+	SetRotationQuaternion(DirectX::XMLoadFloat4(&rot), bufferIndex, bothBuffers);
+}
+
 const DirectX::XMVECTOR& Transform::GetLocalRotationQuaternion(const int& bufferIndex) const { return m_states[bufferIndex].rotationQuaternion; }
 void Transform::SetLocalRotationQuaternion(const DirectX::XMVECTOR& rot, const int& bufferIndex, const bool& bothBuffers) {
 	if (isStatic) return;

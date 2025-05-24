@@ -4,33 +4,110 @@
 #include <string>
 #include <omp.h>
 
-float PhysicsEngine::m_gravity = 9.81f;
 bool PhysicsEngine::m_gravityEnabled = true;
+float PhysicsEngine::m_gravity = 9.81f;
 float PhysicsEngine::m_simulationDeltaTime;
-std::vector<std::shared_ptr<PhysicsObject>> PhysicsEngine::m_bodies;
+
+std::atomic<bool> PhysicsEngine::m_ghostMode = false;
+float PhysicsEngine::m_simTimeAccumulator = 0.0f;
+float PhysicsEngine::m_nextTickTime = 0.0f;
+
+std::unordered_map<uint16_t, std::shared_ptr<NetworkedObject>> PhysicsEngine::m_ownedNetworkedObjects;
+std::unordered_map<uint16_t, std::shared_ptr<NetworkedObject>> PhysicsEngine::m_nonOwnedNetworkedObjects;
+std::vector<std::shared_ptr<PhysicsObject>> PhysicsEngine::m_ownedBodies;
+std::vector<std::shared_ptr<PhysicsObject>> PhysicsEngine::m_nonOwnedBodies;
+std::vector<PhysicsObject*> PhysicsEngine::m_bodies;
+
 CollisionSystem PhysicsEngine::m_collisionSystem;
 
+PhysicsEngine::PhysicsEngine(RingBufferSPSC<Snapshot, 1024>* outgoingBuf,
+    RingBufferSPSC<Snapshot, 1024>* incomingBuf) : m_outgoingBuffer(outgoingBuf), m_incomingBuffer(incomingBuf) {
+}
+
 void PhysicsEngine::onUpdate(float) {
-    for (const auto& body : m_bodies) {
+	Snapshot snapshot;
+    while (m_incomingBuffer->pop(snapshot)) {
+        for (const auto& update : snapshot.updates) {
+            auto it = m_nonOwnedNetworkedObjects.find(update.object_id);
+            if (it != m_nonOwnedNetworkedObjects.end()) {
+                auto& object = it->second;
+                object->addUpdate(snapshot.tick, update);
+                object->setLastAckedTick(snapshot.tick);
+            }
+        }
+    }
+
+    for (const auto& body : m_ownedBodies) {
         if (!body->isStatic()) {
             body->onUpdate(m_simulationDeltaTime);
         }
     }
 
+    for (auto& pair : m_nonOwnedNetworkedObjects) {
+        auto& netObj = *pair.second;
+        netObj.applyUpdate(GlobalData::g_tick,
+            m_kDelayTicks,
+            m_simulationDeltaTime, m_ghostMode);
+    }
     detectAndResolveCollisions(m_simulationDeltaTime);
-    for (const auto& body : m_bodies) {
+
+    for (const auto& body : m_ownedBodies) {
         body->swapStates();
+    }
+	for (const auto& body : m_nonOwnedBodies) {
+		body->swapStates();
+	}
+
+	m_simTimeAccumulator += m_simulationDeltaTime;
+	static const float kMinTickTime = 1.0f / GlobalData::g_networkFreq;
+    if (m_simTimeAccumulator >= m_nextTickTime) {
+        m_nextTickTime += kMinTickTime;
+        Snapshot snapshot;
+		snapshot.tick = GlobalData::g_tick++;
+		for (const auto& [_, object] : m_ownedNetworkedObjects) {
+			ObjectUpdate update;
+			if (object->buildUpdate(snapshot.tick, update)) {
+				snapshot.updates.push_back(update);
+			}
+		}
+        if (!snapshot.updates.empty()) {
+            if (!m_outgoingBuffer->push(std::move(snapshot))) {
+                std::string errorMsg = "Failed to push snapshot to outgoing buffer. Buffer may be full.";
+                OutputDebugStringA(errorMsg.c_str());
+            }
+        }
     }
 }
 
-void PhysicsEngine::addBody(std::shared_ptr<PhysicsObject> body) {
+void PhysicsEngine::addOwnedBody(const std::shared_ptr<PhysicsObject>& body) {
     if (m_running) {
 		throw std::runtime_error("Cannot add bodies while the physics engine is running.");
     }
-	m_bodies.push_back(body);
+	m_ownedBodies.push_back(body);
 	if (m_gravityEnabled) {
 		body->applyConstantForce({ 0.0f, -m_gravity * body->getMass(), 0.0f, 0.0f });
 	}
+}
+
+void PhysicsEngine::addBody(const std::shared_ptr<NetworkedObject>& object) {
+	if (m_running) {
+		throw std::runtime_error("Cannot add networked objects while the physics engine is running.");
+	}
+	if (!object) {
+		throw std::invalid_argument("Cannot add a null NetworkedObject.");
+	}
+    if (object->getOwnerId() == GlobalData::g_clientId) {
+		m_ownedNetworkedObjects[object->getId()] = object;
+		m_ownedBodies.push_back(object->getObject());
+	}
+    else {
+        m_nonOwnedNetworkedObjects[object->getId()] = object;
+        m_nonOwnedBodies.push_back(object->getObject());
+    }
+	m_bodies.push_back(object->getObject().get());
+    if (m_gravityEnabled) {
+        object->getObject().get()->applyConstantForce({ 0.0f, -m_gravity * object->getObject().get()->getMass(), 0.0f, 0.0f });
+    }
 }
 
 void PhysicsEngine::clearBodies() {
@@ -38,6 +115,10 @@ void PhysicsEngine::clearBodies() {
 		throw std::runtime_error("Cannot clear bodies while the physics engine is running.");
 	}
 	m_bodies.clear();
+	m_ownedBodies.clear();
+	m_nonOwnedBodies.clear();
+	m_ownedNetworkedObjects.clear();
+	m_nonOwnedNetworkedObjects.clear();
 	m_contactManifolds.clear();
 }
 
@@ -57,6 +138,10 @@ float PhysicsEngine::getGravity() {
 bool PhysicsEngine::isGravityEnabled() const {
 	return m_gravityEnabled;
 }
+
+bool PhysicsEngine::ghostModeEnabled() { return m_ghostMode.load(); }
+
+void PhysicsEngine::setGhostMode(bool enabled) { m_ghostMode.store(enabled); }
 
 void PhysicsEngine::setSimulationDeltaTime(const float& deltaTime) {
 	m_simulationDeltaTime = deltaTime;
@@ -123,7 +208,7 @@ std::vector<std::pair<PhysicsObject*, PhysicsObject*>> PhysicsEngine::broadPhase
             auto colliderA = m_bodies[i]->getCollider();
             auto colliderB = m_bodies[j]->getCollider();
             if (colliderA && colliderB) {
-                pairs.emplace_back(m_bodies[i].get(), m_bodies[j].get());
+                pairs.emplace_back(m_bodies[i], m_bodies[j]);
             }
         }
     }
@@ -278,8 +363,8 @@ void PhysicsEngine::resolveCollisionVelocity(
 
         XMVECTOR Pn = n * actualN;
 
-        if (!A->isStatic()) A->applyImpulseAtPosition(-Pn, c.position);
-        if (!B->isStatic()) B->applyImpulseAtPosition(Pn, c.position);
+        if (!A->isStatic() && canAlter(static_cast<NetworkedObject*>(A->getUserData()))) A->applyImpulseAtPosition(-Pn, c.position);
+        if (!B->isStatic() && canAlter(static_cast<NetworkedObject*>(B->getUserData()))) B->applyImpulseAtPosition(Pn, c.position);
 
         vA = A->getVelocity(iteration != 0);
         wA = A->getAngularVelocity(iteration != 0);
@@ -302,8 +387,8 @@ void PhysicsEngine::resolveCollisionVelocity(
         float actualLambdaT = c.accumulatedFrictionImpulse - oldAccumT;
 
         XMVECTOR Pt = t * actualLambdaT;
-        if (!A->isStatic()) A->applyImpulseAtPosition(-Pt, c.position);
-        if (!B->isStatic()) B->applyImpulseAtPosition(Pt, c.position);
+        if (!A->isStatic() && canAlter(static_cast<NetworkedObject*>(A->getUserData()))) A->applyImpulseAtPosition(-Pt, c.position);
+        if (!B->isStatic() && canAlter(static_cast<NetworkedObject*>(B->getUserData()))) B->applyImpulseAtPosition(Pt, c.position);
 
         if (c.angularMass > 1e-9f)
         {
@@ -322,8 +407,8 @@ void PhysicsEngine::resolveCollisionVelocity(
                 c.accumulatedAngularFrictionImpulse - oldAccumA;
 
             XMVECTOR Pa = n * actualLambdaA;
-            if (!A->isStatic()) A->applyAngularImpulse(-Pa);
-            if (!B->isStatic()) B->applyAngularImpulse(Pa);
+            if (!A->isStatic() && canAlter(static_cast<NetworkedObject*>(A->getUserData()))) A->applyAngularImpulse(-Pa);
+            if (!B->isStatic() && canAlter(static_cast<NetworkedObject*>(B->getUserData()))) B->applyAngularImpulse(Pa);
         }
     }
 }
@@ -371,10 +456,10 @@ void PhysicsEngine::positionalCorrection(const ContactPoint& contact, PhysicsObj
         (penetrationDepth * percent) / totalInvMass
     );
 
-    if (!a->isStatic()) {
+    if (!a->isStatic() && canAlter(static_cast<NetworkedObject*>(a->getUserData()))) {
         a->getTransform().Translate(XMVectorScale(correction, -invMassA), 1);
     }
-    if (!b->isStatic()) {
+    if (!b->isStatic() && canAlter(static_cast<NetworkedObject*>(b->getUserData()))) {
         b->getTransform().Translate(XMVectorScale(correction, invMassB), 1);
     }
 }
@@ -407,6 +492,10 @@ void PhysicsEngine::matchAndTransferImpulses(CollisionManifold& newManifold, con
 
 std::pair<PhysicsObject*, PhysicsObject*> PhysicsEngine::makePairKey(PhysicsObject* objA, PhysicsObject* objB) {
     return (objA < objB) ? std::make_pair(objA, objB) : std::make_pair(objB, objA);
+}
+
+bool PhysicsEngine::canAlter(NetworkedObject* object) const {
+    return object && object->getOwnerId() == GlobalData::g_clientId;
 }
 
 void PhysicsEngine::onStart() {

@@ -64,6 +64,7 @@ public:
 
     DirectX::XMVECTOR GetRotationQuaternion(const int& bufferIndex) const;
     void SetRotationQuaternion(const DirectX::XMVECTOR& rot, const int& bufferIndex, const bool& bothBuffers = false);
+    void SetRotationQuaternion(const DirectX::XMFLOAT4& rot, const int& bufferIndex, const bool& bothBuffers = false);
 
     const DirectX::XMVECTOR& GetLocalRotationQuaternion(const int& bufferIndex) const;
     void SetLocalRotationQuaternion(const DirectX::XMVECTOR& rot, const int& bufferIndex, const bool& bothBuffers = false);
