@@ -17,9 +17,6 @@ public:
 
     DirectX::XMVECTOR getHalfSize() const { return m_halfSize; }
 
-    // GJK/EPA Support
-    DirectX::XMVECTOR support(Transform* transform, const DirectX::XMVECTOR& direction) const;
-
     // SAT Helpers
     std::vector<DirectX::XMVECTOR> getWorldVertices(Transform* transform) const;
     std::vector<DirectX::XMVECTOR> getFaceNormals(Transform* transform) const;

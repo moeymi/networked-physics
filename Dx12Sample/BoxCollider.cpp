@@ -50,27 +50,6 @@ DirectX::XMMATRIX BoxCollider::getInverseInertiaTensor(float mass) {
 	return m_inverseInertiaTensor;
 }
 
-DirectX::XMVECTOR BoxCollider::support(Transform* tf, const DirectX::XMVECTOR& direction) const {
-    using namespace DirectX;
-
-    // Transform direction to local space
-    XMMATRIX invWorld = XMMatrixInverse(nullptr, tf->GetWorldMatrix(1));
-    XMVECTOR localDir = XMVector3TransformNormal(direction, invWorld);
-
-    // Calculate sign manually
-    XMVECTOR sign = XMVectorSelect(
-        XMVectorReplicate(-1.0f),
-        XMVectorReplicate(1.0f),
-        XMVectorGreater(localDir, XMVectorZero())
-    );
-
-    // Find farthest point in local space
-    XMVECTOR localPoint = XMVectorMultiply(m_halfSize, sign);
-
-    // Transform back to world space
-    return Math::LocalToWorld(tf->GetWorldMatrix(1), localPoint);
-}
-
 
 std::vector<DirectX::XMVECTOR> BoxCollider::getWorldVertices(Transform* tf) const {
     using namespace DirectX;

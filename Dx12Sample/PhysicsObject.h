@@ -53,8 +53,8 @@ public:
 		RK4,
 		Verlet
 	};
-	PhysicsObject(const MeshType& meshType, std::shared_ptr<Mesh> mesh, std::shared_ptr<Texture> texture);
-	~PhysicsObject() = default;
+	PhysicsObject(const MeshType& meshType, Mesh* mesh, Texture* texture);
+	~PhysicsObject();
 
 	void setUserData(void* userData);
 	void* getUserData() const;
@@ -104,8 +104,8 @@ public:
 private:
 	Transform m_transform;
 	MeshType m_meshType;
-	std::shared_ptr<Mesh> m_mesh;
-	std::shared_ptr<Texture> m_texture;
+	Mesh* m_mesh;
+	Texture* m_texture;
 	std::shared_ptr<Collider> m_collider;
 	Material m_material = Material::White;
 

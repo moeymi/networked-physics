@@ -6,8 +6,6 @@
 void BallToBallScenario::onLoad(CommandList& commandList)
 {
 	m_SphereMesh = Mesh::CreateSphere(commandList, 1.0f, 16, false);
-	m_customTexture = std::make_shared<Texture>();
-	m_defaultTexture = std::make_shared<Texture>();
 
 	commandList.LoadTextureFromFile(*m_customTexture, L"Assets/Textures/earth.dds");
 	commandList.LoadTextureFromFile(*m_defaultTexture, L"Assets/Textures/DefaultWhite.bmp");
@@ -17,7 +15,7 @@ void BallToBallScenario::onLoad(CommandList& commandList)
 		1.0f,
 	};
 
-	auto particle1 = std::make_shared<PhysicsObject>( MeshType::Sphere, m_SphereMesh, m_customTexture);
+	auto particle1 = std::make_shared<PhysicsObject>( MeshType::Sphere, GlobalData::g_sphereMesh.get(), GlobalData::g_customTexture.get());
 	auto sphereCollider = std::make_shared<SphereCollider>(.5f);
 	particle1->setCollider(sphereCollider);
 	particle1->setPhysicsMaterial(material);
@@ -28,7 +26,7 @@ void BallToBallScenario::onLoad(CommandList& commandList)
 	particle1->setAngularVelocity({ 0, 0, 5, 0 }, 0);
 	particle1->setAngularVelocity({ 0, 0, 5, 0 }, 1);
 
-	auto particle2 = std::make_shared<PhysicsObject>(MeshType::Sphere, m_SphereMesh, m_customTexture);
+	auto particle2 = std::make_shared<PhysicsObject>(MeshType::Sphere, GlobalData::g_sphereMesh.get(), GlobalData::g_customTexture.get());
 	particle2->setCollider(sphereCollider);
 	particle2->setPhysicsMaterial(material);
 	particle2->onLoad();

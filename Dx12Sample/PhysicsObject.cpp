@@ -7,7 +7,7 @@
 #include "Material.h"
 #include "PhysicsSimulation.h"
 
-PhysicsObject::PhysicsObject(const MeshType& meshType, std::shared_ptr<Mesh> mesh, std::shared_ptr<Texture> texture) :
+PhysicsObject::PhysicsObject(const MeshType& meshType, Mesh* mesh, Texture* texture) :
     m_mesh(mesh),
 	m_meshType(meshType),
     m_texture(texture),
@@ -19,6 +19,10 @@ PhysicsObject::PhysicsObject(const MeshType& meshType, std::shared_ptr<Mesh> mes
 	m_integrateMotion(&PhysicsObject::integrateSemiImplicitEuler)
 {
 };
+
+PhysicsObject::~PhysicsObject()
+{
+}
 
 void PhysicsObject::setUserData(void* userData) { m_userData = userData; }
 void* PhysicsObject::getUserData() const { return m_userData; }

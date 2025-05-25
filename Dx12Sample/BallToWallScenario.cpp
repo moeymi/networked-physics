@@ -6,17 +6,13 @@
 
 void BallToWallScenario::onLoad(CommandList& commandList)
 {
-	m_SphereMesh = Mesh::CreateSphere(commandList, 1.0f, 16, false);
-	m_PlaneMesh = Mesh::CreatePlane(commandList);
-	m_customTexture = std::make_shared<Texture>();
-	m_defaultTexture = std::make_shared<Texture>();
 
 	PhysicsMaterial material = {
 		0.2f, // static friction
 		1.0f,
 	};
 
-	auto particle1 = std::make_shared<PhysicsObject>( MeshType::Sphere, m_SphereMesh, GlobalData::g_customTexture);
+	auto particle1 = std::make_shared<PhysicsObject>( MeshType::Sphere, GlobalData::g_sphereMesh.get(), GlobalData::g_customTexture.get());
 	auto sphereCollider = std::make_shared<SphereCollider>(.5f);
 	particle1->setCollider(sphereCollider);
 	particle1->setPhysicsMaterial(material);
@@ -25,7 +21,7 @@ void BallToWallScenario::onLoad(CommandList& commandList)
 	//particle1->setVelocity({ 3, 0, 0, 0 }, 1);
 	particle1->setAngularVelocity({ 0, 0, 1, 0 }, 1);
 
-	auto wall = std::make_shared<PhysicsObject>(MeshType::Plane, m_PlaneMesh, GlobalData::g_defaultTexture);
+	auto wall = std::make_shared<PhysicsObject>(MeshType::Plane, GlobalData::g_planeMesh.get(), GlobalData::g_defaultTexture.get());
 	auto planeCollider = std::make_shared<BoxCollider>(DirectX::XMVectorSet(.5f, 0.01f, .5f, 0.0f));
 	wall->setCollider(planeCollider);
 	wall->setPhysicsMaterial(material);

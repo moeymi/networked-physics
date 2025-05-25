@@ -688,7 +688,7 @@ void NetworkEngine::handleScenario(const NetSim::Scenario* scenario) {
 			throw std::runtime_error("Unknown object type");
         }
 
-		auto physicsObject = std::make_shared<PhysicsObject>(objectType, objectMesh, texture);
+		auto physicsObject = std::make_shared<PhysicsObject>(objectType, objectMesh.get(), texture.get());
 		physicsObject->setCollider(collider);
 		physicsObject->setColor(color);
 		physicsObject->getTransform().SetPosition(position, 0, true);

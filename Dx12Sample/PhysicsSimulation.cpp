@@ -120,7 +120,7 @@ bool PhysicsSimulation::LoadContent()
     GlobalData::g_customTexture = std::make_shared<Texture>();
     GlobalData::g_defaultTexture = std::make_shared<Texture>();
 
-    commandList->LoadTextureFromFile(*GlobalData::g_customTexture, L"Assets/Textures/earth.dds");
+    commandList->LoadTextureFromFile(*GlobalData::g_customTexture, L"Assets/Textures/marble.dds");
     commandList->LoadTextureFromFile(*GlobalData::g_defaultTexture, L"Assets/Textures/DefaultWhite.bmp");
 
 	// Load the scenario meshes.
@@ -160,11 +160,12 @@ void PhysicsSimulation::UnloadContent()
     }
 
     // Unload textures
-    GlobalData::g_customTexture = nullptr;
-	GlobalData::g_defaultTexture = nullptr;
-	GlobalData::g_sphereMesh = nullptr;
-	GlobalData::g_boxMesh = nullptr;
-	GlobalData::g_planeMesh = nullptr;
+    m_allNetworkedObjects.clear();
+    GlobalData::g_customTexture.reset();
+    GlobalData::g_defaultTexture.reset();
+    GlobalData::g_sphereMesh.reset();
+	GlobalData::g_boxMesh.reset();
+	GlobalData::g_planeMesh.reset();
 
     auto fenceValue = commandQueue->ExecuteCommandList(commandList);
     commandQueue->WaitForFenceValue(fenceValue);
@@ -497,6 +498,11 @@ void PhysicsSimulation::OnGUI()
                         ChangeScenario(1);
 
                     ImGui::NextColumn();
+					if (ImGui::Button("Ball To Capsule Scenario", ImVec2(-1.0f, 0.0f))) {
+						ChangeScenario(2);
+					}
+
+                    ImGui::NextColumn();
                     ImGui::EndChild();
                     ImGui::TreePop();
                 }
@@ -609,6 +615,9 @@ void PhysicsSimulation::ChangeScenario(int index)
     case 1:
         m_CurrentScenario = std::make_unique<ScenarioB>();
         break;
+	case 2:
+		m_CurrentScenario = std::make_unique<BallToCapsuleScenario>();
+		break;
     default:
         break;
     }

@@ -5,10 +5,10 @@
 
 class BallToCapsuleScenario : public Scenario
 {
-	std::shared_ptr<Mesh> m_SphereMesh;
 	std::shared_ptr<Mesh> m_CapsuleMesh;
-	std::shared_ptr <Texture> m_customTexture;
-	std::shared_ptr <Texture> m_defaultTexture;
+	std::shared_ptr<PhysicsObject> m_capsule;
+	std::shared_ptr<PhysicsObject> m_particle;
+	std::shared_ptr<PhysicsObject> m_box;
 
 public:
 	BallToCapsuleScenario() = default;

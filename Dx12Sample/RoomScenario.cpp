@@ -22,12 +22,12 @@ void RoomScenario::createWalls(CommandList& commandList) {
 
 	auto planeCollider = std::make_shared<BoxCollider>(DirectX::XMVectorSet(0.5, 0.01f, 0.5, 0.0f));
 
-	auto plane1 = std::make_shared<PhysicsObject>(MeshType::Plane, GlobalData::g_planeMesh, GlobalData::g_defaultTexture);
-	auto plane2 = std::make_shared<PhysicsObject>(MeshType::Plane, GlobalData::g_planeMesh, GlobalData::g_defaultTexture);
-	auto plane3 = std::make_shared<PhysicsObject>(MeshType::Plane, GlobalData::g_planeMesh, GlobalData::g_defaultTexture);
-	auto plane4 = std::make_shared<PhysicsObject>(MeshType::Plane, GlobalData::g_planeMesh, GlobalData::g_defaultTexture);
-	auto plane5 = std::make_shared<PhysicsObject>(MeshType::Plane, GlobalData::g_planeMesh, GlobalData::g_defaultTexture);
-	auto plane6 = std::make_shared<PhysicsObject>(MeshType::Plane, GlobalData::g_planeMesh, GlobalData::g_defaultTexture);
+	auto plane1 = std::make_shared<PhysicsObject>(MeshType::Plane, GlobalData::g_planeMesh.get(), GlobalData::g_defaultTexture.get());
+	auto plane2 = std::make_shared<PhysicsObject>(MeshType::Plane, GlobalData::g_planeMesh.get(), GlobalData::g_defaultTexture.get());
+	auto plane3 = std::make_shared<PhysicsObject>(MeshType::Plane, GlobalData::g_planeMesh.get(), GlobalData::g_defaultTexture.get());
+	auto plane4 = std::make_shared<PhysicsObject>(MeshType::Plane, GlobalData::g_planeMesh.get(), GlobalData::g_defaultTexture.get());
+	auto plane5 = std::make_shared<PhysicsObject>(MeshType::Plane, GlobalData::g_planeMesh.get(), GlobalData::g_defaultTexture.get());
+	auto plane6 = std::make_shared<PhysicsObject>(MeshType::Plane, GlobalData::g_planeMesh.get(), GlobalData::g_defaultTexture.get());
 
 	plane1->onLoad();
 	plane2->onLoad();
