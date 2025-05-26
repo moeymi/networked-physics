@@ -22,6 +22,7 @@ namespace GlobalData {
 	int g_tick = 0;
 
 	std::shared_ptr<Texture> g_customTexture = nullptr;
+	std::shared_ptr<Texture> g_staticTexture = nullptr;
 	std::shared_ptr<Texture> g_defaultTexture = nullptr;
 
 	std::shared_ptr<Mesh> g_sphereMesh = nullptr;

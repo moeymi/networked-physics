@@ -1,7 +1,5 @@
 #include "BallToBallScenario.h"
-
 #include "SphereCollider.h"
-
 
 void BallToBallScenario::onLoad(CommandList& commandList)
 {

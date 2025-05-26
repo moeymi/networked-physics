@@ -686,12 +686,11 @@ void NetworkEngine::handleScenario(const NetSim::Scenario* scenario) {
 
         std::shared_ptr<Mesh> objectMesh;
         std::shared_ptr<Collider> collider;
-        std::shared_ptr<Texture> texture = GlobalData::g_defaultTexture;;
+        std::shared_ptr<Texture> texture = objCreation->is_static() ? GlobalData::g_staticTexture : GlobalData::g_customTexture;
         switch (objectType) {
 		case MeshType::Sphere:
 			objectMesh = GlobalData::g_sphereMesh;
 			collider = std::make_shared<SphereCollider>(colliderSize.x);
-			texture = GlobalData::g_customTexture;
 			break;
 		case MeshType::Box:
 			objectMesh = GlobalData::g_boxMesh;
@@ -704,6 +703,7 @@ void NetworkEngine::handleScenario(const NetSim::Scenario* scenario) {
 		case MeshType::Plane:
 			objectMesh = GlobalData::g_planeMesh;
 			collider = std::make_shared<BoxCollider>(DirectX::XMVectorSet(colliderSize.x, colliderSize.y, colliderSize.z, 0));
+            texture = GlobalData::g_defaultTexture;
 			break;
 		default:
 			throw std::runtime_error("Unknown object type");

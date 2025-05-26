@@ -8,7 +8,6 @@ void ScenarioB::onLoadInternal(CommandList& commandList)
 {
 	std::normal_distribution<float> d{ 0.0, 3.0 };
 	PhysicsMaterial material = {
-		0.5f, // static friction
 		0.5,
 		0.7
 	};

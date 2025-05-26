@@ -14,9 +14,14 @@ protected:
 	std::vector<std::shared_ptr<PhysicsObject>> m_physicsObjects;
 	static std::default_random_engine m_randomEngine;
 
+	bool m_ready = false;
+
 public:
 	Scenario() = default;
 	virtual ~Scenario() = default;
+
+	void setReady(bool ready) { m_ready = ready; }
+	bool isReady() const { return m_ready; }
 
 	void virtual onLoad(CommandList& commandList) = 0;
 	void virtual onUnload(CommandList& commandList) = 0;

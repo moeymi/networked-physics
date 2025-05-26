@@ -127,8 +127,10 @@ bool PhysicsSimulation::LoadContent()
     // Load shared textures
     GlobalData::g_customTexture = std::make_shared<Texture>();
     GlobalData::g_defaultTexture = std::make_shared<Texture>();
+	GlobalData::g_staticTexture = std::make_shared<Texture>();
 
     commandList->LoadTextureFromFile(*GlobalData::g_customTexture, L"Assets/Textures/marble.dds");
+    commandList->LoadTextureFromFile(*GlobalData::g_staticTexture, L"Assets/Textures/static.dds");
     commandList->LoadTextureFromFile(*GlobalData::g_defaultTexture, L"Assets/Textures/DefaultWhite.bmp");
 
 	// Load the scenario meshes.
@@ -178,6 +180,7 @@ void PhysicsSimulation::UnloadContent()
     m_allNetworkedObjects.clear();
 
     GlobalData::g_customTexture.reset();
+	GlobalData::g_staticTexture.reset();
     GlobalData::g_defaultTexture.reset();
     GlobalData::g_sphereMesh.reset();
 	GlobalData::g_boxMesh.reset();
@@ -254,20 +257,6 @@ void PhysicsSimulation::OnRender(RenderEventArgs& e)
     };
 
 	m_RenderingEngine.Render(renderCallback, guiCallback, m_pWindow.get());
-}
-
-// Helper to display a little (?) mark which shows a tooltip when hovered.
-static void ShowHelpMarker(const char* desc)
-{
-    ImGui::TextDisabled("(?)");
-    if (ImGui::IsItemHovered())
-    {
-        ImGui::BeginTooltip();
-        ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f);
-        ImGui::TextUnformatted(desc);
-        ImGui::PopTextWrapPos();
-        ImGui::EndTooltip();
-    }
 }
 
 namespace {
@@ -526,13 +515,12 @@ void PhysicsSimulation::OnGUI()
                 if (ImGui::Button("Broadcast Scenario")) {
                     BroadCastCurrentScenarioCreate();
                 }
-                if (m_allNetworkedObjects.size() > 0 && ImGui::Button("Start Simulation")) {
+                if (m_allNetworkedObjects.size() > 0 && m_CurrentScenario->isReady() && ImGui::Button("Start Simulation")) {
                     double localNow = GlobalData::getTimestamp();
                     double startTime = localNow + 2.0;
 
                     m_simulationScheduled = true;
                     m_simulationStartTime = startTime;
-
                     m_NetworkingEngine.scheduleSimulationStart(startTime);
                 }
             }
@@ -581,13 +569,11 @@ void PhysicsSimulation::OnGUI()
 
             if (ImGui::SliderFloat("##Gravity", &gravity, -20.0f, 20.0f, "%.5f m/s^2"));
 			if (ImGui::Button("Set Gravity")) {
-				gravity = std::max(0.0f, gravity);
                 m_PhysicsEngine.setGravity(gravity);
                 m_NetworkingEngine.changeGravity(gravity);
 			}
 
             ImGui::SameLine();
-            ShowHelpMarker("Gravity acceleration in m/s^2");
         }
 
         {
@@ -691,6 +677,8 @@ void PhysicsSimulation::CreateEmptyScenario(std::vector <std::shared_ptr<Network
     }
     auto fenceValue = commandQueue->ExecuteCommandList(commandList);
     commandQueue->WaitForFenceValue(fenceValue);
+
+	m_CurrentScenario->setReady(true);
 }
 
 
@@ -711,6 +699,7 @@ void PhysicsSimulation::BroadCastCurrentScenarioCreate()
             {
                 m_PhysicsEngine.addBody(obj);
             }
+			m_CurrentScenario->setReady(true);
         }
     }
 }

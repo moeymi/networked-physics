@@ -31,6 +31,7 @@ namespace GlobalData {
 	extern int g_tick;
 
 	extern std::shared_ptr <Texture> g_customTexture;
+	extern std::shared_ptr <Texture> g_staticTexture;
 	extern std::shared_ptr <Texture> g_defaultTexture;
 
 	extern std::shared_ptr<Mesh> g_sphereMesh;
