@@ -62,8 +62,8 @@ public:
 
 private:
     virtual void onUpdate(float deltaTime) override;
-	virtual void onStop() override;
-    virtual void onStart() override;
+	virtual void onStop() noexcept override;
+    virtual void onStart() noexcept override;
 
     std::vector<std::pair<PhysicsObject*, PhysicsObject*>> broadPhase();
 
@@ -71,13 +71,12 @@ private:
     void prestepCollisionManifolds(std::map<std::pair<PhysicsObject*, PhysicsObject*>, CollisionManifold>& contactManifolds, const float& dt);
     void resolveCollisionVelocity(CollisionManifold& manifold, const int& iteration);
     void positionalCorrection(const ContactPoint& contact, PhysicsObject* a, PhysicsObject* b);
-    void matchAndTransferImpulses(CollisionManifold& newManifold, const CollisionManifold& oldManifold);
 
     DirectX::XMVECTOR computeTangent(DirectX::XMVECTOR relVel, DirectX::XMVECTOR normal);
 
     // Helper to create a canonical key for a pair of objects
     std::pair<PhysicsObject*, PhysicsObject*> makePairKey(PhysicsObject* objA, PhysicsObject* objB);
 
-    bool canAlter(NetworkedObject* object) const;
+    bool canModify(NetworkedObject* object) const;
 
 };

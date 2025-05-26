@@ -17,7 +17,6 @@ class CommandList;
 
 struct PhysicsMaterial {
 	float friction = 0.5f;
-	float angularFriction = 0.5f;
 	float restitution = 1.0f;
 };
 
@@ -131,6 +130,8 @@ private:
 	DirectX::XMVECTOR calculateForces(const DirectX::XMVECTOR& position, const DirectX::XMVECTOR& velocity);
 	void integrateMotion(const float& deltaTime);
 	void integrateAngularMotion(const float& deltaTime);
+
+	void adjustBrightness();
 
 	void integrateEuler(const float& deltaTime);
 	void integrateSemiImplicitEuler(const float& deltaTime);

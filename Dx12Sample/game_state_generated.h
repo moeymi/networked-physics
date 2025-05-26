@@ -62,6 +62,9 @@ struct PeerListBuilder;
 struct RequestScenario;
 struct RequestScenarioBuilder;
 
+struct StopSimulation;
+struct StopSimulationBuilder;
+
 struct DiscoveryBroadcast;
 struct DiscoveryBroadcastBuilder;
 
@@ -113,15 +116,16 @@ enum MessageUnion : uint8_t {
   MessageUnion_GravityChange = 5,
   MessageUnion_RequestScenario = 6,
   MessageUnion_StartSimulation = 7,
-  MessageUnion_PeerList = 8,
-  MessageUnion_Ping = 9,
-  MessageUnion_Pong = 10,
-  MessageUnion_DiscoveryBroadcast = 11,
+  MessageUnion_StopSimulation = 8,
+  MessageUnion_PeerList = 9,
+  MessageUnion_Ping = 10,
+  MessageUnion_Pong = 11,
+  MessageUnion_DiscoveryBroadcast = 12,
   MessageUnion_MIN = MessageUnion_NONE,
   MessageUnion_MAX = MessageUnion_DiscoveryBroadcast
 };
 
-inline const MessageUnion (&EnumValuesMessageUnion())[12] {
+inline const MessageUnion (&EnumValuesMessageUnion())[13] {
   static const MessageUnion values[] = {
     MessageUnion_NONE,
     MessageUnion_Recognize,
@@ -131,6 +135,7 @@ inline const MessageUnion (&EnumValuesMessageUnion())[12] {
     MessageUnion_GravityChange,
     MessageUnion_RequestScenario,
     MessageUnion_StartSimulation,
+    MessageUnion_StopSimulation,
     MessageUnion_PeerList,
     MessageUnion_Ping,
     MessageUnion_Pong,
@@ -140,7 +145,7 @@ inline const MessageUnion (&EnumValuesMessageUnion())[12] {
 }
 
 inline const char * const *EnumNamesMessageUnion() {
-  static const char * const names[13] = {
+  static const char * const names[14] = {
     "NONE",
     "Recognize",
     "Scenario",
@@ -149,6 +154,7 @@ inline const char * const *EnumNamesMessageUnion() {
     "GravityChange",
     "RequestScenario",
     "StartSimulation",
+    "StopSimulation",
     "PeerList",
     "Ping",
     "Pong",
@@ -194,6 +200,10 @@ template<> struct MessageUnionTraits<NetSim::RequestScenario> {
 
 template<> struct MessageUnionTraits<NetSim::StartSimulation> {
   static const MessageUnion enum_value = MessageUnion_StartSimulation;
+};
+
+template<> struct MessageUnionTraits<NetSim::StopSimulation> {
+  static const MessageUnion enum_value = MessageUnion_StopSimulation;
 };
 
 template<> struct MessageUnionTraits<NetSim::PeerList> {
@@ -282,31 +292,25 @@ FLATBUFFERS_STRUCT_END(Vec4, 16);
 FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(4) PhysicsMaterial FLATBUFFERS_FINAL_CLASS {
  private:
   float friction_;
-  float angular_friction_;
   float restitution_;
 
  public:
   PhysicsMaterial()
       : friction_(0),
-        angular_friction_(0),
         restitution_(0) {
   }
-  PhysicsMaterial(float _friction, float _angular_friction, float _restitution)
+  PhysicsMaterial(float _friction, float _restitution)
       : friction_(::flatbuffers::EndianScalar(_friction)),
-        angular_friction_(::flatbuffers::EndianScalar(_angular_friction)),
         restitution_(::flatbuffers::EndianScalar(_restitution)) {
   }
   float friction() const {
     return ::flatbuffers::EndianScalar(friction_);
   }
-  float angular_friction() const {
-    return ::flatbuffers::EndianScalar(angular_friction_);
-  }
   float restitution() const {
     return ::flatbuffers::EndianScalar(restitution_);
   }
 };
-FLATBUFFERS_STRUCT_END(PhysicsMaterial, 12);
+FLATBUFFERS_STRUCT_END(PhysicsMaterial, 8);
 
 /// State of a single object at a specific sim-tick
 FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(4) ObjectUpdate FLATBUFFERS_FINAL_CLASS {
@@ -1188,6 +1192,47 @@ inline ::flatbuffers::Offset<RequestScenario> CreateRequestScenario(
   return builder_.Finish();
 }
 
+struct StopSimulation FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
+  typedef StopSimulationBuilder Builder;
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_TICK = 4
+  };
+  uint64_t tick() const {
+    return GetField<uint64_t>(VT_TICK, 0);
+  }
+  bool Verify(::flatbuffers::Verifier &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyField<uint64_t>(verifier, VT_TICK, 8) &&
+           verifier.EndTable();
+  }
+};
+
+struct StopSimulationBuilder {
+  typedef StopSimulation Table;
+  ::flatbuffers::FlatBufferBuilder &fbb_;
+  ::flatbuffers::uoffset_t start_;
+  void add_tick(uint64_t tick) {
+    fbb_.AddElement<uint64_t>(StopSimulation::VT_TICK, tick, 0);
+  }
+  explicit StopSimulationBuilder(::flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  ::flatbuffers::Offset<StopSimulation> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = ::flatbuffers::Offset<StopSimulation>(end);
+    return o;
+  }
+};
+
+inline ::flatbuffers::Offset<StopSimulation> CreateStopSimulation(
+    ::flatbuffers::FlatBufferBuilder &_fbb,
+    uint64_t tick = 0) {
+  StopSimulationBuilder builder_(_fbb);
+  builder_.add_tick(tick);
+  return builder_.Finish();
+}
+
 struct DiscoveryBroadcast FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   typedef DiscoveryBroadcastBuilder Builder;
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
@@ -1325,6 +1370,9 @@ struct NetworkMessage FLATBUFFERS_FINAL_CLASS : private ::flatbuffers::Table {
   const NetSim::StartSimulation *data_as_StartSimulation() const {
     return data_type() == NetSim::MessageUnion_StartSimulation ? static_cast<const NetSim::StartSimulation *>(data()) : nullptr;
   }
+  const NetSim::StopSimulation *data_as_StopSimulation() const {
+    return data_type() == NetSim::MessageUnion_StopSimulation ? static_cast<const NetSim::StopSimulation *>(data()) : nullptr;
+  }
   const NetSim::PeerList *data_as_PeerList() const {
     return data_type() == NetSim::MessageUnion_PeerList ? static_cast<const NetSim::PeerList *>(data()) : nullptr;
   }
@@ -1374,6 +1422,10 @@ template<> inline const NetSim::RequestScenario *NetworkMessage::data_as<NetSim:
 
 template<> inline const NetSim::StartSimulation *NetworkMessage::data_as<NetSim::StartSimulation>() const {
   return data_as_StartSimulation();
+}
+
+template<> inline const NetSim::StopSimulation *NetworkMessage::data_as<NetSim::StopSimulation>() const {
+  return data_as_StopSimulation();
 }
 
 template<> inline const NetSim::PeerList *NetworkMessage::data_as<NetSim::PeerList>() const {
@@ -1472,6 +1524,10 @@ inline bool VerifyMessageUnion(::flatbuffers::Verifier &verifier, const void *ob
     }
     case MessageUnion_StartSimulation: {
       auto ptr = reinterpret_cast<const NetSim::StartSimulation *>(obj);
+      return verifier.VerifyTable(ptr);
+    }
+    case MessageUnion_StopSimulation: {
+      auto ptr = reinterpret_cast<const NetSim::StopSimulation *>(obj);
       return verifier.VerifyTable(ptr);
     }
     case MessageUnion_PeerList: {

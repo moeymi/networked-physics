@@ -40,6 +40,10 @@ void NetworkEngine::setStartSimulationListener(std::function<void(double)> liste
 	m_startSimulation = listener;
 }
 
+void NetworkEngine::setStopSimulationListener(std::function<void()> listener) {
+	m_stopSimulation = listener;
+}
+
 void NetworkEngine::scheduleSimulationStart(float time) {
     flatbuffers::FlatBufferBuilder builder;
     auto msgType = builder.CreateString("StartSimulation");
@@ -74,6 +78,20 @@ void NetworkEngine::changeGravity(const float& gravity) {
 	}
 }
 
+void NetworkEngine::stopSimulation() {
+	flatbuffers::FlatBufferBuilder builder;
+	auto msgType = builder.CreateString("StopSimulation");
+	auto stopSim = NetSim::CreateStopSimulation(builder, GlobalData::g_tick);
+	NetSim::NetworkMessageBuilder msg(builder);
+	msg.add_msg_type(msgType);
+	msg.add_data_type(NetSim::MessageUnion_StopSimulation);
+	msg.add_data(stopSim.Union());
+	builder.Finish(msg.Finish());
+	for (const auto& s : m_peerSockets) {
+		sendMessage(s.get(), builder);
+	}
+}
+
 void NetworkEngine::initializeSockets(unsigned short listenPort) {
     WSADATA wsaData;
     if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
@@ -102,7 +120,7 @@ void NetworkEngine::connectToPeer(const std::string& ip, uint16_t port)
 
         if (isPeerConnected(peer.get())) {
             peer->close();
-			OutputDebugStringA("Peer already connected.\n");
+			Log::Warn() << "Peer " << ip << " already connected" << std::endl;
 			return;
         }
 
@@ -115,13 +133,12 @@ void NetworkEngine::connectToPeer(const std::string& ip, uint16_t port)
     catch (const std::exception& e)  // connect() threw -> ignore / retry later
     {
 		auto string = std::string("Connect to peer failed: ") + e.what();
-		OutputDebugStringA(string.c_str());
+		Log::Info() << string << std::endl;
 		return;
     }
 }
 
 void NetworkEngine::removePeer(TCPSocket* peerSocket) {
-
     {
         std::lock_guard<std::mutex> lk(m_peerMutex);
         m_peerInfoMap.erase(peerSocket->native());
@@ -138,7 +155,7 @@ void NetworkEngine::removePeer(TCPSocket* peerSocket) {
 
 void NetworkEngine::broadcastDiscovery(unsigned short discoveryPort) {
     if (!m_multicastSocket) {
-        OutputDebugStringA("Multicast socket not initialized yet.\n");
+		Log::Error() << "Multicast socket not initialized yet." << std::endl;
         return;
     }
     std::string discoveryMessage = constructDiscoveryMessage();
@@ -303,7 +320,7 @@ void NetworkEngine::assignOwnersAndBroadcastScenarioCreate(const std::vector<std
         NetSim::Vec4 rotationVec4 = { rotation.x, rotation.y, rotation.z, rotation.w };
         NetSim::Vec3 scaleVec3 = { scale.x, scale.y, scale.z };
         NetSim::Vec3 colliderSizeVec3 = { colliderSize.x, colliderSize.y, colliderSize.z };
-        NetSim::PhysicsMaterial material = { physicsMaterial.friction, physicsMaterial.angularFriction, physicsMaterial.restitution };
+        NetSim::PhysicsMaterial material = { physicsMaterial.friction, physicsMaterial.restitution };
 
         uint16_t peerIndex = 0;
         uint32_t peerId = GlobalData::g_clientId;
@@ -324,8 +341,6 @@ void NetworkEngine::assignOwnersAndBroadcastScenarioCreate(const std::vector<std
         }
 
 		auto ntObj = std::make_shared<NetworkedObject>(i, peerId, phObj);
-		OutputDebugStringA(std::to_string(peerId).c_str());
-        OutputDebugStringA("\n");
 		phObj->setUserData(ntObj.get());
         outNetworkedObjects.push_back(std::move(ntObj));
 
@@ -351,6 +366,9 @@ void NetworkEngine::assignOwnersAndBroadcastScenarioCreate(const std::vector<std
             sendMessage(s.get(), builder);
         }
     }
+
+	Log::Info() << "Broadcasted scenario creation with " << objectCreations.size() << " objects." << std::endl;
+
 }
 
 void NetworkEngine::sendMessage(TCPSocket* peerSocket, flatbuffers::FlatBufferBuilder& builder) {
@@ -554,6 +572,9 @@ void NetworkEngine::handlePeerData(TCPSocket* peerSocket) {
 	case NetSim::MessageUnion_GravityChange:
 		handleGravityChange(message->data_as_GravityChange());
 		break;
+    case:: NetSim::MessageUnion_StopSimulation:
+        handleStopSimulation(message->data_as_StopSimulation());
+        break;
     default:
         break;
     }
@@ -677,7 +698,7 @@ void NetworkEngine::handleScenario(const NetSim::Scenario* scenario) {
 			collider = std::make_shared<BoxCollider>(DirectX::XMVectorSet(colliderSize.x, colliderSize.y, colliderSize.z, 0));
 			break;
 		case MeshType::Capsule:
-            objectMesh = Mesh::CreateCapsule(*commandList, colliderSize.x, colliderSize.y, 16);
+            objectMesh = GlobalData::createCapsuleMesh(*commandList, colliderSize.x, colliderSize.y, 16);
 			collider = std::make_shared<CapsuleCollider>(colliderSize.x, colliderSize.y);
 			break;
 		case MeshType::Plane:
@@ -696,7 +717,7 @@ void NetworkEngine::handleScenario(const NetSim::Scenario* scenario) {
 		physicsObject->getTransform().SetScale(scale, 0, true);
 		physicsObject->setStatic(objCreation->is_static());
         physicsObject->setMass(objCreation->mass());
-        physicsObject->setPhysicsMaterial({ objCreation->material()->friction(), objCreation->material()->angular_friction(), objCreation->material()->restitution() });
+        physicsObject->setPhysicsMaterial({ objCreation->material()->friction(), objCreation->material()->restitution() });
 
 		auto networkedObject = std::make_shared<NetworkedObject>(objectId, ownerId, physicsObject);
 		physicsObject->setUserData(networkedObject.get());
@@ -785,6 +806,12 @@ void NetworkEngine::handleGravityChange(const NetSim::GravityChange* gravityChan
 	PhysicsEngine::setGravity(newGravity);
 }
 
+void NetworkEngine::handleStopSimulation(const NetSim::StopSimulation* stopSim) {
+	if (!stopSim) return;
+	m_stopSimulation();
+
+}
+
 void NetworkEngine::onUpdate(float deltaTime) {
     static double lastBroadcast = 0.0;
     double now = GlobalData::getTimestamp();
@@ -854,10 +881,10 @@ void NetworkEngine::onUpdate(float deltaTime) {
     sendObjectUpdatesToPeers();
 }
 
-void NetworkEngine::onStop() {
-    for (auto& s : m_peerSockets) s->close();
-    m_listenSocket->close();
+void NetworkEngine::onStop() noexcept {
+    for (auto& s : m_peerSockets) s->shutdown();
+    m_listenSocket->shutdown();
     WSACleanup();
 }
 
-void NetworkEngine::onStart() {}
+void NetworkEngine::onStart() noexcept {}

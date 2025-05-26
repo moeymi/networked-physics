@@ -22,11 +22,11 @@ protected:
 	std::vector<std::function<void(float)>> m_beforeUpdateListeners;
 
     virtual void onUpdate(float deltaTime) = 0;
-	virtual void onStop() = 0;
+	virtual void onStop() noexcept = 0;
     virtual void onStart() = 0;
 
 public:
-    virtual ~ThreadedSystem();
+    virtual ~ThreadedSystem() noexcept;
 
     int getFrequency() const;
     void setFrequency(const int& timeStep);
@@ -37,7 +37,7 @@ public:
     int getAffinity() const;
 
     void start();
-    void stop();
+    void stop() noexcept;
 
 	float getDeltaTime() const;
 

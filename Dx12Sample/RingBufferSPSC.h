@@ -28,6 +28,17 @@ public:
         return true;
     }
 
+	bool empty() const noexcept
+	{
+		return _head.load(std::memory_order_acquire) == _tail.load(std::memory_order_acquire);
+	}
+
+	void clear() noexcept
+	{
+		_head.store(0, std::memory_order_relaxed);
+		_tail.store(0, std::memory_order_relaxed);
+	}
+
 private:
     std::array<T, Capacity>        _data;
     std::atomic<size_t>            _head{ 0 };

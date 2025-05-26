@@ -73,7 +73,7 @@ void PhysicsEngine::onUpdate(float) {
         if (!snapshot.updates.empty()) {
             if (!m_outgoingBuffer->push(std::move(snapshot))) {
                 std::string errorMsg = "Failed to push snapshot to outgoing buffer. Buffer may be full.";
-                OutputDebugStringA(errorMsg.c_str());
+				Log::Error() << errorMsg << std::endl;
             }
         }
     }
@@ -165,20 +165,11 @@ void PhysicsEngine::detectAndResolveCollisions(const float& deltaTime) {
         if (objA->isStatic() && objB->isStatic()) continue;
 
         if (auto newManifoldOpt = m_collisionSystem.checkCollision(objA, objB)) {
-            CollisionManifold newManifold = *newManifoldOpt;
             auto pairKey = makePairKey(objA, objB);
-
-            auto it = m_contactManifolds.find(pairKey);
-
-            if (it != m_contactManifolds.end()) {
-                CollisionManifold& oldManifold = it->second;
-                matchAndTransferImpulses(newManifold, oldManifold);
-            }
-            currentFrameManifolds[pairKey] = std::move(newManifold);
+            currentFrameManifolds[pairKey] = std::move(newManifoldOpt.value());
         }
     }
     m_contactManifolds = std::move(currentFrameManifolds);
-
     prestepCollisionManifolds(m_contactManifolds, deltaTime);
 
     for (int iter = 0; iter < m_velocityIterations; ++iter) {
@@ -205,6 +196,11 @@ std::vector<std::pair<PhysicsObject*, PhysicsObject*>> PhysicsEngine::broadPhase
     std::vector<std::pair<PhysicsObject*, PhysicsObject*>> pairs;
     for (size_t i = 0; i < m_bodies.size(); ++i) {
         for (size_t j = i + 1; j < m_bodies.size(); ++j) {
+			// Skip pairs if we cannot modify them
+            if (!canModify(static_cast<NetworkedObject*>(m_bodies[i]->getUserData())) &&
+                !canModify(static_cast<NetworkedObject*>(m_bodies[j]->getUserData()))) {
+                continue;
+            }
             auto colliderA = m_bodies[i]->getCollider();
             auto colliderB = m_bodies[j]->getCollider();
             if (colliderA && colliderB) {
@@ -325,7 +321,6 @@ void PhysicsEngine::resolveCollisionVelocity(
     const PhysicsMaterial& matB = B->getPhysicsMaterial();
 
     const float combinedFriction = std::sqrt(matA.friction * matB.friction);
-    const float combinedAngularFriction = std::sqrt(matA.angularFriction * matB.angularFriction);
 
     const XMMATRIX invInertiaA = A->getInverseWorldInertiaTensor(0);
     const XMMATRIX invInertiaB = B->getInverseWorldInertiaTensor(0);
@@ -363,8 +358,8 @@ void PhysicsEngine::resolveCollisionVelocity(
 
         XMVECTOR Pn = n * actualN;
 
-        if (!A->isStatic() && canAlter(static_cast<NetworkedObject*>(A->getUserData()))) A->applyImpulseAtPosition(-Pn, c.position);
-        if (!B->isStatic() && canAlter(static_cast<NetworkedObject*>(B->getUserData()))) B->applyImpulseAtPosition(Pn, c.position);
+        if (!A->isStatic() && canModify(static_cast<NetworkedObject*>(A->getUserData()))) A->applyImpulseAtPosition(-Pn, c.position);
+        if (!B->isStatic() && canModify(static_cast<NetworkedObject*>(B->getUserData()))) B->applyImpulseAtPosition(Pn, c.position);
 
         vA = A->getVelocity(iteration != 0);
         wA = A->getAngularVelocity(iteration != 0);
@@ -387,8 +382,8 @@ void PhysicsEngine::resolveCollisionVelocity(
         float actualLambdaT = c.accumulatedFrictionImpulse - oldAccumT;
 
         XMVECTOR Pt = t * actualLambdaT;
-        if (!A->isStatic() && canAlter(static_cast<NetworkedObject*>(A->getUserData()))) A->applyImpulseAtPosition(-Pt, c.position);
-        if (!B->isStatic() && canAlter(static_cast<NetworkedObject*>(B->getUserData()))) B->applyImpulseAtPosition(Pt, c.position);
+        if (!A->isStatic() && canModify(static_cast<NetworkedObject*>(A->getUserData()))) A->applyImpulseAtPosition(-Pt, c.position);
+        if (!B->isStatic() && canModify(static_cast<NetworkedObject*>(B->getUserData()))) B->applyImpulseAtPosition(Pt, c.position);
 
         if (c.angularMass > 1e-9f)
         {
@@ -398,7 +393,7 @@ void PhysicsEngine::resolveCollisionVelocity(
             float relOmegaN = XMVectorGetX(XMVector3Dot(relVelAngular, n));
             float lambdaA = -relOmegaN * c.angularMass;
 
-            float maxA = combinedAngularFriction * c.accumulatedNormalImpulse;
+            float maxA = combinedFriction * c.accumulatedNormalImpulse;
 
             float oldAccumA = c.accumulatedAngularFrictionImpulse;
             c.accumulatedAngularFrictionImpulse =
@@ -407,8 +402,8 @@ void PhysicsEngine::resolveCollisionVelocity(
                 c.accumulatedAngularFrictionImpulse - oldAccumA;
 
             XMVECTOR Pa = n * actualLambdaA;
-            if (!A->isStatic() && canAlter(static_cast<NetworkedObject*>(A->getUserData()))) A->applyAngularImpulse(-Pa);
-            if (!B->isStatic() && canAlter(static_cast<NetworkedObject*>(B->getUserData()))) B->applyAngularImpulse(Pa);
+            if (!A->isStatic() && canModify(static_cast<NetworkedObject*>(A->getUserData()))) A->applyAngularImpulse(-Pa);
+            if (!B->isStatic() && canModify(static_cast<NetworkedObject*>(B->getUserData()))) B->applyAngularImpulse(Pa);
         }
     }
 }
@@ -456,37 +451,11 @@ void PhysicsEngine::positionalCorrection(const ContactPoint& contact, PhysicsObj
         (penetrationDepth * percent) / totalInvMass
     );
 
-    if (!a->isStatic() && canAlter(static_cast<NetworkedObject*>(a->getUserData()))) {
+    if (!a->isStatic() && canModify(static_cast<NetworkedObject*>(a->getUserData()))) {
         a->getTransform().Translate(XMVectorScale(correction, -invMassA), 1);
     }
-    if (!b->isStatic() && canAlter(static_cast<NetworkedObject*>(b->getUserData()))) {
+    if (!b->isStatic() && canModify(static_cast<NetworkedObject*>(b->getUserData()))) {
         b->getTransform().Translate(XMVectorScale(correction, invMassB), 1);
-    }
-}
-
-void PhysicsEngine::matchAndTransferImpulses(CollisionManifold& newManifold, const CollisionManifold& oldManifold) {
-    using namespace DirectX;
-    const float matchDistanceThresholdSq = 0.01f * 0.01f; // Example threshold
-
-    for (auto& newContact : newManifold.contacts) {
-        float closestDistSq = 1e10f;
-        const ContactPoint* bestMatch = nullptr;
-
-        for (const auto& oldContact : oldManifold.contacts) {
-            // Match based on world-space position proximity (simplistic)
-            float distSq = XMVectorGetX(XMVector3LengthSq(XMVectorSubtract(newContact.position, oldContact.position)));
-            if (distSq < closestDistSq && distSq < matchDistanceThresholdSq) {
-                closestDistSq = distSq;
-                bestMatch = &oldContact;
-            }
-        }
-
-        if (bestMatch) {
-            // Transfer impulses from the matched old contact
-            newContact.accumulatedNormalImpulse = bestMatch->accumulatedNormalImpulse;
-            newContact.accumulatedFrictionImpulse = bestMatch->accumulatedFrictionImpulse;
-            newContact.accumulatedAngularFrictionImpulse = bestMatch->accumulatedAngularFrictionImpulse; // NEW
-        }
     }
 }
 
@@ -494,14 +463,14 @@ std::pair<PhysicsObject*, PhysicsObject*> PhysicsEngine::makePairKey(PhysicsObje
     return (objA < objB) ? std::make_pair(objA, objB) : std::make_pair(objB, objA);
 }
 
-bool PhysicsEngine::canAlter(NetworkedObject* object) const {
+bool PhysicsEngine::canModify(NetworkedObject* object) const {
     return object && object->getOwnerId() == GlobalData::g_clientId;
 }
 
-void PhysicsEngine::onStart() {
+void PhysicsEngine::onStart() noexcept {
 	if (m_simulationDeltaTime <= 0.0f) {
         m_simulationDeltaTime = m_fixedTimeStep;
 	}
 }
 
-void PhysicsEngine::onStop() {}
+void PhysicsEngine::onStop() noexcept {}

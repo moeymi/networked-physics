@@ -91,6 +91,12 @@ PhysicsSimulation::PhysicsSimulation(const std::wstring& name, int width, int he
 			m_PhysicsEngine.setGravity(gravity);
 		}
 	);
+    m_NetworkingEngine.setStopSimulationListener(
+        [this]()
+        {
+            StopSimulation();
+        }
+    );
 	m_NetworkingEngine.setStartSimulationListener(
 		[this](double time)
 		{
@@ -106,12 +112,14 @@ PhysicsSimulation::~PhysicsSimulation()
 
 bool PhysicsSimulation::LoadContent()
 {
+    Log::Warn() << ("Loading content for PhysicsSimulation...") << std::endl;
+
     auto device = Application::Get().GetDevice();
     auto commandQueue = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY);
     auto commandList = commandQueue->GetCommandList();
 
     std::srand(static_cast<unsigned int>(std::chrono::system_clock::now().time_since_epoch().count()));
-    GlobalData::g_clientId = rand() % 100;
+    GlobalData::g_clientId = rand() % 5000;
 
 	// Load the rendering engine.
 	m_RenderingEngine.LoadContent(commandQueue, commandList, device, m_pWindow.get());
@@ -127,6 +135,7 @@ bool PhysicsSimulation::LoadContent()
 	GlobalData::g_sphereMesh = Mesh::CreateSphere(*commandList, 1.0f, 16);
 	GlobalData::g_boxMesh = Mesh::CreateCube(*commandList, 1.0f, false);
 	GlobalData::g_planeMesh = Mesh::CreatePlane(*commandList);
+    GlobalData::g_capsuleMeshes.clear();
 
     auto fenceValue = commandQueue->ExecuteCommandList(commandList);
     commandQueue->WaitForFenceValue(fenceValue);
@@ -148,19 +157,26 @@ void PhysicsSimulation::OnResize(ResizeEventArgs& e)
 
 void PhysicsSimulation::UnloadContent()
 {
-    m_PhysicsEngine.stop();
-	m_NetworkingEngine.stop();
     auto device = Application::Get().GetDevice();
     auto commandQueue = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY);
     auto commandList = commandQueue->GetCommandList();
-
-    if (m_CurrentScenario)
     {
-        m_CurrentScenario->onUnload(*commandList);
+        std::lock_guard<std::mutex> lock(m_ScenarioMutex);
+        if (m_CurrentScenario)
+        {
+            m_CurrentScenario->onUnload(*commandList);
+        }
+        m_CurrentScenario.reset();
+        m_CurrentScenario = nullptr;
     }
 
-    // Unload textures
+    m_simulationScheduled = false;
+    m_simulationStartTime = 0.0;
+
+    m_PhysicsEngine.stop();
+	m_NetworkingEngine.stop();
     m_allNetworkedObjects.clear();
+
     GlobalData::g_customTexture.reset();
     GlobalData::g_defaultTexture.reset();
     GlobalData::g_sphereMesh.reset();
@@ -169,9 +185,6 @@ void PhysicsSimulation::UnloadContent()
 
     auto fenceValue = commandQueue->ExecuteCommandList(commandList);
     commandQueue->WaitForFenceValue(fenceValue);
-
-	m_simulationScheduled = false;
-	m_simulationStartTime = 0.0;
 }
 
 void PhysicsSimulation::OnUpdate(UpdateEventArgs& e)
@@ -228,6 +241,7 @@ void PhysicsSimulation::OnRender(RenderEventArgs& e)
     // Wrap the member function in a lambda to match the std::function signature.  
     auto renderCallback = [this](CommandList& commandList, const DirectX::XMMATRIX& viewMatrix, const DirectX::XMMATRIX& viewProjectionMatrix)
         {
+			std::lock_guard<std::mutex> lock(m_ScenarioMutex);
             if (m_CurrentScenario)
             {
                 m_CurrentScenario->onRender(commandList, viewMatrix, viewProjectionMatrix);
@@ -258,6 +272,7 @@ static void ShowHelpMarker(const char* desc)
 
 namespace {
     bool g_AllowFullscreenToggle = true;
+    bool g_AllowConsoleToggle = true;
 }
 
 void PhysicsSimulation::OnKeyPressed(KeyEventArgs& e)
@@ -316,6 +331,9 @@ void PhysicsSimulation::OnKeyPressed(KeyEventArgs& e)
         case KeyCode::ShiftKey:
             m_Shift = true;
             break;
+        case KeyCode::F2:
+			g_AllowConsoleToggle = !g_AllowConsoleToggle;
+			break;
 		default:
 			break;
         }
@@ -493,16 +511,13 @@ void PhysicsSimulation::OnGUI()
                     if (ImGui::Button("Spheres Scenario", ImVec2(-1.0f, 0.0f))) {
                         ChangeScenario(0);
                     }
-                    ImGui::NextColumn();
                     if (ImGui::Button("Scenario B", ImVec2(-1.0f, 0.0f)))
                         ChangeScenario(1);
 
-                    ImGui::NextColumn();
 					if (ImGui::Button("Ball To Capsule Scenario", ImVec2(-1.0f, 0.0f))) {
 						ChangeScenario(2);
 					}
 
-                    ImGui::NextColumn();
                     ImGui::EndChild();
                     ImGui::TreePop();
                 }
@@ -521,6 +536,12 @@ void PhysicsSimulation::OnGUI()
                     m_NetworkingEngine.scheduleSimulationStart(startTime);
                 }
             }
+        }
+        else {
+			if (ImGui::Button("Stop Simulation")) {
+				StopSimulation();
+				m_NetworkingEngine.stopSimulation();
+			}
         }
 
         if (ImGui::CollapsingHeader("Network")) {
@@ -542,7 +563,7 @@ void PhysicsSimulation::OnGUI()
         }
 
         if (ImGui::CollapsingHeader("Physics")) {
-            float gravity = m_PhysicsEngine.getGravity();
+            static float gravity = m_PhysicsEngine.getGravity();
             bool gravityEnabled = m_PhysicsEngine.isGravityEnabled();
             bool reversed = gravity < 0;
 
@@ -555,28 +576,26 @@ void PhysicsSimulation::OnGUI()
 			ImGui::SameLine();
 			ImGui::Text("%d sec", GlobalData::g_tick);
 
-            ImGui::Text("Gravity");
+            ImGui::Text("Gravity:  %f", m_PhysicsEngine.getGravity());
             ImGui::SameLine();
-            ImGui::Text("Reversed");
-            ImGui::SameLine();
-            if (ImGui::Checkbox("##Gravity Reversed", &reversed)) {
-                gravity = -gravity;
-                m_PhysicsEngine.setGravity(gravity);
-                m_NetworkingEngine.changeGravity(gravity);
-            }
 
-            if (ImGui::SliderFloat("##Gravity", &gravity, 0.0f, 20.0f, "%.5f m/s^2")) {
+            if (ImGui::SliderFloat("##Gravity", &gravity, -20.0f, 20.0f, "%.5f m/s^2"));
+			if (ImGui::Button("Set Gravity")) {
+				gravity = std::max(0.0f, gravity);
                 m_PhysicsEngine.setGravity(gravity);
                 m_NetworkingEngine.changeGravity(gravity);
-            }
+			}
 
             ImGui::SameLine();
             ShowHelpMarker("Gravity acceleration in m/s^2");
         }
 
-        if (m_CurrentScenario && ImGui::CollapsingHeader("Simulation Info")) {
-            int objectCount = static_cast<int>(m_CurrentScenario->getPhysicsObjects().size());
-            ImGui::Text("Objects in scenario: %d", objectCount);
+        {
+            std::lock_guard<std::mutex> lock(m_ScenarioMutex);
+            if (m_CurrentScenario && ImGui::CollapsingHeader("Simulation Info")) {
+                int objectCount = static_cast<int>(m_CurrentScenario->getPhysicsObjects().size());
+                ImGui::Text("Objects in scenario: %d", objectCount);
+            }
         }
 
         if (ImGui::Button("Reset Camera")) {
@@ -592,6 +611,8 @@ void PhysicsSimulation::OnGUI()
 
     if (m_CurrentScenario)
         m_CurrentScenario->drawImGui();
+
+    RenderFixedBottomLogConsole(Log::GetEntries());
 }
 
 
@@ -599,7 +620,7 @@ void PhysicsSimulation::ChangeScenario(int index)
 {
     auto commandQueue = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY);
     auto commandList = commandQueue->GetCommandList();
-    
+	std::lock_guard<std::mutex> lock(m_ScenarioMutex);
     if (m_CurrentScenario)
     {
         m_PhysicsEngine.stop();
@@ -636,6 +657,8 @@ void PhysicsSimulation::CreateEmptyScenario(std::vector <std::shared_ptr<Network
     auto commandList = commandQueue->GetCommandList();
 
     m_allNetworkedObjects = std::move(networkedObjects);
+
+    std::lock_guard<std::mutex> lock(m_ScenarioMutex);
 
 	auto physicsObjects = std::vector<std::shared_ptr<PhysicsObject>>();
 	for (auto& netObj : m_allNetworkedObjects)
@@ -674,16 +697,106 @@ void PhysicsSimulation::CreateEmptyScenario(std::vector <std::shared_ptr<Network
 void PhysicsSimulation::BroadCastCurrentScenarioCreate()
 {
     if (m_PhysicsEngine.isRunning()) {
-		m_lastError = "Cannot create scenario while physics engine is running.";
+		// m_lastError = "Cannot create scenario while physics engine is running.";
+		return;
     }
-	if (m_CurrentScenario)
-	{
-		m_PhysicsEngine.clearBodies();		
-        m_allNetworkedObjects.clear();
-		m_NetworkingEngine.assignOwnersAndBroadcastScenarioCreate(m_CurrentScenario->getPhysicsObjects(), m_PhysicsEngine.getGravity(), m_allNetworkedObjects);
-		for (const auto& obj : m_allNetworkedObjects)
-		{
-            m_PhysicsEngine.addBody(obj);
-		}
+    {
+        std::lock_guard<std::mutex> lock(m_ScenarioMutex);
+        if (m_CurrentScenario)
+        {
+            m_PhysicsEngine.clearBodies();
+            m_allNetworkedObjects.clear();
+            m_NetworkingEngine.assignOwnersAndBroadcastScenarioCreate(m_CurrentScenario->getPhysicsObjects(), m_PhysicsEngine.getGravity(), m_allNetworkedObjects);
+            for (const auto& obj : m_allNetworkedObjects)
+            {
+                m_PhysicsEngine.addBody(obj);
+            }
+        }
     }
+}
+
+void PhysicsSimulation::StopSimulation()
+{
+	m_PhysicsEngine.stop();
+	m_simulationScheduled = false;
+	m_simulationStartTime = 0.0;
+
+	m_outgoingBuffer.clear();
+	m_incomingBuffer.clear();
+    {
+        std::lock_guard<std::mutex> lock(m_ScenarioMutex);
+        if (m_CurrentScenario)
+        {
+            auto commandQueue = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY);
+            auto commandList = commandQueue->GetCommandList();
+            m_CurrentScenario->onUnload(*commandList);
+            auto fenceValue = commandQueue->ExecuteCommandList(commandList);
+            commandQueue->WaitForFenceValue(fenceValue);
+
+            m_CurrentScenario.reset();
+            m_CurrentScenario = nullptr;
+        }
+    }
+	m_PhysicsEngine.clearBodies();
+	m_allNetworkedObjects.clear();
+}
+
+void PhysicsSimulation::RenderFixedBottomLogConsole(const std::vector<LogEntry>& entries) {
+#if USE_LOGGER
+	if (!g_AllowConsoleToggle)
+		return;
+    const float consoleHeight = 200.0f;  // Fixed height
+    const ImVec2 windowPadding = ImVec2(10, 10);
+
+    ImGuiIO& io = ImGui::GetIO();
+    ImVec2 windowPos = ImVec2(0, io.DisplaySize.y - consoleHeight);
+    ImVec2 windowSize = ImVec2(io.DisplaySize.x, consoleHeight);
+
+    ImGui::SetNextWindowPos(windowPos);
+    ImGui::SetNextWindowSize(windowSize);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
+
+    ImGuiWindowFlags flags = ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoCollapse;
+
+    ImGui::Begin("Log Console", nullptr, flags);
+
+    static ImGuiTextFilter filter;
+    filter.Draw("Filter");
+
+    ImGui::SameLine();
+    if (ImGui::Button("Clear"))
+    {
+        Log::Clear();
+        ImGui::SetScrollHere(0.0f);
+    }
+
+
+    if (ImGui::BeginChild("ConsoleScrollRegion", ImVec2(0, 0), false, ImGuiWindowFlags_AlwaysVerticalScrollbar)) {
+        for (const auto& entry : entries) {
+            if (!filter.PassFilter(entry.message.c_str()))
+                continue;
+
+            ImVec4 color;
+            switch (entry.level) {
+            case LogLevel::Log:    color = ImVec4(1, 1, 1, 1); break;
+            case LogLevel::Warning:color = ImVec4(1, 1, 0, 1); break;
+            case LogLevel::Error:  color = ImVec4(1, 0.4f, 0.4f, 1); break;
+            }
+
+            ImGui::PushStyleColor(ImGuiCol_Text, color);
+            ImGui::TextWrapped("%s", entry.message.c_str());
+            ImGui::PopStyleColor();
+        }
+
+        if (ImGui::GetScrollY() >= ImGui::GetScrollMaxY())
+            ImGui::SetScrollHere(1.0f);
+    }
+    ImGui::EndChild();
+
+    ImGui::PopStyleVar(2);
+    ImGui::End();
+#endif
 }

@@ -1,6 +1,5 @@
 #pragma once
 // Include winsock
-#include "game_state_generated.h"
 #include <iostream>
 #include <string>
 #include <vector>
@@ -11,6 +10,8 @@
 
 #include <DirectXMath.h>
 
+#include "game_state_generated.h"
+#include "Log.h"
 
 #include <winsock2.h>
 #include <ws2tcpip.h>

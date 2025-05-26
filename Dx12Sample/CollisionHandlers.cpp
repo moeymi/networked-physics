@@ -34,6 +34,16 @@ std::optional<CollisionManifold> CollisionHandlers::SphereVsSphere(PhysicsObject
          radiusSum - distance
          });
 
+#if USE_LOGGER
+	 Log::Info() << "SphereVsSphere: Collision detected with distance: " << distance << " at " <<
+		 DirectX::XMVectorGetX(manifold.contacts[0].position) << ", " <<
+		 DirectX::XMVectorGetY(manifold.contacts[0].position) << ", " <<
+		 DirectX::XMVectorGetZ(manifold.contacts[0].position) << " with normal: " <<
+		 DirectX::XMVectorGetX(manifold.contacts[0].normal) << ", " <<
+		 DirectX::XMVectorGetY(manifold.contacts[0].normal) << ", " <<
+		 DirectX::XMVectorGetZ(manifold.contacts[0].normal) << " and penetration: " << manifold.contacts[0].penetration << std::endl;
+#endif
+
      if(flip)
 	 {
 		 // Swap the objects in the manifold if flip is true
@@ -113,8 +123,18 @@ std::optional<CollisionManifold> CollisionHandlers::SphereVsBox(PhysicsObject* s
             normal,
             penetration
         });
+
     }
 
+#if USE_LOGGER
+	Log::Info() << "SphereVsBox: Collision detected with distance: " << distance << " at {" <<
+		XMVectorGetX(manifold.contacts[0].position) << ", " <<
+		XMVectorGetY(manifold.contacts[0].position) << ", " <<
+		XMVectorGetZ(manifold.contacts[0].position) << "} with normal: {" <<
+		XMVectorGetX(manifold.contacts[0].normal) << ", " <<
+		XMVectorGetY(manifold.contacts[0].normal) << ", " <<
+		XMVectorGetZ(manifold.contacts[0].normal) << "} and penetration: " << manifold.contacts[0].penetration << std::endl;
+#endif
     if (flip)
     {
         // Swap the objects in the manifold if flip is true
@@ -204,6 +224,17 @@ std::optional<CollisionManifold> CollisionHandlers::SphereVsCapsule(PhysicsObjec
         normal,
         penetration
         });
+
+
+#if USE_LOGGER
+    Log::Info() << "SphereVsCasule: Collision detected with distance: " << distance << " at " <<
+        XMVectorGetX(contactPoint) << ", " <<
+        XMVectorGetY(contactPoint) << ", " <<
+        XMVectorGetZ(contactPoint) << " with normal: " <<
+        XMVectorGetX(normal) << ", " <<
+        XMVectorGetY(normal) << ", " <<
+        XMVectorGetZ(normal) << " and penetration: " << penetration << std::endl;
+#endif
 
     // 7. Handle Flip
     if (flip)
@@ -329,6 +360,17 @@ std::optional<CollisionManifold> CollisionHandlers::CapsuleVsCapsule(PhysicsObje
 
     m.contacts.push_back({ contact, normal, penetration });
 
+
+#if USE_LOGGER
+    Log::Info() << "CapsuleVsCapsule: Collision detected with distance: " << distance << " at " <<
+        XMVectorGetX(contact) << ", " <<
+        XMVectorGetY(contact) << ", " <<
+        XMVectorGetZ(contact) << " with normal: " <<
+        XMVectorGetX(normal) << ", " <<
+        XMVectorGetY(normal) << ", " <<
+        XMVectorGetZ(normal) << " and penetration: " << penetration << std::endl;
+#endif
+
     if (flip)
     {
         std::swap(m.objectA, m.objectB);
@@ -440,6 +482,17 @@ std::optional<CollisionManifold> CollisionHandlers::BoxVsCapsule(PhysicsObject* 
 
         m.contacts.push_back({ closestPt, n, penetration });
     }
+
+
+#if USE_LOGGER
+	Log::Info() << "BoxVsCasule: Collision detected with distance: " << dist << " at " <<
+		XMVectorGetX(m.contacts[0].position) << ", " <<
+		XMVectorGetY(m.contacts[0].position) << ", " <<
+		XMVectorGetZ(m.contacts[0].position) << " with normal: " <<
+		XMVectorGetX(m.contacts[0].normal) << ", " <<
+		XMVectorGetY(m.contacts[0].normal) << ", " <<
+		XMVectorGetZ(m.contacts[0].normal) << " and penetration: " << m.contacts[0].penetration << std::endl;
+#endif
 
     // ------------------------------------------------------------------
     // 6. Flip?

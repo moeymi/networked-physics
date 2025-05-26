@@ -2,6 +2,7 @@
 #include "pch.h"
 #include <optional>
 #include <functional>
+#include "Log.h"
 #include "PhysicsObject.h"
 namespace CollisionHandlers {
     std::optional<CollisionManifold> SphereVsSphere(PhysicsObject* a, PhysicsObject* b, const bool& flip = false);

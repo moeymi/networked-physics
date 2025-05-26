@@ -41,6 +41,7 @@
 #include "RootSignature.h"
 #include "Texture.h"
 #include "VertexBuffer.h"
+#include "Log.h"
 
 #include <DirectXMath.h>
 
@@ -139,13 +140,12 @@ protected:
     void OnGUI();
 
 private:
+	std::mutex m_ScenarioMutex;
     std::unique_ptr<Scenario> m_CurrentScenario;
 
 	RenderingEngine m_RenderingEngine;
 	PhysicsEngine m_PhysicsEngine;
 	NetworkEngine m_NetworkingEngine;
-
-	std::string m_lastError = "Error message";
 
     std::vector<std::shared_ptr<NetworkedObject>> m_allNetworkedObjects;
     std::array<NetworkedObject*, 40000> m_unownedObjects{ nullptr };
@@ -173,8 +173,10 @@ private:
 
     int m_Width;
     int m_Height;
-
 	void ChangeScenario(int index);
 	void CreateEmptyScenario(std::vector<std::shared_ptr<NetworkedObject>>&&);
 	void BroadCastCurrentScenarioCreate();
+	void StopSimulation();
+
+    void RenderFixedBottomLogConsole(const std::vector<LogEntry>& entries);
 };

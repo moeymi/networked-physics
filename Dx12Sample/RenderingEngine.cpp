@@ -17,8 +17,8 @@ RenderingEngine::RenderingEngine() :
     m_ScissorRect(CD3DX12_RECT(0, 0, LONG_MAX, LONG_MAX))
     , m_ClearColor(0.4f, 0.2f, 0.4f, 1.0f)
 {
-    XMVECTOR cameraPos = XMVectorSet(0, 5, -20, 1);
-    XMVECTOR cameraTarget = XMVectorSet(0, 5, 0, 1);
+    XMVECTOR cameraPos = XMVectorSet(0, 0, -20, 1);
+    XMVECTOR cameraTarget = XMVectorSet(0, 0, 0, 1);
     XMVECTOR cameraUp = XMVectorSet(0, 1, 0, 0);
     m_Camera.set_LookAt(cameraPos, cameraTarget, cameraUp);
 

@@ -18,7 +18,6 @@ void SpheresScenario::onLoadInternal(CommandList& commandList)
 
 	PhysicsMaterial material = {
 		m_friction,
-		m_angularFriction,
 		m_restitution
 	};
 	CollisionSystem collisionSystem;
@@ -84,9 +83,6 @@ void SpheresScenario::drawImGui() {
 	if (ImGui::CollapsingHeader("Physics")) {
 		if (ImGui::DragFloat("Friction", &m_friction, 0.01f, 0.0f, 1.0f)) {
 			m_friction = std::clamp(m_friction, 0.0f, 1.0f);
-		}
-		if(ImGui::DragFloat("Angular Friction", &m_angularFriction, 0.01f, 0.0f, 1.0f)) {
-			m_angularFriction = std::clamp(m_angularFriction, 0.0f, 1.0f);
 		}
 		if (ImGui::DragFloat("Restitution", &m_restitution, 0.01f, 0.0f, 1.0f)) {
 			m_restitution = std::clamp(m_restitution, 0.0f, 1.0f);

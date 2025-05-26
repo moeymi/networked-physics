@@ -68,7 +68,7 @@ public:
                 return TCPSocket(INVALID_SOCKET, isBlocking());
             }
 			std::string err = "accept() failed: " + std::to_string(ec);
-			OutputDebugStringA(err.c_str());
+			Log::Error() << err << std::endl;
         }
         return TCPSocket(client, isBlocking());
     }
@@ -82,7 +82,7 @@ public:
             int ec = WSAGetLastError();
             if (!(ec == WSAEWOULDBLOCK || ec == WSAEINPROGRESS)) {
 				std::string err = "connect() failed: " + std::to_string(ec);
-				OutputDebugStringA(err.c_str());
+				Log::Error() << err << std::endl;
             }
         }
         return rc;
@@ -100,7 +100,8 @@ public:
                     break;
                 }
 				std::string err = "send() failed: " + std::to_string(ec);
-				OutputDebugStringA(err.c_str());
+                Log::Error() << err << std::endl;
+                break;
             }
 			sentAll += sent;
             ptr += sent;
@@ -115,7 +116,7 @@ public:
             int ec = WSAGetLastError();
             if (ec != WSAEWOULDBLOCK) {
                 std::string err = "recv() failed: " + std::to_string(ec);
-                OutputDebugStringA(err.c_str());
+                Log::Error() << err << std::endl;
             }
         }
         return recvd;
@@ -128,11 +129,17 @@ public:
 			int ec = WSAGetLastError();
 			if (ec != WSAEWOULDBLOCK) {
 				auto err = std::string("getsockname() failed: ") + std::to_string(ec);
-				OutputDebugStringA(err.c_str());
+                Log::Error() << err << std::endl;
 				return std::nullopt;
 			}
 		}
 		return addr;
+	}
+
+	void shutdown() {
+		if (sock_ != INVALID_SOCKET) {
+			::shutdown(sock_, SD_BOTH);
+		}
 	}
 
     bool isBlocking() const {

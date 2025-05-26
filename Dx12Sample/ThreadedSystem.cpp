@@ -6,7 +6,6 @@
 
 ThreadedSystem::~ThreadedSystem() { stop(); }
 
-
 void ThreadedSystem::setAffinity(const int& coreId) { m_coreAffinity = coreId; }
 int ThreadedSystem::getAffinity() const { return m_coreAffinity; }
 
@@ -21,7 +20,7 @@ void ThreadedSystem::setFrequency(const int& freq) {
 }
 
 void ThreadedSystem::start() {
-    if (!m_running) {
+    if (!m_running.load()) {
         m_running = true;
 		m_fixedTimeStep = 1.0f / static_cast<float>(m_frequency);
 		onStart();
@@ -33,69 +32,58 @@ void ThreadedSystem::start() {
     }
 }
 
-void ThreadedSystem::stop() {
-    m_running = false;
-	if (m_thread.joinable()) {
-		onStop();
-	}
+void ThreadedSystem::stop() noexcept {
+	if (!m_running.load()) return;
+
+	m_running.store(false, std::memory_order_seq_cst);
     if (m_thread.joinable()) {
         m_thread.join();
     }
+    onStop();
 }
 
 void ThreadedSystem::run() {
     using clock = std::chrono::steady_clock;
-    constexpr int maxUpdatesPerCycle = 5;
+    constexpr int   MAX_UPDATES = 5;
+    constexpr float MAX_DELTA = 0.25f;
 
-    auto previousTime = clock::now();
-	auto realPreviousTime = previousTime;
-    float accumulatedTime = 0.0f;
+    auto previous = clock::now();
+    auto realPrev = previous;
+    double accumulator = 0.0;
 
-    while (m_running) {
-        auto currentTime = clock::now();
-        float frameTime = std::chrono::duration<float>(currentTime - previousTime).count();
-        previousTime = currentTime;
+    while (m_running.load(std::memory_order_relaxed)) {
+        auto now = clock::now();
+        double frameDt = std::chrono::duration<double>(now - previous).count();
+        previous = now;
 
-        frameTime = min(frameTime, 0.25f); // clamp to avoid huge catch-ups
-        accumulatedTime += frameTime;
+        frameDt = min(frameDt, double(MAX_DELTA));
+        accumulator += frameDt;
 
-        int updateCount = 0;
-        while (accumulatedTime >= m_fixedTimeStep && updateCount < maxUpdatesPerCycle) {
-            auto realCurrentTime = clock::now();
-            m_realTimeStep = std::chrono::duration<float>(realCurrentTime - realPreviousTime).count();
-
-			realPreviousTime = realCurrentTime;
+        int updates = 0;
+        while (accumulator >= m_fixedTimeStep && updates < MAX_UPDATES) {
+            auto realNow = clock::now();
+            m_realTimeStep = std::chrono::duration<double>(realNow - realPrev).count();
+            realPrev = realNow;
 
             {
-                std::lock_guard<std::mutex> lock(m_listenersMutex);
-                for (const auto& listener : m_beforeUpdateListeners) {
-                    listener(m_fixedTimeStep);
-                }
+                std::lock_guard<std::mutex> lk(m_listenersMutex);
+                for (auto& L : m_beforeUpdateListeners) L(m_fixedTimeStep);
             }
-
             onUpdate(m_fixedTimeStep);
-
             {
-                std::lock_guard<std::mutex> lock(m_listenersMutex);
-                for (const auto& listener : m_postUpdateListeners) {
-                    listener(m_fixedTimeStep);
-                }
+                std::lock_guard<std::mutex> lk(m_listenersMutex);
+                for (auto& L : m_postUpdateListeners) L(m_fixedTimeStep);
             }
 
-            accumulatedTime -= m_fixedTimeStep;
-            updateCount++;
+            accumulator -= m_fixedTimeStep;
+            ++updates;
         }
 
-        if (updateCount == maxUpdatesPerCycle) {
-            // If we hit the update cap, we likely dropped frames or are running slow.
-            accumulatedTime = 0.0f; // Optionally reset, or log a warning
+        if (updates == MAX_UPDATES) {
+            accumulator *= 0.5;
         }
 
-        // Sleep until the next frame
-        float timeToSleep = m_fixedTimeStep - accumulatedTime;
-        if (timeToSleep > 0.0f) {
-            std::this_thread::sleep_for(std::chrono::duration<float>(0));
-        }
+        std::this_thread::yield();
     }
 }
 

@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <random>
+#include <algorithm>
 
 #include "CommandList.h"
 #include "Material.h"
@@ -73,20 +74,59 @@ void PhysicsObject::setMass(const float& mass)
 {
 	m_mass = max(mass, 0.00001f);
 }
+
 void PhysicsObject::setStatic(const bool& isStatic)
 {
 	m_transform.SetStatic(isStatic);
 }
 
-void PhysicsObject::setPhysicsMaterial(const PhysicsMaterial& material)
-{
+void PhysicsObject::setPhysicsMaterial(const PhysicsMaterial& material) {
 	m_physicsMaterial = material;
+    adjustBrightness();
 }
 
-void PhysicsObject::setColor(const DirectX::XMFLOAT4& color)
-{
+void PhysicsObject::setColor(const DirectX::XMFLOAT4& color) {
     m_material.Ambient = { color.x * 0.1f, color.y * 0.1f, color.z * 0.1f, 1 };
 	m_material.Diffuse = color;
+	adjustBrightness();
+}
+
+void PhysicsObject::adjustBrightness() {
+    using namespace DirectX;
+    // Clamp helper lambda
+    auto clamp = [](float v, float mn, float mx) {
+        return max(mn, min(mx, v));
+        };
+
+    // === 1. Adjust Emissive (bounce -> more glow)
+    float emissiveIntensity = clamp(m_physicsMaterial.restitution, 0.0f, 1.0f) * 0.5f;
+    m_material.Emissive = XMFLOAT4(
+        m_material.Diffuse.x * emissiveIntensity,
+        m_material.Diffuse.y * emissiveIntensity,
+        m_material.Diffuse.z * emissiveIntensity,
+        1.0f
+    );
+
+    // === 2. Adjust Ambient (angularFriction -> more ambient)
+    float ambientFactor = 0.1f + clamp(m_physicsMaterial.friction, 0.0f, 1.0f) * 0.3f;
+    m_material.Ambient = XMFLOAT4(
+        m_material.Diffuse.x * ambientFactor,
+        m_material.Diffuse.y * ambientFactor,
+        m_material.Diffuse.z * ambientFactor,
+        1.0f
+    );
+
+    // === 3. Adjust Specular (friction -> affects shininess)
+    float specularFactor = 1.0f - clamp(m_physicsMaterial.friction, 0.0f, 1.0f);
+    m_material.Specular = XMFLOAT4(
+        specularFactor,
+        specularFactor,
+        specularFactor,
+        1.0f
+    );
+
+    // === 4. Adjust Specular Power (surface glossiness)
+    m_material.SpecularPower = 16.0f + specularFactor * 112.0f; // Ranges from 16 to 128
 }
 
 void PhysicsObject::setCollider(std::shared_ptr<Collider> collider)
