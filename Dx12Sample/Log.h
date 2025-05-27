@@ -1,8 +1,10 @@
 #pragma once
+
+#ifdef USE_LOGGER
+
 #include <vector>
 #include <sstream>
 #include <mutex>
-
 enum class LogLevel {
     Log,
     Warning,
@@ -46,3 +48,5 @@ private:
     std::ostringstream buffer_;
     LogLevel level_;
 };
+
+#endif

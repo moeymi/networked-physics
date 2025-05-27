@@ -1,10 +1,6 @@
 #include "Transform.h"
 #include "Helpers.h"
 
-void Transform::SetParent(const std::shared_ptr<Transform>& newParent) {
-	parent = newParent;
-}
-
 bool Transform::IsStatic() const { return isStatic; }
 void Transform::SetStatic(bool value) {
 	isStatic = value;
@@ -66,26 +62,15 @@ DirectX::XMMATRIX Transform::GetWorldMatrix(const int& bufferIndex) {
 			CleanDirty(bufferIndex, false);
 		}
 	}
-	if (parent != nullptr) {
-		return m_states[bufferIndex].worldMatrix * parent->GetWorldMatrix(bufferIndex);
-	}
 	return m_states[bufferIndex].worldMatrix;
 }
 
 DirectX::XMVECTOR Transform::GetPosition(const int& bufferIndex) const {
-	if (parent) {
-		return DirectX::XMVector3Transform(m_states[bufferIndex].position, parent->GetWorldMatrix(bufferIndex));
-	}
 	return m_states[bufferIndex].position;
 }
 
 void Transform::SetPosition(const DirectX::XMFLOAT3& pos, const int& bufferIndex, const bool& bothBuffers) {
 	if (isStatic) return;
-	// Set position in local space from world space
-	if (parent) {
-		DirectX::XMMATRIX invParentWorld = DirectX::XMMatrixInverse(nullptr, parent->GetWorldMatrix(bufferIndex));
-		m_states[bufferIndex].position = DirectX::XMVector3Transform(DirectX::XMLoadFloat3(&pos), invParentWorld);
-	}
 	else {
 		m_states[bufferIndex].position = DirectX::XMLoadFloat3(&pos);
 	}
@@ -97,14 +82,8 @@ void Transform::SetPosition(const DirectX::XMFLOAT3& pos, const int& bufferIndex
 }
 void Transform::SetPosition(const DirectX::XMVECTOR& pos, const int& bufferIndex, const bool& bothBuffers) {
 	if (isStatic) return;
-	// Set position in local space from world space
-	if (parent) {
-		DirectX::XMMATRIX invParentWorld = DirectX::XMMatrixInverse(nullptr, parent->GetWorldMatrix(bufferIndex));
-		m_states[bufferIndex].position = DirectX::XMVector3Transform(pos, invParentWorld);
-	}
-	else {
-		m_states[bufferIndex].position = pos;
-	}
+
+	m_states[bufferIndex].position = pos;
 
 	m_states[bufferIndex].positionScaleDirty = true;
 
@@ -136,26 +115,11 @@ void Transform::SetLocalPosition(const DirectX::XMVECTOR& pos, const int& buffer
 }
 
 DirectX::XMVECTOR Transform::GetScale(const int& bufferIndex) const {
-	if (parent) {
-		DirectX::XMMATRIX parentWorld = parent->GetWorldMatrix(bufferIndex);
-		DirectX::XMMATRIX invParentWorld = DirectX::XMMatrixInverse(nullptr, parentWorld);
-		DirectX::XMVECTOR parentScale = DirectX::XMVector3Length(invParentWorld.r[0]);
-		return DirectX::XMVectorMultiply(m_states[bufferIndex].scale, parentScale);
-	}
 	return m_states[bufferIndex].scale;
 }
 void Transform::SetScale(const DirectX::XMFLOAT3& s, const int& bufferIndex, const bool& bothBuffers) {
 	if (isStatic) return;
-	if (parent) {
-		DirectX::XMMATRIX parentWorld = parent->GetWorldMatrix(bufferIndex);
-		DirectX::XMMATRIX invParentWorld = DirectX::XMMatrixInverse(nullptr, parentWorld);
-		DirectX::XMVECTOR parentScale = DirectX::XMVector3Length(invParentWorld.r[0]);
-		m_states[bufferIndex].scale = DirectX::XMVectorDivide(DirectX::XMLoadFloat3(&s), parentScale);
-	}
-	else {
-		m_states[bufferIndex].scale = DirectX::XMLoadFloat3(&s);
-	}
-
+	m_states[bufferIndex].scale = DirectX::XMLoadFloat3(&s);
 	m_states[bufferIndex].positionScaleDirty = true;
 
 	if (bothBuffers) {
@@ -164,15 +128,7 @@ void Transform::SetScale(const DirectX::XMFLOAT3& s, const int& bufferIndex, con
 }
 void Transform::SetScale(const DirectX::XMVECTOR& s, const int& bufferIndex, const bool& bothBuffers) {
 	if (isStatic) return;
-	if (parent) {
-		DirectX::XMMATRIX parentWorld = parent->GetWorldMatrix(bufferIndex);
-		DirectX::XMMATRIX invParentWorld = DirectX::XMMatrixInverse(nullptr, parentWorld);
-		DirectX::XMVECTOR parentScale = DirectX::XMVector3Length(invParentWorld.r[0]);
-		m_states[bufferIndex].scale = DirectX::XMVectorDivide(s, parentScale);
-	}
-	else {
-		m_states[bufferIndex].scale = s;
-	}
+	m_states[bufferIndex].scale = s;
 
 	m_states[bufferIndex].positionScaleDirty = true;
 
@@ -201,21 +157,11 @@ void Transform::SetLocalScale(const DirectX::XMVECTOR& s, const int& bufferIndex
 
 
 DirectX::XMVECTOR Transform::GetRotationQuaternion(const int& bufferIndex) const {
-	if (parent != nullptr) {
-		DirectX::XMVECTOR parentRot = parent->GetRotationQuaternion(bufferIndex);
-		return DirectX::XMQuaternionMultiply(m_states[bufferIndex].rotationQuaternion, parentRot);
-	}
 	return m_states[bufferIndex].rotationQuaternion;
 }
 void Transform::SetRotationQuaternion(const DirectX::XMVECTOR& rot, const int& bufferIndex, const bool& bothBuffers) {
 	if (isStatic) return;
-	if (parent != nullptr) {
-		DirectX::XMVECTOR parentRot = parent->GetRotationQuaternion(bufferIndex);
-		m_states[bufferIndex].rotationQuaternion = DirectX::XMQuaternionMultiply(rot, DirectX::XMQuaternionInverse(parentRot));
-	}
-	else {
-		m_states[bufferIndex].rotationQuaternion = rot;
-	}
+	m_states[bufferIndex].rotationQuaternion = rot;
 
 	m_states[bufferIndex].rotationDirty = true;
 
@@ -240,22 +186,11 @@ void Transform::SetLocalRotationQuaternion(const DirectX::XMVECTOR& rot, const i
 }
 
 DirectX::XMFLOAT3 Transform::GetRotationEulerAngles(const int& bufferIndex) const {
-	if (parent != nullptr) {
-		DirectX::XMFLOAT3 parentRot = parent->GetRotationEulerAngles(bufferIndex);
-		DirectX::XMFLOAT3 rot = Math::QuaternionToEuler(m_states[bufferIndex].rotationQuaternion);
-		return { rot.x + parentRot.x, rot.y + parentRot.y, rot.z + parentRot.z };
-	}
 	return Math::QuaternionToEuler(m_states[bufferIndex].rotationQuaternion);
 }
 void Transform::SetRotationEulerAngles(const DirectX::XMFLOAT3& rot, const int& bufferIndex, const bool& bothBuffers) {
 	if (isStatic) return;
-	if (parent) {
-		DirectX::XMFLOAT3 parentRot = parent->GetRotationEulerAngles(bufferIndex);
-		m_states[bufferIndex].rotationQuaternion = DirectX::XMQuaternionRotationRollPitchYaw(rot.x - parentRot.x, rot.y - parentRot.y, rot.z - parentRot.z);
-	}
-	else {
-		m_states[bufferIndex].rotationQuaternion = DirectX::XMQuaternionRotationRollPitchYaw(rot.x, rot.y, rot.z);
-	}
+	m_states[bufferIndex].rotationQuaternion = DirectX::XMQuaternionRotationRollPitchYaw(rot.x, rot.y, rot.z);
 
 	m_states[bufferIndex].rotationDirty = true;
 

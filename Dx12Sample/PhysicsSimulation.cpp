@@ -200,6 +200,7 @@ void PhysicsSimulation::OnUpdate(UpdateEventArgs& e)
     if (m_simulationScheduled) {
         double now = GlobalData::getTimestamp();
         if (now >= m_simulationStartTime) {
+            GlobalData::g_tick = 0;
             m_PhysicsEngine.start();
             m_simulationScheduled = false;
         }

@@ -24,7 +24,6 @@ private:
     } m_states[2];
 
     std::mutex worldMatrixMutex[2];
-    std::shared_ptr<Transform> parent = nullptr;
 
     bool isStatic = false;
 
@@ -38,8 +37,6 @@ private:
 public:
     Transform() = default;
     Transform(const Transform&) = delete;
-
-    void SetParent(const std::shared_ptr<Transform>& parent);
 
     bool IsStatic() const;
     void SetStatic(bool value);

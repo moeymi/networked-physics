@@ -154,8 +154,8 @@ private:
     bool m_simulationScheduled = false;
     double m_simulationStartTime;
 
-	RingBufferSPSC<Snapshot, 1024> m_outgoingBuffer;
-	RingBufferSPSC<Snapshot, 1024> m_incomingBuffer;
+	RingBufferSPSC<Snapshot, 4096> m_outgoingBuffer;
+	RingBufferSPSC<Snapshot, 4096> m_incomingBuffer;
 
     // Camera controller
     float m_Forward;

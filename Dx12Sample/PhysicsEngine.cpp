@@ -1,8 +1,10 @@
 #include "PhysicsEngine.h"
 #include "GlobalData.h"
+
 #include <algorithm>
 #include <string>
 #include <omp.h>
+#include <barrier>
 
 bool PhysicsEngine::m_gravityEnabled = true;
 float PhysicsEngine::m_gravity = 9.81f;
@@ -20,17 +22,20 @@ std::vector<PhysicsObject*> PhysicsEngine::m_bodies;
 
 CollisionSystem PhysicsEngine::m_collisionSystem;
 
-PhysicsEngine::PhysicsEngine(RingBufferSPSC<Snapshot, 1024>* outgoingBuf,
-    RingBufferSPSC<Snapshot, 1024>* incomingBuf) : m_outgoingBuffer(outgoingBuf), m_incomingBuffer(incomingBuf) {
+PhysicsEngine::PhysicsEngine(RingBufferSPSC<Snapshot, 4096>* outgoingBuf,
+    RingBufferSPSC<Snapshot, 4096>* incomingBuf) : m_outgoingBuffer(outgoingBuf), m_incomingBuffer(incomingBuf) {
 }
 
 void PhysicsEngine::onUpdate(float) {
 	Snapshot snapshot;
+
     while (m_incomingBuffer->pop(snapshot)) {
         for (const auto& update : snapshot.updates) {
             auto it = m_nonOwnedNetworkedObjects.find(update.object_id);
             if (it != m_nonOwnedNetworkedObjects.end()) {
                 auto& object = it->second;
+				Log::Info() << "PhysicsEngine: Received update for object ID " << update.object_id << " at tick " << snapshot.tick << " position: " <<
+                    update.position.x << ", " << update.position.y << ", " << update.position.z << std::endl;
                 object->addUpdate(snapshot.tick, update);
                 object->setLastAckedTick(snapshot.tick);
             }
@@ -43,20 +48,21 @@ void PhysicsEngine::onUpdate(float) {
         }
     }
 
-    for (auto& pair : m_nonOwnedNetworkedObjects) {
-        auto& netObj = *pair.second;
-        netObj.applyUpdate(GlobalData::g_tick,
+    for (const auto& [_, obj] : m_nonOwnedNetworkedObjects) {
+        if (obj->getObject()->isStatic()) continue;
+        obj->applyUpdate(GlobalData::g_tick,
             m_kDelayTicks,
             m_simulationDeltaTime, m_ghostMode);
     }
+
     detectAndResolveCollisions(m_simulationDeltaTime);
 
     for (const auto& body : m_ownedBodies) {
         body->swapStates();
     }
-	for (const auto& body : m_nonOwnedBodies) {
-		body->swapStates();
-	}
+    for (const auto& body : m_nonOwnedBodies) {
+        body->swapStates();
+    }
 
 	m_simTimeAccumulator += m_simulationDeltaTime;
 	static const float kMinTickTime = 1.0f / GlobalData::g_networkFreq;
@@ -65,6 +71,7 @@ void PhysicsEngine::onUpdate(float) {
         Snapshot snapshot;
 		snapshot.tick = GlobalData::g_tick++;
 		for (const auto& [_, object] : m_ownedNetworkedObjects) {
+            if (object->getObject()->isStatic()) continue;
 			ObjectUpdate update;
 			if (object->buildUpdate(snapshot.tick, update)) {
 				snapshot.updates.push_back(update);

@@ -72,11 +72,11 @@ private:
     std::unordered_map<SOCKET, double> m_peerRTT;
     std::unordered_map<double, double> m_sentPingTimestamps;
 
-	RingBufferSPSC<Snapshot, 1024>* m_outgoingBuffer;
-	RingBufferSPSC<Snapshot, 1024>* m_incomingBuffer;
+	RingBufferSPSC<Snapshot, 4096>* m_outgoingBuffer;
+	RingBufferSPSC<Snapshot, 4096>* m_incomingBuffer;
 
 public:
-	NetworkEngine(RingBufferSPSC<Snapshot, 1024>*, RingBufferSPSC<Snapshot, 1024>*);
+	NetworkEngine(RingBufferSPSC<Snapshot, 4096>*, RingBufferSPSC<Snapshot, 4096>*);
     ~NetworkEngine();
 
     void initializeSockets(unsigned short listenPort);

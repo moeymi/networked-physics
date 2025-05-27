@@ -38,12 +38,12 @@ private:
 	static float m_simTimeAccumulator;
 	static float m_nextTickTime;
 
-	RingBufferSPSC<Snapshot, 1024>* m_outgoingBuffer;
-	RingBufferSPSC<Snapshot, 1024>* m_incomingBuffer;
+	RingBufferSPSC<Snapshot, 4096>* m_outgoingBuffer;
+	RingBufferSPSC<Snapshot, 4096>* m_incomingBuffer;
 
 public:
-    PhysicsEngine(RingBufferSPSC<Snapshot, 1024>* outgoingBuf,
-        RingBufferSPSC<Snapshot, 1024>* incomingBuf);
+    PhysicsEngine(RingBufferSPSC<Snapshot, 4096>* outgoingBuf,
+        RingBufferSPSC<Snapshot, 4096>* incomingBuf);
 
     void addOwnedBody(const std::shared_ptr<PhysicsObject>& body);
 	void addBody(const std::shared_ptr<NetworkedObject>& object);

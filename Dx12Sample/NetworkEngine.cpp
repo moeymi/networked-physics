@@ -12,7 +12,7 @@
 #include "PhysicsEngine.h"
 #include "IPAddress.h"
 
-NetworkEngine::NetworkEngine(RingBufferSPSC<Snapshot, 1024>* outgoingBuf, RingBufferSPSC<Snapshot, 1024>* incomingBuf) :
+NetworkEngine::NetworkEngine(RingBufferSPSC<Snapshot, 4096>* outgoingBuf, RingBufferSPSC<Snapshot, 4096>* incomingBuf) :
     m_outgoingBuffer(outgoingBuf), m_incomingBuffer(incomingBuf) {
 }
 
@@ -527,24 +527,18 @@ void NetworkEngine::handleNewConnection()
 void NetworkEngine::handlePeerData(TCPSocket* peerSocket) {
     uint32_t netSize = 0;
     int got = peerSocket->recv(&netSize, sizeof(netSize));
-    if (got == 0) {
+    if (got <= 0) {
         removePeer(peerSocket);
         return;
     }
-	else if (got < 0) {
-		return;
-	}
 
     uint32_t size = ntohl(netSize);
     std::vector<char> buf(size);
     got = peerSocket->recv(buf.data(), buf.size());
-    if (got == 0) {
+    if (got <= 0) {
         removePeer(peerSocket);
         return;
     }
-	else if (got < 0) {
-		return;
-	}
 
     auto message = NetSim::GetNetworkMessage(buf.data());
     switch (message->data_type()) {

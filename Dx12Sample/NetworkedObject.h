@@ -6,7 +6,7 @@
 #include <memory>
 #include <algorithm>
 
-struct alignas(16) ObjectUpdate {
+struct ObjectUpdate {
     uint32_t object_id;
     DirectX::XMFLOAT3 position;
     DirectX::XMFLOAT4 rotation;
@@ -20,7 +20,7 @@ struct Snapshot {
 	std::vector<ObjectUpdate> updates;
 };
 
-struct alignas(16) GhostState {
+struct GhostState {
 	uint64_t tick;
 	ObjectUpdate update;
 };
@@ -37,12 +37,16 @@ private:
 	std::deque<GhostState>         m_buffer;
     ObjectUpdate                   m_lastSnapshot;
     uint64_t                       m_lastSnapshotTick = 0;
+	bool						   m_received = false;
 	float                          m_blendAlpha = 1;
 
     void updateGhost(const uint64_t& localTick, const int& delayTicks, const float& dt) {
         using namespace DirectX;
-
-        GhostState  aState{}, bState{};
+        GhostState  aState{
+			0, ObjectUpdate{ 0, {0, 0, 0}, {0, 0, 0, 1}, {0, 0, 0}, {0, 0, 0} }
+		}, bState{
+			0, ObjectUpdate{ 0, {0, 0, 0}, {0, 0, 0, 1}, {0, 0, 0}, {0, 0, 0} }
+		};
         bool        haveA = false, haveB = false;
         int64_t     target = int64_t(localTick) - delayTicks;
 
@@ -90,8 +94,8 @@ private:
 
         if (haveA && haveB)
         {
-            float alpha = float(target - aState.tick) /
-                float(bState.tick - aState.tick);
+            float denominator = float(bState.tick - aState.tick);
+            float alpha = (denominator == 0.0f) ? 0.0f : float(target - aState.tick) / denominator;
 
             XMStoreFloat3(&newPos,
                 XMVectorLerp(XMLoadFloat3(&aState.update.position),
@@ -132,15 +136,25 @@ private:
         }
 
         auto& xf = m_object->getTransform();
-        XMVECTOR errP = XMLoadFloat3(&newPos) - xf.GetPosition(0);
+        XMVECTOR errP = DirectX::XMVectorSubtract(XMLoadFloat3(&newPos), xf.GetPosition(0));
 
-        m_blendAlpha = min(m_blendAlpha + dt * 1.0f, 1.0f);
-        XMVECTOR blendedP = xf.GetPosition(0) + errP * m_blendAlpha;
+        m_blendAlpha = std::clamp(m_blendAlpha + dt * 1.0f, 0.0f, 1.0f);
+        XMVECTOR blendedP = DirectX::XMVectorAdd(xf.GetPosition(0), DirectX::XMVectorScale(errP, m_blendAlpha));
         XMVECTOR blendedR = XMQuaternionSlerp(xf.GetRotationQuaternion(0),
             XMLoadFloat4(&newRot),
             m_blendAlpha);
 
-        xf.SetPosition(blendedP, 1);
+        XMFLOAT3 blendedPFloat3;
+		XMStoreFloat3(&blendedPFloat3, blendedP);
+
+		// Check for any NAN values in the blended position or rotation
+        if (std::isnan(blendedPFloat3.x) || std::isnan(blendedPFloat3.y) || std::isnan(blendedPFloat3.z)) {
+			Log::Info() << "NetworkedObject: Last snapshot position contains NaN values at tick " << m_lastSnapshotTick << ", resetting to zero position.";
+           // return;
+        }
+
+
+        xf.SetPosition(blendedPFloat3, 1);
         xf.SetRotationQuaternion(blendedR, 1);
         m_object->setVelocity(newVel, 1);
         m_object->setAngularVelocity(newAngVel, 1);
@@ -148,8 +162,24 @@ private:
 
     void snapToLast()
     {
-        if (!m_object) return;
+        if (!m_object) {
+			Log::Warn() << "NetworkedObject: No object set for snapping." << std::endl;
+			return;
+        }
+		if (!m_received) {
+			Log::Warn() << "NetworkedObject: No last snapshot available to snap to." << std::endl;
+			return;
+		}
         auto& xf = m_object->getTransform();
+
+        Log::Info() << "NetworkedObject: Snapping to last snapshot at tick " << m_lastSnapshotTick << " for object ID " << m_id << " owned by " << m_ownerId << " with position "
+            << m_lastSnapshot.position.x << ", " << m_lastSnapshot.position.y << ", " << m_lastSnapshot.position.z << std::endl;
+
+        // Check for any NAN values
+		if (std::isnan(m_lastSnapshot.position.x) || std::isnan(m_lastSnapshot.position.y) || std::isnan(m_lastSnapshot.position.z)) {
+			Log::Info() << "NetworkedObject: Last snapshot position contains NaN values at tick " << m_lastSnapshotTick << ", resetting to zero position." << std::endl;
+			m_lastSnapshot.position = { 0.0f, 0.0f, 0.0f };
+		}
 
         xf.SetPosition(m_lastSnapshot.position, 1);
         xf.SetRotationQuaternion(m_lastSnapshot.rotation, 1);
@@ -160,17 +190,27 @@ private:
         m_buffer.clear();
     }
 
-	DirectX::XMVECTOR integrateRotation(const DirectX::XMVECTOR& rotation, const DirectX::XMFLOAT3& angularVelocity, float dt) {
-		using namespace DirectX;
+    DirectX::XMVECTOR integrateRotation(const DirectX::XMVECTOR& rotation, const DirectX::XMFLOAT3& angularVelocity, float dt) {
+        using namespace DirectX;
 
-		XMVECTOR omega = XMLoadFloat3(&angularVelocity);
-		XMVECTOR qDot = XMQuaternionMultiply(rotation, XMVectorSet(omega.m128_f32[0], omega.m128_f32[1], omega.m128_f32[2], 0.0f));
-		qDot = XMVectorScale(qDot, 0.5f * dt);
-		return XMQuaternionNormalize(XMVectorAdd(rotation, qDot));
-	}
+        // Convert angular velocity (in radians/sec) to a quaternion derivative
+        XMVECTOR omegaVec = XMVectorSet(angularVelocity.x, angularVelocity.y, angularVelocity.z, 0.0f);
+
+        // qDot = 0.5 * q * omega (in quaternion form)
+        XMVECTOR qDot = XMQuaternionMultiply(rotation, omegaVec);
+        qDot = XMVectorScale(qDot, 0.5f * dt);
+
+        // Integrate by adding qDot to current rotation
+        XMVECTOR integrated = XMVectorAdd(rotation, qDot);
+
+        // Normalize to maintain valid quaternion
+        return XMQuaternionNormalize(integrated);
+    }
 
 public:
-	NetworkedObject(const uint16_t& id, const uint16_t& ownerId, const std::shared_ptr<PhysicsObject>& object) : m_id(id), m_ownerId(ownerId), m_lastAckedTick(0) {
+	NetworkedObject(const uint16_t& id, const uint16_t& ownerId, const std::shared_ptr<PhysicsObject>& object) : m_id(id), m_ownerId(ownerId), m_lastAckedTick(0),
+		m_lastSnapshot({ 0, {0, 0, 0}, {0, 0, 0, 1}, {0, 0, 0}, {0, 0, 0} })
+    {
 		setObject(object);
 	}
 
@@ -208,6 +248,7 @@ public:
 	void addUpdate(const uint64_t& tick, const ObjectUpdate& update) {
         m_lastSnapshotTick = tick;
         m_lastSnapshot = update;
+		m_received = true;
 
 		m_buffer.push_back({ tick, update });
 		if (m_buffer.size() > 4) {

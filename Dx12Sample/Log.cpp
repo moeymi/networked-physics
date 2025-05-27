@@ -1,3 +1,4 @@
+#ifdef USE_LOGGER
 #include "Log.h"
 
 std::vector<LogEntry> Log::logEntries_;
@@ -55,3 +56,4 @@ void Log::Clear() {
     std::lock_guard<std::mutex> lock(mutex_);
     logEntries_.clear();
 }
+#endif
