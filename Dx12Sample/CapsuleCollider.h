@@ -27,14 +27,7 @@ public:
 	// Helper to get the local-space endpoints of the capsule's central segment
 	void getLocalSegmentEndpoints(DirectX::XMVECTOR& out_p1, DirectX::XMVECTOR& out_p2) const;
 
-	// GJK/EPA Support
-	DirectX::XMVECTOR support(Transform* transform, const DirectX::XMVECTOR& direction) const;
-
 	// Closest point on capsule surface to a given point
 	DirectX::XMVECTOR closestPoint(Transform* transform, const DirectX::XMVECTOR& point) const;
-
-	// Check if a point is inside the capsule
-	bool containsPoint(Transform* transform, const DirectX::XMVECTOR& point) const;
-
 };
 

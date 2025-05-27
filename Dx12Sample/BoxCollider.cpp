@@ -43,80 +43,67 @@ AABB BoxCollider::getWorldAABB(Transform* transform) const
 
 DirectX::XMMATRIX BoxCollider::getInertiaTensor(float mass) {
     using namespace DirectX;
-    if (!m_calculatedInertiaTensor) {
-        XMFLOAT3 size;
-        XMStoreFloat3(&size, XMVectorMultiply(m_halfSize, XMVectorReplicate(2.0f)));
+    XMFLOAT3 h;  XMStoreFloat3(&h, m_halfSize);  // half-extents
+    const float sx = h.x * 2.0f, sy = h.y * 2.0f, sz = h.z * 2.0f;
 
-        float Ix = (mass / 12.0f) * (size.y * size.y + size.z * size.z);
-        float Iy = (mass / 12.0f) * (size.x * size.x + size.z * size.z);
-        float Iz = (mass / 12.0f) * (size.x * size.x + size.y * size.y);
+    const float ix = mass * (sy * sy + sz * sz) * (1.f / 12.f);
+    const float iy = mass * (sx * sx + sz * sz) * (1.f / 12.f);
+    const float iz = mass * (sx * sx + sy * sy) * (1.f / 12.f);
 
-        m_inertiaTensor = XMMatrixScaling(Ix, Iy, Iz);
-        m_calculatedInertiaTensor = true;
-	}
-    return m_inertiaTensor;
+    // Diagonal – we can build it directly; no XMMatrixScaling needed
+    return XMMATRIX(
+        ix, 0, 0, 0,
+        0, iy, 0, 0,
+        0, 0, iz, 0,
+        0, 0, 0, 1);
 }
 
 DirectX::XMMATRIX BoxCollider::getInverseInertiaTensor(float mass) {
-    using namespace DirectX;
-	if (!m_calculatedInverseInertiaTensor) {
-		m_inverseInertiaTensor = getInertiaTensor(mass);
-		m_inverseInertiaTensor = XMMatrixInverse(nullptr, m_inverseInertiaTensor);
-		m_calculatedInverseInertiaTensor = true;
-	}
-	return m_inverseInertiaTensor;
+    DirectX::XMMATRIX I = getInertiaTensor(mass);
+    I.r[0] = DirectX::XMVectorReciprocal(I.r[0]);
+    I.r[1] = DirectX::XMVectorReciprocal(I.r[1]);
+    I.r[2] = DirectX::XMVectorReciprocal(I.r[2]);
+    return I;
 }
 
 
-std::vector<DirectX::XMVECTOR> BoxCollider::getWorldVertices(Transform* tf) const {
+std::array<DirectX::XMVECTOR, 8> BoxCollider::getWorldVertices(Transform* tf) const {
     using namespace DirectX;
 
-    std::vector<XMVECTOR> vertices;
-    vertices.reserve(8);
+	std::array<XMVECTOR, 8> v;
 
-    const XMVECTOR half = m_halfSize;
-    for (int x = -1; x <= 1; x += 2) {
-        for (int y = -1; y <= 1; y += 2) {
-            for (int z = -1; z <= 1; z += 2) {
-                XMVECTOR localPoint = XMVectorSet(
-                    x * XMVectorGetX(half),
-                    y * XMVectorGetY(half),
-                    z * XMVectorGetZ(half),
-                    0.0f
-                );
-                vertices.push_back(Math::LocalToWorld(tf->GetWorldMatrix(1), localPoint));
-            }
-        }
+    // Sign-bit tricks: build ±halfSize by XORing sign masks
+    for (int i = 0; i < 8; ++i)
+    {
+        const auto local = XMVectorSet(
+            (i & 1) ? XMVectorGetX(m_halfSize) : -XMVectorGetX(m_halfSize),
+            (i & 2) ? XMVectorGetY(m_halfSize) : -XMVectorGetY(m_halfSize),
+            (i & 4) ? XMVectorGetZ(m_halfSize) : -XMVectorGetZ(m_halfSize), 0.f);
+        v[i] = XMVector3Transform(local, tf->GetWorldMatrix(1));
     }
-    return vertices;
+    return v;
 }
 
-std::vector<DirectX::XMVECTOR> BoxCollider::getFaceNormals(Transform* tf) const {
+std::array<DirectX::XMVECTOR, 3> BoxCollider::getFaceNormals(Transform* tf) const {
     using namespace DirectX;
 
-    // Local space normals (assuming axis-aligned)
-    std::vector<XMVECTOR> locals = {
-        XMVectorSet(1, 0, 0, 0),
-        XMVectorSet(0, 1, 0, 0),
-        XMVectorSet(0, 0, 1, 0)
-    };
+    const XMMATRIX rot = XMMatrixRotationQuaternion(tf->GetRotationQuaternion(1));
 
-    // Transform to world space
-    std::vector<XMVECTOR> worldNormals;
-    XMMATRIX rotation = XMMatrixRotationQuaternion(tf->GetRotationQuaternion(1));
-    for (const auto& n : locals) {
-        worldNormals.push_back(XMVector3TransformNormal(n, rotation));
-    }
-    return worldNormals;
-}
-
-std::vector<DirectX::XMVECTOR> BoxCollider::getEdgeDirections(Transform* tf) const {
-    using namespace DirectX;
-    XMMATRIX rotation = XMMatrixRotationQuaternion(tf->GetRotationQuaternion(1));
     return {
-        XMVector3TransformNormal(XMVectorSet(1, 0, 0, 0), rotation),
-        XMVector3TransformNormal(XMVectorSet(0, 1, 0, 0), rotation),
-        XMVector3TransformNormal(XMVectorSet(0, 0, 1, 0), rotation)
+        XMVector3TransformNormal(XMVectorSet(1.f, 0.f, 0.f, 0.f), rot),
+        XMVector3TransformNormal(XMVectorSet(0.f, 1.f, 0.f, 0.f), rot),
+        XMVector3TransformNormal(XMVectorSet(0.f, 0.f, 1.f, 0.f), rot)
+    };
+}
+
+std::array<DirectX::XMVECTOR, 3> BoxCollider::getEdgeDirections(Transform* tf) const {
+    using namespace DirectX;
+    const XMMATRIX rot = XMMatrixRotationQuaternion(tf->GetRotationQuaternion(1));
+
+    return {
+        XMVector3TransformNormal(XMVectorSet(1.f, 0.f, 0.f, 0.f), rot),
+        XMVector3TransformNormal(XMVectorSet(0.f, 1.f, 0.f, 0.f), rot),
+        XMVector3TransformNormal(XMVectorSet(0.f, 0.f, 1.f, 0.f), rot)
     };
 }
 

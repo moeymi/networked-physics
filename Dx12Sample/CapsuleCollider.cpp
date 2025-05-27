@@ -100,34 +100,6 @@ DirectX::XMMATRIX CapsuleCollider::getInverseInertiaTensor(float mass) {
     return m_inverseInertiaTensor;
 }
 
-DirectX::XMVECTOR CapsuleCollider::support(Transform* transform, const DirectX::XMVECTOR& direction) const {
-    using namespace DirectX;
-
-    XMMATRIX worldRotation = XMMatrixRotationQuaternion(transform->GetRotationQuaternion(1)); 
-    XMMATRIX invWorldRotation = XMMatrixTranspose(worldRotation);
-    XMVECTOR localDir = XMVector3TransformNormal(direction, invWorldRotation);
-
-    localDir = XMVector3Normalize(localDir);
-
-    XMVECTOR localP1, localP2;
-    getLocalSegmentEndpoints(localP1, localP2);
-
-    float dot1 = XMVectorGetX(XMVector3Dot(localP1, localDir));
-    float dot2 = XMVectorGetX(XMVector3Dot(localP2, localDir));
-
-    XMVECTOR localSupportPoint;
-    if (dot1 > dot2) {
-        localSupportPoint = localP1;
-    }
-    else {
-        localSupportPoint = localP2;
-    }
-
-    localSupportPoint = XMVectorAdd(localSupportPoint, XMVectorScale(localDir, m_radius));
-
-    return Math::LocalToWorld(transform->GetWorldMatrix(1), localSupportPoint);
-}
-
 DirectX::XMVECTOR CapsuleCollider::closestPoint(Transform* transform, const DirectX::XMVECTOR& point) const {
     using namespace DirectX;
 
@@ -146,19 +118,4 @@ DirectX::XMVECTOR CapsuleCollider::closestPoint(Transform* transform, const Dire
     XMVECTOR localClosestPoint = XMVectorAdd(closestPointOnSegment, XMVectorScale(directionToPoint, m_radius));
 
     return Math::LocalToWorld(worldMatrix, localClosestPoint);
-}
-
-bool CapsuleCollider::containsPoint(Transform* transform, const DirectX::XMVECTOR& point) const {
-    using namespace DirectX;
-
-    XMMATRIX worldMatrix = transform->GetWorldMatrix(1);
-    XMMATRIX invWorldMatrix = XMMatrixInverse(nullptr, worldMatrix);
-    XMVECTOR localPoint = XMVector3TransformCoord(point, invWorldMatrix);
-
-    XMVECTOR localP1, localP2;
-    getLocalSegmentEndpoints(localP1, localP2);
-
-    float sqrDistance = Math::SqrDistancePointSegment(localPoint, localP1, localP2);
-
-    return sqrDistance <= (m_radius * m_radius);
 }

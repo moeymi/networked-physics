@@ -1,49 +1,45 @@
 #include "SphereCollider.h"
 
+using namespace DirectX;
+
 SphereCollider::SphereCollider(float radius)
-	: m_radius(radius)
+    : m_radius(radius)
+    , m_radiusVec(XMVectorReplicate(radius))
 {
 }
 
-SphereCollider::~SphereCollider()
+inline AABB SphereCollider::getWorldAABB(Transform* transform) const
 {
+    XMMATRIX W = transform->GetWorldMatrix(1);
+    XMVECTOR center = W.r[3];
+    return AABB(center - m_radiusVec,
+        center + m_radiusVec);
 }
 
-ColliderType SphereCollider::getType() const
+inline XMMATRIX SphereCollider::getInertiaTensor(float mass)
 {
-	return ColliderType::Sphere;
+    if (!m_inertiaReady) {
+        m_inertiaVal = (2.0f / 5.0f) * mass * m_radius * m_radius;
+        m_inertiaTensor = XMMatrixScaling(m_inertiaVal,
+            m_inertiaVal,
+            m_inertiaVal);
+        m_inertiaReady = true;
+    }
+    return m_inertiaTensor;
 }
 
-AABB SphereCollider::getWorldAABB(Transform* transform) const
+inline XMMATRIX SphereCollider::getInverseInertiaTensor(float mass)
 {
-	DirectX::XMVECTOR center = transform->GetPosition(1);
-	return AABB(
-		DirectX::XMVectorSubtract(center, DirectX::XMVectorReplicate(m_radius)), 
-		DirectX::XMVectorAdd(center, DirectX::XMVectorReplicate(m_radius))
-	);
-}
+    if (!m_invInertiaReady) {
+        // ensure inertiaVal is up-to-date
+        if (!m_inertiaReady)
+            getInertiaTensor(mass);
 
-DirectX::XMMATRIX SphereCollider::getInertiaTensor(float mass) {
-	using namespace DirectX;
-	if (!m_calculatedInertiaTensor) {
-		float I = (2.0f / 5.0f) * mass * m_radius * m_radius;
-		m_inertiaTensor = XMMatrixScaling(I, I, I);
-		m_calculatedInertiaTensor = true;
-	}
-	return m_inertiaTensor;
-}
-
-DirectX::XMMATRIX SphereCollider::getInverseInertiaTensor(float mass) {
-	using namespace DirectX;
-	if (!m_calculatedInverseInertiaTensor) {
-		m_inverseInertiaTensor = getInertiaTensor(mass);
-		m_inverseInertiaTensor = XMMatrixInverse(nullptr, m_inverseInertiaTensor);
-		m_calculatedInverseInertiaTensor = true;
-	}
-	return m_inverseInertiaTensor;
-}
-
-float SphereCollider::getRadius() const
-{
-	return m_radius;
+        float invI = (m_inertiaVal > FLT_EPSILON)
+            ? (1.0f / m_inertiaVal)
+            : 0.0f;
+        m_inverseInertiaTensor = XMMatrixScaling(invI, invI, invI);
+        m_invInertiaReady = true;
+    }
+    return m_inverseInertiaTensor;
 }
