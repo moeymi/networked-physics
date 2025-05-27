@@ -123,7 +123,7 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions);USE_LOGGER;USE_LOGGER=0;USE_LOGGING=1;USE_LOGGER=1;USE_LOGGER=0</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions);USE_LOGGER;USE_LOGGER=0;USE_LOGGING=1;USE_LOGGER=1;USE_LOGGER=0;USE_LOGGER=1</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <OpenMPSupport>true</OpenMPSupport>
@@ -148,7 +148,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions);USE_LOGGER;USE_LOGGER=0;USE_LOGGING=1;USE_LOGGER=1;USE_LOGGER=0</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions);USE_LOGGER;USE_LOGGER=0;USE_LOGGING=1;USE_LOGGER=1;USE_LOGGER=0;USE_LOGGER=1</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <OpenMPSupport>true</OpenMPSupport>
@@ -208,6 +208,7 @@
     <ClCompile Include="ThreadAffinity.cpp" />
     <ClCompile Include="ThreadedSystem.cpp" />
     <ClCompile Include="RoomScenario.cpp" />
+    <ClCompile Include="ThreadPool.cpp" />
     <ClCompile Include="Transform.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -246,6 +247,7 @@
     <ClInclude Include="ThreadAffinity.h" />
     <ClInclude Include="ThreadedSystem.h" />
     <ClInclude Include="RoomScenario.h" />
+    <ClInclude Include="ThreadPool.h" />
     <ClInclude Include="Transform.h" />
     <ClInclude Include="TransformHelpers.h" />
   </ItemGroup>

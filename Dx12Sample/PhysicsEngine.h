@@ -5,6 +5,7 @@
 #include "NetworkedObject.h"
 #include "RingBufferSPSC.h"
 #include "SpatialHashGrid.h"
+#include "ThreadPool.h"
 
 #include <shared_mutex>
 
@@ -16,19 +17,21 @@ private:
 	static std::vector<std::shared_ptr<PhysicsObject>> m_nonOwnedBodies;
 	static std::vector<PhysicsObject*> m_bodies;
     static SpatialHashGrid m_spatialGrid;
+    static ThreadPool s_pool;
 
     static CollisionSystem m_collisionSystem;
 
-    std::map <std::pair<PhysicsObject*, PhysicsObject*>, CollisionManifold> m_contactManifolds;
+    std::map <PairKey, CollisionManifold> m_contactManifolds;
 
     static constexpr int m_velocityIterations = 8;
     static constexpr int m_positionIterations = 4;
-    static constexpr float m_kRestitutionThreshold = 1.0f;  // only bounce if closing speed > this
-	static constexpr int m_kDelayTicks = 2;  // number of ticks to delay ghost updates
+    static constexpr float m_kRestitutionThreshold = 1.0f;
+	static constexpr int m_kDelayTicks = 2;
 
-    static constexpr float m_kPenetrationSlop = 0.001f;  // 1 mm of allowed overlap
-    static constexpr float m_kBaumgarte = 0.2f;    // positional stabilization factor
-    static constexpr float kTangentEpsSq = 1e-8f;
+    static constexpr float m_kPenetrationSlop = 0.001f;
+    static constexpr float m_kBaumgarte = 0.2f;
+    static constexpr float m_kTangentEpsSq = 1e-8f;
+	static constexpr std::size_t m_kChunkSize = 64;
 
 	static float m_gravity;
 	static bool m_gravityEnabled;
@@ -42,6 +45,8 @@ private:
 
 	RingBufferSPSC<Snapshot, 4096>* m_outgoingBuffer;
 	RingBufferSPSC<Snapshot, 4096>* m_incomingBuffer;
+
+    std::atomic<std::size_t> jobsIssued{ 0 };
 
 public:
     PhysicsEngine(RingBufferSPSC<Snapshot, 4096>* outgoingBuf,
@@ -70,14 +75,14 @@ private:
     std::vector<std::pair<PhysicsObject*, PhysicsObject*>> broadPhase();
 
     void detectAndResolveCollisions(const float& dt);
-    void prestepCollisionManifolds(std::map<std::pair<PhysicsObject*, PhysicsObject*>, CollisionManifold>& contactManifolds, const float& dt);
+    void prestepCollisionManifolds(std::map<PairKey, CollisionManifold>& contactManifolds, const float& dt);
     void resolveCollisionVelocity(CollisionManifold& manifold, const int& iteration);
     void positionalCorrection(const ContactPoint& contact, PhysicsObject* a, PhysicsObject* b);
 
     DirectX::XMVECTOR computeTangent(DirectX::XMVECTOR relVel, DirectX::XMVECTOR normal);
 
     // Helper to create a canonical key for a pair of objects
-    std::pair<PhysicsObject*, PhysicsObject*> makePairKey(PhysicsObject* objA, PhysicsObject* objB);
+    PairKey makePairKey(PhysicsObject* objA, PhysicsObject* objB);
 
     bool canModify(NetworkedObject* object) const;
 

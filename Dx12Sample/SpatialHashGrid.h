@@ -32,6 +32,11 @@ struct PairKey {
     bool operator==(PairKey const& o) const {
         return a == o.a && b == o.b;
     }
+
+    bool operator<(const PairKey& o) const noexcept
+    {
+        return (a < o.a) || (a == o.a && b < o.b);
+    }
 };
 
 struct PairKeyHash {

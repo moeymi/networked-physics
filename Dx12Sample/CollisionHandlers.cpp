@@ -82,7 +82,7 @@ std::optional<CollisionManifold> CollisionHandlers::SphereVsBox(PhysicsObject* s
 
     if (isInside) {
         // Calculate penetration using box's face normals
-        const std::vector<XMVECTOR> faceNormals = box->getFaceNormals(&boxTransform);
+        const auto faceNormals = box->getFaceNormals(&boxTransform);
         const XMVECTOR boxCenter = boxTransform.GetPosition(1);
         const XMVECTOR halfSize = box->getHalfSize();
 

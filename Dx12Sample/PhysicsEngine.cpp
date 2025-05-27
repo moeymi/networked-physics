@@ -20,6 +20,7 @@ std::vector<std::shared_ptr<PhysicsObject>> PhysicsEngine::m_ownedBodies;
 std::vector<std::shared_ptr<PhysicsObject>> PhysicsEngine::m_nonOwnedBodies;
 std::vector<PhysicsObject*> PhysicsEngine::m_bodies;
 SpatialHashGrid PhysicsEngine::m_spatialGrid(2.0f);
+ThreadPool PhysicsEngine::s_pool;
 
 CollisionSystem PhysicsEngine::m_collisionSystem;
 
@@ -164,9 +165,8 @@ float PhysicsEngine::getSimulationDeltaTime() const {
 void PhysicsEngine::detectAndResolveCollisions(const float& deltaTime) {
     auto candidates = broadPhase();
 
-    std::map<std::pair<PhysicsObject*, PhysicsObject*>, CollisionManifold> currentFrameManifolds;
+    std::map<PairKey, CollisionManifold> currentFrameManifolds;
 
-    //#pragma omp parallel for
     for (int i = 0; i < candidates.size(); i++) {
         auto pair = candidates[i];
         PhysicsObject* objA = pair.first;
@@ -210,7 +210,7 @@ std::vector<std::pair<PhysicsObject*, PhysicsObject*>> PhysicsEngine::broadPhase
 	return candidates;
 }
 
-void PhysicsEngine::prestepCollisionManifolds(std::map<std::pair<PhysicsObject*, PhysicsObject*>, CollisionManifold>& contactManifolds, const float& dt) {
+void PhysicsEngine::prestepCollisionManifolds(std::map<PairKey, CollisionManifold>& contactManifolds, const float& dt) {
     using namespace DirectX;
 
     for (auto& pair : contactManifolds) {
@@ -413,7 +413,7 @@ DirectX::XMVECTOR PhysicsEngine::computeTangent(DirectX::XMVECTOR relVel, Direct
     XMVECTOR t = XMVectorSubtract(relVel,
         XMVectorScale(normal, XMVectorGetX(XMVector3Dot(relVel, normal))));
 
-    if (XMVectorGetX(XMVector3LengthSq(t)) < kTangentEpsSq)
+    if (XMVectorGetX(XMVector3LengthSq(t)) < m_kTangentEpsSq)
     {
         float nx = fabsf(XMVectorGetX(normal));
         float ny = fabsf(XMVectorGetY(normal));
@@ -458,8 +458,13 @@ void PhysicsEngine::positionalCorrection(const ContactPoint& contact, PhysicsObj
     }
 }
 
-std::pair<PhysicsObject*, PhysicsObject*> PhysicsEngine::makePairKey(PhysicsObject* objA, PhysicsObject* objB) {
-    return (objA < objB) ? std::make_pair(objA, objB) : std::make_pair(objB, objA);
+PairKey PhysicsEngine::makePairKey(PhysicsObject* objA, PhysicsObject* objB) {
+	if (objA < objB) {
+		return PairKey(objA, objB);
+	}
+	else {
+		return PairKey(objB, objA);
+	}
 }
 
 bool PhysicsEngine::canModify(NetworkedObject* object) const {
@@ -474,4 +479,5 @@ void PhysicsEngine::onStart() noexcept {
 
 void PhysicsEngine::onStop() noexcept {
     m_spatialGrid.clear();
+	s_pool.wait();
 }
