@@ -17,11 +17,28 @@ ColliderType BoxCollider::getType() const
 
 AABB BoxCollider::getWorldAABB(Transform* transform) const
 {
-	DirectX::XMVECTOR center = transform->GetPosition(1);
-	return AABB(
-		DirectX::XMVectorSubtract(center, m_halfSize),
-		DirectX::XMVectorAdd(center, m_halfSize)
-	);
+    using namespace DirectX;
+
+    // 1) grab all 8 world-space vertices
+    auto verts = getWorldVertices(transform);
+    if (verts.empty()) {
+        // fallback to a degenerate box at the origin
+        XMVECTOR zero = XMVectorZero();
+        return AABB(zero, zero);
+    }
+
+    // 2) init min/max to the first vertex
+    XMVECTOR minV = verts[0];
+    XMVECTOR maxV = verts[0];
+
+    // 3) sweep the rest
+    for (size_t i = 1; i < verts.size(); ++i) {
+        minV = XMVectorMin(minV, verts[i]);
+        maxV = XMVectorMax(maxV, verts[i]);
+    }
+
+    // 4) return the world-space AABB
+    return AABB(minV, maxV);
 }
 
 DirectX::XMMATRIX BoxCollider::getInertiaTensor(float mass) {

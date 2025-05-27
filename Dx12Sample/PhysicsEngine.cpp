@@ -19,6 +19,7 @@ std::unordered_map<uint16_t, std::shared_ptr<NetworkedObject>> PhysicsEngine::m_
 std::vector<std::shared_ptr<PhysicsObject>> PhysicsEngine::m_ownedBodies;
 std::vector<std::shared_ptr<PhysicsObject>> PhysicsEngine::m_nonOwnedBodies;
 std::vector<PhysicsObject*> PhysicsEngine::m_bodies;
+SpatialHashGrid PhysicsEngine::m_spatialGrid(2.0f);
 
 CollisionSystem PhysicsEngine::m_collisionSystem;
 
@@ -112,6 +113,7 @@ void PhysicsEngine::addBody(const std::shared_ptr<NetworkedObject>& object) {
         m_nonOwnedBodies.push_back(object->getObject());
     }
 	m_bodies.push_back(object->getObject().get());
+	m_spatialGrid.addBody(object->getObject().get(), object->getObject()->getCollider()->getWorldAABB(&object->getObject()->getTransform()), object->getObject()->isStatic());
     if (m_gravityEnabled) {
         object->getObject().get()->applyConstantForce({ 0.0f, -m_gravity * object->getObject().get()->getMass(), 0.0f, 0.0f });
     }
@@ -127,6 +129,7 @@ void PhysicsEngine::clearBodies() {
 	m_ownedNetworkedObjects.clear();
 	m_nonOwnedNetworkedObjects.clear();
 	m_contactManifolds.clear();
+	m_spatialGrid.clear();
 }
 
 void PhysicsEngine::setGravity(const float& gravity) {
@@ -200,22 +203,11 @@ void PhysicsEngine::detectAndResolveCollisions(const float& deltaTime) {
 }
 
 std::vector<std::pair<PhysicsObject*, PhysicsObject*>> PhysicsEngine::broadPhase() {
-    std::vector<std::pair<PhysicsObject*, PhysicsObject*>> pairs;
-    for (size_t i = 0; i < m_bodies.size(); ++i) {
-        for (size_t j = i + 1; j < m_bodies.size(); ++j) {
-			// Skip pairs if we cannot modify them
-            if (!canModify(static_cast<NetworkedObject*>(m_bodies[i]->getUserData())) &&
-                !canModify(static_cast<NetworkedObject*>(m_bodies[j]->getUserData()))) {
-                continue;
-            }
-            auto colliderA = m_bodies[i]->getCollider();
-            auto colliderB = m_bodies[j]->getCollider();
-            if (colliderA && colliderB) {
-                pairs.emplace_back(m_bodies[i], m_bodies[j]);
-            }
-        }
-    }
-    return pairs;
+    m_spatialGrid.updateDynamicBodies();
+
+    auto candidates = m_spatialGrid.computePairs();
+
+	return candidates;
 }
 
 void PhysicsEngine::prestepCollisionManifolds(std::map<std::pair<PhysicsObject*, PhysicsObject*>, CollisionManifold>& contactManifolds, const float& dt) {
@@ -480,4 +472,6 @@ void PhysicsEngine::onStart() noexcept {
 	}
 }
 
-void PhysicsEngine::onStop() noexcept {}
+void PhysicsEngine::onStop() noexcept {
+    m_spatialGrid.clear();
+}

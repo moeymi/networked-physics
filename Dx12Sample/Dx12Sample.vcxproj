@@ -200,6 +200,7 @@
     <ClCompile Include="RingBufferSPSC.cpp" />
     <ClCompile Include="Scenario.cpp" />
     <ClCompile Include="Socket.cpp" />
+    <ClCompile Include="SpatialHashGrid.cpp" />
     <ClCompile Include="SpheresScenario.cpp" />
     <ClCompile Include="ScenarioB.cpp" />
     <ClCompile Include="SphereCollider.cpp" />
@@ -236,6 +237,7 @@
     <ClInclude Include="RingBufferSPSC.h" />
     <ClInclude Include="Scenario.h" />
     <ClInclude Include="Socket.h" />
+    <ClInclude Include="SpatialHashGrid.h" />
     <ClInclude Include="SpheresScenario.h" />
     <ClInclude Include="ScenarioB.h" />
     <ClInclude Include="SphereCollider.h" />

@@ -28,16 +28,25 @@ class AABB
 {
 public:
 	AABB() = default;
-	AABB(const DirectX::XMVECTOR& min, const DirectX::XMVECTOR& max) : m_min(min), m_max(max) {}
+	AABB(const DirectX::XMVECTOR& min, const DirectX::XMVECTOR& max) : m_min(min), m_max(max),
+		m_minFloat(DirectX::XMFLOAT3()), m_maxFloat(DirectX::XMFLOAT3())
+	{
+		DirectX::XMStoreFloat3(&m_minFloat, min);
+		DirectX::XMStoreFloat3(&m_maxFloat, max);
+	}
 	~AABB() = default;
 	DirectX::XMVECTOR getMin() const { return m_min; }
 	DirectX::XMVECTOR getMax() const { return m_max; }
+	DirectX::XMFLOAT3 getMinFloat() const { return m_minFloat; }
+	DirectX::XMFLOAT3 getMaxFloat() const { return m_maxFloat; }
 	DirectX::XMVECTOR getCenter() const { return DirectX::XMVectorScale(DirectX::XMVectorAdd(m_min, m_max), 0.5f); }
 	DirectX::XMVECTOR getSize() const { return DirectX::XMVectorSubtract(m_max, m_min); }
 
 private:
 	DirectX::XMVECTOR m_min;
 	DirectX::XMVECTOR m_max;
+	DirectX::XMFLOAT3 m_minFloat;
+	DirectX::XMFLOAT3 m_maxFloat;
 };
 
 class Collider

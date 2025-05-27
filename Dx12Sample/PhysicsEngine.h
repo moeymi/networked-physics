@@ -4,6 +4,7 @@
 #include "ThreadedSystem.h"
 #include "NetworkedObject.h"
 #include "RingBufferSPSC.h"
+#include "SpatialHashGrid.h"
 
 #include <shared_mutex>
 
@@ -14,6 +15,7 @@ private:
     static std::vector<std::shared_ptr<PhysicsObject>> m_ownedBodies;
 	static std::vector<std::shared_ptr<PhysicsObject>> m_nonOwnedBodies;
 	static std::vector<PhysicsObject*> m_bodies;
+    static SpatialHashGrid m_spatialGrid;
 
     static CollisionSystem m_collisionSystem;
 
