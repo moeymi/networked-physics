@@ -445,14 +445,13 @@ void PhysicsSimulation::OnGUI()
             }
         };
 
+        ShowEngineData("Network", m_NetworkingEngine, GlobalData::g_networkDt, GlobalData::g_networkFreq);
         float physicsDeltaTime = m_PhysicsEngine.getSimulationDeltaTime();
         if (ImGui::InputFloat("Physics delta time", &physicsDeltaTime, 0.005f, 0.01f, "%.3f")) {
             physicsDeltaTime = std::clamp(physicsDeltaTime, 0.001f, 0.1f);
             m_PhysicsEngine.setSimulationDeltaTime(physicsDeltaTime);
         }
-
         ShowEngineData("Physics", m_PhysicsEngine, GlobalData::g_physicsDt, GlobalData::g_physicsFreq);
-        ShowEngineData("Network", m_NetworkingEngine, GlobalData::g_networkDt, GlobalData::g_networkFreq);
         ImGui::End();
     }
 
