@@ -34,7 +34,6 @@ private:
 	static constexpr std::size_t m_kChunkSize = 64;
 
 	static float m_gravity;
-	static bool m_gravityEnabled;
 
 	static float m_simulationDeltaTime;
 
@@ -43,14 +42,12 @@ private:
 	static float m_simTimeAccumulator;
 	static float m_nextTickTime;
 
-	RingBufferSPSC<Snapshot, 4096>* m_outgoingBuffer;
-	RingBufferSPSC<Snapshot, 4096>* m_incomingBuffer;
-
-    std::atomic<std::size_t> jobsIssued{ 0 };
+	RingBufferSPSC<Snapshot, 512>* m_outgoingBuffer;
+	RingBufferSPSC<Snapshot, 512>* m_incomingBuffer;
 
 public:
-    PhysicsEngine(RingBufferSPSC<Snapshot, 4096>* outgoingBuf,
-        RingBufferSPSC<Snapshot, 4096>* incomingBuf);
+    PhysicsEngine(RingBufferSPSC<Snapshot, 512>* outgoingBuf,
+        RingBufferSPSC<Snapshot, 512>* incomingBuf);
 
     void addOwnedBody(const std::shared_ptr<PhysicsObject>& body);
 	void addBody(const std::shared_ptr<NetworkedObject>& object);
@@ -61,8 +58,6 @@ public:
 
     static bool ghostModeEnabled();
     static void setGhostMode(bool enabled);
-
-    bool isGravityEnabled() const;
 
     void setSimulationDeltaTime(const float& deltaTime);
     float getSimulationDeltaTime() const;

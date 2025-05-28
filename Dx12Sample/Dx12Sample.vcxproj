@@ -185,6 +185,7 @@
     <ClCompile Include="FlatBufferHelper.cpp" />
     <ClCompile Include="GlobalData.cpp" />
     <ClCompile Include="IPAddress.cpp" />
+    <ClCompile Include="IslandBuilder.cpp" />
     <ClCompile Include="Light.cpp" />
     <ClCompile Include="Log.cpp" />
     <ClCompile Include="main.cpp" />
@@ -223,6 +224,7 @@
     <ClInclude Include="FlatBufferHelper.h" />
     <ClInclude Include="game_state_generated.h" />
     <ClInclude Include="IPAddress.h" />
+    <ClInclude Include="IslandBuilder.h" />
     <ClInclude Include="Light.h" />
     <ClInclude Include="Log.h" />
     <ClInclude Include="Material.h" />

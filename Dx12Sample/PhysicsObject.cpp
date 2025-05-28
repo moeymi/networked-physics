@@ -91,6 +91,16 @@ void PhysicsObject::setColor(const DirectX::XMFLOAT4& color) {
 	adjustBrightness();
 }
 
+void PhysicsObject::setIsland(const int& i) const
+{
+	m_island = i;
+}
+
+int PhysicsObject::getIsland() const
+{
+	return m_island;
+}
+
 void PhysicsObject::adjustBrightness() {
     using namespace DirectX;
 

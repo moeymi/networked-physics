@@ -480,13 +480,13 @@ std::optional<CollisionManifold> CollisionHandlers::BoxVsCapsule(PhysicsObject* 
     }
 
 
-//	Log::Info() << "BoxVsCasule: Collision detected with distance: " << dist << " at " <<
-//		XMVectorGetX(m.contacts[0].position) << ", " <<
-//		XMVectorGetY(m.contacts[0].position) << ", " <<
-//		XMVectorGetZ(m.contacts[0].position) << " with normal: " <<
-//		XMVectorGetX(m.contacts[0].normal) << ", " <<
-//		XMVectorGetY(m.contacts[0].normal) << ", " <<
-//		XMVectorGetZ(m.contacts[0].normal) << " and penetration: " << m.contacts[0].penetration << std::endl;
+	Log::Info() << "BoxVsCasule: Collision detected with distance: " << dist << " at " <<
+		XMVectorGetX(m.contacts[0].position) << ", " <<
+		XMVectorGetY(m.contacts[0].position) << ", " <<
+		XMVectorGetZ(m.contacts[0].position) << " with normal: " <<
+		XMVectorGetX(m.contacts[0].normal) << ", " <<
+		XMVectorGetY(m.contacts[0].normal) << ", " <<
+		XMVectorGetZ(m.contacts[0].normal) << " and penetration: " << m.contacts[0].penetration << std::endl;
 
 
     // ------------------------------------------------------------------

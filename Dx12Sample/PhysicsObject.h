@@ -85,6 +85,9 @@ public:
 	void setPhysicsMaterial(const PhysicsMaterial& material);
 	void setColor(const DirectX::XMFLOAT4& color);
 
+	int getIsland() const;
+	void setIsland(const int& island) const;
+
 	bool isStatic() const;
 	float getMass() const;
 	MeshType getMeshType() const;
@@ -119,6 +122,7 @@ private:
 
 	float m_mass = 1.0f;
 	PhysicsMaterial m_physicsMaterial;
+	mutable int m_island = -1;
 
 	DirectX::XMVECTOR m_centerOfMass = { 0.0f, 0.0f, 0.0f, 1.0f };
 	DirectX::XMVECTOR m_constantForces = { 0.0f, 0.0f, 0.0f, 0.0f };

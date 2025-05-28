@@ -12,7 +12,7 @@
 #include "PhysicsEngine.h"
 #include "IPAddress.h"
 
-NetworkEngine::NetworkEngine(RingBufferSPSC<Snapshot, 4096>* outgoingBuf, RingBufferSPSC<Snapshot, 4096>* incomingBuf) :
+NetworkEngine::NetworkEngine(RingBufferSPSC<Snapshot, 512>* outgoingBuf, RingBufferSPSC<Snapshot, 512>* incomingBuf) :
     m_outgoingBuffer(outgoingBuf), m_incomingBuffer(incomingBuf) {
 }
 

@@ -5,8 +5,8 @@
 #include <string>
 #include <omp.h>
 #include <barrier>
+#include "IslandBuilder.h"
 
-bool PhysicsEngine::m_gravityEnabled = true;
 float PhysicsEngine::m_gravity = 9.81f;
 float PhysicsEngine::m_simulationDeltaTime;
 
@@ -24,8 +24,8 @@ ThreadPool PhysicsEngine::s_pool;
 
 CollisionSystem PhysicsEngine::m_collisionSystem;
 
-PhysicsEngine::PhysicsEngine(RingBufferSPSC<Snapshot, 4096>* outgoingBuf,
-    RingBufferSPSC<Snapshot, 4096>* incomingBuf) : m_outgoingBuffer(outgoingBuf), m_incomingBuffer(incomingBuf) {
+PhysicsEngine::PhysicsEngine(RingBufferSPSC<Snapshot, 512>* outgoingBuf,
+    RingBufferSPSC<Snapshot, 512>* incomingBuf) : m_outgoingBuffer(outgoingBuf), m_incomingBuffer(incomingBuf) {
 }
 
 void PhysicsEngine::onUpdate(float) {
@@ -93,9 +93,7 @@ void PhysicsEngine::addOwnedBody(const std::shared_ptr<PhysicsObject>& body) {
 		throw std::runtime_error("Cannot add bodies while the physics engine is running.");
     }
 	m_ownedBodies.push_back(body);
-	if (m_gravityEnabled) {
-		body->applyConstantForce({ 0.0f, -m_gravity * body->getMass(), 0.0f, 0.0f });
-	}
+    body->applyConstantForce({ 0.0f, -m_gravity * body->getMass(), 0.0f, 0.0f });
 }
 
 void PhysicsEngine::addBody(const std::shared_ptr<NetworkedObject>& object) {
@@ -115,9 +113,7 @@ void PhysicsEngine::addBody(const std::shared_ptr<NetworkedObject>& object) {
     }
 	m_bodies.push_back(object->getObject().get());
 	m_spatialGrid.addBody(object->getObject().get(), object->getObject()->getCollider()->getWorldAABB(&object->getObject()->getTransform()), object->getObject()->isStatic());
-    if (m_gravityEnabled) {
-        object->getObject().get()->applyConstantForce({ 0.0f, -m_gravity * object->getObject().get()->getMass(), 0.0f, 0.0f });
-    }
+    object->getObject().get()->applyConstantForce({ 0.0f, -m_gravity * object->getObject().get()->getMass(), 0.0f, 0.0f });
 }
 
 void PhysicsEngine::clearBodies() {
@@ -135,7 +131,6 @@ void PhysicsEngine::clearBodies() {
 
 void PhysicsEngine::setGravity(const float& gravity) {
 	m_gravity = gravity;
-	if (!m_gravityEnabled) return;
 	for (auto body : m_bodies) {
         body->resetConstantForces();
 		body->applyConstantForce({ 0.0f, -m_gravity * body->getMass(), 0.0f, 0.0f });
@@ -144,10 +139,6 @@ void PhysicsEngine::setGravity(const float& gravity) {
 
 float PhysicsEngine::getGravity() {
 	return m_gravity;
-}
-
-bool PhysicsEngine::isGravityEnabled() const {
-	return m_gravityEnabled;
 }
 
 bool PhysicsEngine::ghostModeEnabled() { return m_ghostMode.load(); }
@@ -182,24 +173,67 @@ void PhysicsEngine::detectAndResolveCollisions(const float& deltaTime) {
     m_contactManifolds = std::move(currentFrameManifolds);
     prestepCollisionManifolds(m_contactManifolds, deltaTime);
 
-    for (int iter = 0; iter < m_velocityIterations; ++iter) {
-        for (int i = 0; i < m_contactManifolds.size(); i++) {
-			auto pair = m_contactManifolds.begin();
-			std::advance(pair, i);
-            auto& manifold = pair->second;
-            if (manifold.contacts.empty()) continue;
-            resolveCollisionVelocity(manifold, iter);
-        }
+    std::vector<PhysicsObject*> bodies;
+    bodies.reserve(m_ownedBodies.size() + m_nonOwnedBodies.size());
+    for (const auto& b : m_ownedBodies)     if (!b->isStatic()) bodies.push_back(b.get());
+    for (const auto& b : m_nonOwnedBodies)  if (!b->isStatic()) bodies.push_back(b.get());
+
+    // Map body* -> its slot in 'bodies'  (pointer->index)
+    std::unordered_map<PhysicsObject*, int> bodyIndex;
+    for (int i = 0; i < (int)bodies.size(); ++i) bodyIndex[bodies[i]] = i;
+
+    // --- 3b  Union–Find on contact graph -----------------------------------
+    UnionFind uf(bodies.size());
+    for (auto& [_, manifold] : m_contactManifolds) {
+        int a = bodyIndex[manifold.objectA];
+        int b = bodyIndex[manifold.objectB];
+        uf.unite(a, b);
     }
 
-    for (int iter = 0; iter < m_positionIterations; ++iter) {
-		for (auto& [key, manifold] : m_contactManifolds) {
-            if (manifold.contacts.empty()) continue;
-            for (auto& contact : manifold.contacts) {
-                positionalCorrection(contact, manifold.objectA, manifold.objectB);
-            }
-        }
+    // --- 3c  Bucket manifolds by island id ---------------------------------
+    std::unordered_map<int, std::vector<CollisionManifold*>> islandTable;
+    for (auto& [key, manifold] : m_contactManifolds) {
+        int root = uf.find(bodyIndex[manifold.objectA]);   // either body works
+        islandTable[root].push_back(&manifold);
     }
+
+    for (auto& [root, list] : islandTable)
+        for (auto* m : list) {
+            m->objectA->setIsland(root);
+            m->objectB->setIsland(root);
+        }
+
+    for (auto& [id, island] : islandTable)
+    {
+        auto* list = &island;
+
+        s_pool.enqueue([this, list] {
+            for (int iter = 0; iter < m_velocityIterations; ++iter) {
+                for (CollisionManifold* m : *list) {
+                    if (m->contacts.empty()) continue;
+                    resolveCollisionVelocity(*m, iter);
+                }
+            }
+            });
+    }
+    s_pool.wait();
+
+
+    for (auto& [id, island] : islandTable)
+    {
+        auto* list = &island;
+
+        s_pool.enqueue([this, list] {
+            for (int iter = 0; iter < m_positionIterations; ++iter) {
+                for (CollisionManifold* m : *list) {
+                    if (m->contacts.empty()) continue;
+                    for (auto& cp : m->contacts)
+                        positionalCorrection(cp, m->objectA, m->objectB);
+                }
+            }
+            });
+    }
+    s_pool.wait();
 }
 
 std::vector<std::pair<PhysicsObject*, PhysicsObject*>> PhysicsEngine::broadPhase() {

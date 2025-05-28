@@ -553,7 +553,6 @@ void PhysicsSimulation::OnGUI()
 
         if (ImGui::CollapsingHeader("Physics")) {
             static float gravity = m_PhysicsEngine.getGravity();
-            bool gravityEnabled = m_PhysicsEngine.isGravityEnabled();
             bool reversed = gravity < 0;
 
 			bool ghostMode = PhysicsEngine::ghostModeEnabled();

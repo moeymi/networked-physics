@@ -6,6 +6,8 @@
 #include <queue>
 #include <thread>
 #include <vector>
+#include <set>
+#include <stdexcept>
 
 class ThreadPool {
 public:
@@ -18,16 +20,17 @@ public:
         {
             std::lock_guard lk(_m);
             _queue.emplace(Task{ std::forward<F>(f) });
-            ++_pending;
+            _pending.fetch_add(1, std::memory_order_acq_rel);
         }
         _cv.notify_one();
     }
 
-    void wait();                           // block until all tasks done
+    void wait();
 private:
     struct Task { std::function<void()> fn; };
 
     std::vector<std::thread> _workers;
+    std::set<std::thread::id> _worker_ids;
     std::queue<Task>         _queue;
     std::mutex               _m;
     std::condition_variable  _cv;
