@@ -31,7 +31,6 @@ inline XMMATRIX SphereCollider::getInertiaTensor(float mass)
 inline XMMATRIX SphereCollider::getInverseInertiaTensor(float mass)
 {
     if (!m_invInertiaReady) {
-        // ensure inertiaVal is up-to-date
         if (!m_inertiaReady)
             getInertiaTensor(mass);
 

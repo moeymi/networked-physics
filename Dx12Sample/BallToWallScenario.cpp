@@ -8,7 +8,7 @@ void BallToWallScenario::onLoad(CommandList& commandList)
 {
 
 	PhysicsMaterial material = {
-		0.2f, // static friction
+		0.2f, // friction
 		1.0f,
 	};
 
@@ -18,7 +18,6 @@ void BallToWallScenario::onLoad(CommandList& commandList)
 	particle1->setPhysicsMaterial(material);
 	particle1->onLoad();
 	particle1->getTransform().SetPosition({ 0, 0, 2, 1 }, 0, true);
-	//particle1->setVelocity({ 3, 0, 0, 0 }, 1);
 	particle1->setAngularVelocity({ 0, 0, 1, 0 }, 1);
 
 	auto wall = std::make_shared<PhysicsObject>(MeshType::Plane, GlobalData::g_planeMesh.get(), GlobalData::g_defaultTexture.get());

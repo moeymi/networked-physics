@@ -4,7 +4,6 @@
 CapsuleCollider::CapsuleCollider(const float& radius, const float& cylinderHeight)
     : m_radius(radius), m_cylinderHeight(cylinderHeight)
 {
-    // Ensure valid dimensions
     if (m_radius < 0) m_radius = 0;
     if (m_cylinderHeight < 0) m_cylinderHeight = 0;
 }
@@ -18,7 +17,6 @@ void CapsuleCollider::getLocalSegmentEndpoints(DirectX::XMVECTOR& out_p1, Direct
 {
     using namespace DirectX;
     float halfCylinderHeight = m_cylinderHeight * 0.5f;
-    // Capsule along local Y-axis
     out_p1 = XMVectorSet(0.0f, -halfCylinderHeight, 0.0f, 0.0f);
     out_p2 = XMVectorSet(0.0f, halfCylinderHeight, 0.0f, 0.0f);
 }
@@ -90,7 +88,6 @@ DirectX::XMMATRIX CapsuleCollider::getInverseInertiaTensor(float mass) {
         XMVECTOR determinant;
         m_inverseInertiaTensor = XMMatrixInverse(&determinant, m_inverseInertiaTensor);
 
-        // Handle non-invertible matrix (e.g., zero mass)
         if (XMVectorGetX(XMVectorAbs(determinant)) < 1e-6f) {
             m_inverseInertiaTensor = XMMatrixIdentity();
         }

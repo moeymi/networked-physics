@@ -7,11 +7,9 @@
 
 struct XMF3Hash {
     size_t operator()(DirectX::XMFLOAT3 const& c) const noexcept {
-        // Harvest the integer bits
         auto xi = static_cast<uint32_t>(c.x);
         auto yi = static_cast<uint32_t>(c.y);
         auto zi = static_cast<uint32_t>(c.z);
-        // 3 large primes for mixing
         return (xi * 73856093u) ^ (yi * 19349663u) ^ (zi * 83492791u);
     }
 };
@@ -52,7 +50,6 @@ public:
         : m_cellSize(cellSize) {
     }
 
-    // called once at startup or whenever a new object appears
     void addBody(PhysicsObject* obj, AABB const& box, bool isStatic) {
         auto cellList = worldToCells(box);
         for (auto const& cell : cellList)
@@ -76,11 +73,9 @@ public:
 		m_prevAABBs.clear();
 	}
 
-    // if you ever remove an object mid-game
     void removeBody(PhysicsObject* obj) {
         auto it = m_bodyCells.find(obj);
         if (it != m_bodyCells.end()) {
-            // dynamic
             for (auto const& cell : it->second) {
                 auto& vec = m_cells[cell];
                 vec.erase(std::remove(vec.begin(), vec.end(), obj), vec.end());

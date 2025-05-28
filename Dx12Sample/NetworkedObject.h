@@ -50,7 +50,6 @@ private:
         bool        haveA = false, haveB = false;
         int64_t     target = int64_t(localTick) - delayTicks;
 
-        // clamp target into the buffer’s span
         if (!m_buffer.empty())
         {
             target = std::clamp(target,
@@ -58,7 +57,6 @@ private:
                 int64_t(m_buffer.back().tick));
         }
 
-        // try to find two samples to interpolate…
         for (size_t i = 0; i + 1 < m_buffer.size(); ++i)
         {
             auto& s0 = m_buffer[i];
@@ -70,13 +68,13 @@ private:
                 break;
             }
         }
-        // if we only have one sample, extrapolate from it
+
         if (!haveA && m_buffer.size() == 1)
         {
             aState = m_buffer.front();
             haveA = true;
         }
-        // if we have none, fall back to lastSnapshot
+
         if (!haveA && m_buffer.empty())
         {
             aState.tick = m_lastSnapshotTick;
@@ -116,11 +114,9 @@ private:
         }
         else
         {
-            // read the pose you just displayed in the previous frame
             XMVECTOR curP = m_object->getTransform().GetPosition(0);
             XMVECTOR curR = m_object->getTransform().GetRotationQuaternion(0);
 
-            // --- 2. Advance position & orientation by velocity * dt ----------
             XMVECTOR vLin = XMLoadFloat3(&aState.update.velocity);
             XMVECTOR vAng = XMLoadFloat3(&aState.update.angular_velocity);
 
@@ -130,7 +126,6 @@ private:
             XMStoreFloat3(&newPos, nextP);
             XMStoreFloat4(&newRot, nextR);
 
-            // velocities stay the same
             newVel = aState.update.velocity;
             newAngVel = aState.update.angular_velocity;
         }
@@ -147,10 +142,9 @@ private:
         XMFLOAT3 blendedPFloat3;
 		XMStoreFloat3(&blendedPFloat3, blendedP);
 
-		// Check for any NAN values in the blended position or rotation
         if (std::isnan(blendedPFloat3.x) || std::isnan(blendedPFloat3.y) || std::isnan(blendedPFloat3.z)) {
 			Log::Info() << "NetworkedObject: Last snapshot position contains NaN values at tick " << m_lastSnapshotTick << ", resetting to zero position.";
-           // return;
+            return;
         }
 
 
@@ -172,10 +166,6 @@ private:
 		}
         auto& xf = m_object->getTransform();
 
-        Log::Info() << "NetworkedObject: Snapping to last snapshot at tick " << m_lastSnapshotTick << " for object ID " << m_id << " owned by " << m_ownerId << " with position "
-            << m_lastSnapshot.position.x << ", " << m_lastSnapshot.position.y << ", " << m_lastSnapshot.position.z << std::endl;
-
-        // Check for any NAN values
 		if (std::isnan(m_lastSnapshot.position.x) || std::isnan(m_lastSnapshot.position.y) || std::isnan(m_lastSnapshot.position.z)) {
 			Log::Info() << "NetworkedObject: Last snapshot position contains NaN values at tick " << m_lastSnapshotTick << ", resetting to zero position." << std::endl;
 			m_lastSnapshot.position = { 0.0f, 0.0f, 0.0f };
@@ -193,17 +183,13 @@ private:
     DirectX::XMVECTOR integrateRotation(const DirectX::XMVECTOR& rotation, const DirectX::XMFLOAT3& angularVelocity, float dt) {
         using namespace DirectX;
 
-        // Convert angular velocity (in radians/sec) to a quaternion derivative
         XMVECTOR omegaVec = XMVectorSet(angularVelocity.x, angularVelocity.y, angularVelocity.z, 0.0f);
 
-        // qDot = 0.5 * q * omega (in quaternion form)
         XMVECTOR qDot = XMQuaternionMultiply(rotation, omegaVec);
         qDot = XMVectorScale(qDot, 0.5f * dt);
 
-        // Integrate by adding qDot to current rotation
         XMVECTOR integrated = XMVectorAdd(rotation, qDot);
 
-        // Normalize to maintain valid quaternion
         return XMQuaternionNormalize(integrated);
     }
 

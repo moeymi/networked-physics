@@ -7,7 +7,6 @@
 class MulticastSocket : public Socket
 {
 public:
-    /*  group  – e.g. 239.255.42.42:5000 */
     MulticastSocket(const IPAddress& group,
         const IPAddress& iface);
 

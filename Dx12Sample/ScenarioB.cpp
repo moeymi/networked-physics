@@ -13,9 +13,8 @@ void ScenarioB::onLoadInternal(CommandList& commandList)
 	};
 	for (int i = 0; i < 50; i++)
 	{
-		int randNum = 0;// rand() % 2;
+		int randNum = 0;
 		if (randNum) {
-			// Create a static box
 			auto box = std::make_shared<PhysicsObject>(MeshType::Box, GlobalData::g_boxMesh.get(), GlobalData::g_defaultTexture.get());
 			auto sphereCollider = std::make_shared<BoxCollider>(DirectX::XMVectorReplicate(.5f));
 			box->setCollider(sphereCollider);
@@ -29,7 +28,6 @@ void ScenarioB::onLoadInternal(CommandList& commandList)
 			m_physicsObjects.push_back(box);
 		}
 		else {
-			// Create a sphere
 			auto particle = std::make_shared<PhysicsObject>(MeshType::Sphere, GlobalData::g_sphereMesh.get(), GlobalData::g_customTexture.get());
 			auto sphereCollider = std::make_shared<SphereCollider>(.5f);
 			particle->setCollider(sphereCollider);
@@ -40,8 +38,6 @@ void ScenarioB::onLoadInternal(CommandList& commandList)
 			particle->onLoad();
 			particle->getTransform().SetPosition({ x, y, z, 1 }, 0, true);
 			m_physicsObjects.push_back(particle);
-			//particle->setVelocity({ 5, 0, 0, 0 }, 0);
-			//particle->setVelocity({ 5, 0, 0, 0 }, 1);
 		}
 	}
 }

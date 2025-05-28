@@ -17,10 +17,9 @@ public:
 
     DirectX::XMVECTOR getHalfSize() const { return m_halfSize; }
 
-    // SAT Helpers
-    std::array<DirectX::XMVECTOR, 8> getWorldVertices(Transform* transform) const;
-    std::array<DirectX::XMVECTOR, 3> getFaceNormals(Transform* transform) const;
-    std::array<DirectX::XMVECTOR, 3> getEdgeDirections(Transform* transform) const;
+    std::vector<DirectX::XMVECTOR> getWorldVertices(Transform* transform) const;
+    std::vector<DirectX::XMVECTOR> getFaceNormals(Transform* transform) const;
+    std::vector<DirectX::XMVECTOR> getEdgeDirections(Transform* transform) const;
 
     DirectX::XMVECTOR closestPoint(Transform* transform, const DirectX::XMVECTOR& point) const;
 	bool containsPoint(Transform* transform, const DirectX::XMVECTOR& point) const;

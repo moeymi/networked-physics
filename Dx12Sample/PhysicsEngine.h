@@ -76,7 +76,6 @@ private:
 
     DirectX::XMVECTOR computeTangent(DirectX::XMVECTOR relVel, DirectX::XMVECTOR normal);
 
-    // Helper to create a canonical key for a pair of objects
     PairKey makePairKey(PhysicsObject* objA, PhysicsObject* objB);
 
     bool canModify(NetworkedObject* object) const;

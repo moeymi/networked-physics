@@ -98,14 +98,14 @@ void NetworkEngine::initializeSockets(unsigned short listenPort) {
         throw std::runtime_error("WSAStartup failed");
 
     IPAddress listenAddr = IPAddress("0.0.0.0", listenPort);
-    m_listenSocket = std::make_unique<TCPSocket>(false);   // passive ctor
+    m_listenSocket = std::make_unique<TCPSocket>(false);
     m_listenSocket->listen(listenAddr);
 
     constexpr char GROUP_IP[] = "239.255.42.42";
     const uint16_t GROUP_PORT = GlobalData::g_broadcastPort;
 
     IPAddress groupAddr(GROUP_IP, GROUP_PORT);
-    IPAddress localIface = IPAddress::initializeLocal(GROUP_PORT);   // pick your NIC
+    IPAddress localIface = IPAddress::initializeLocal(GROUP_PORT);
 
     m_multicastSocket = std::make_unique<MulticastSocket>(groupAddr, localIface);
 	m_multicastSocket->setBlocking(false);
@@ -130,7 +130,7 @@ void NetworkEngine::connectToPeer(const std::string& ip, uint16_t port)
             m_peerSockets.push_back(std::move(peer));
         }
     }
-    catch (const std::exception& e)  // connect() threw -> ignore / retry later
+    catch (const std::exception& e)
     {
 		auto string = std::string("Connect to peer failed: ") + e.what();
 		Log::Info() << string << std::endl;
@@ -149,7 +149,7 @@ void NetworkEngine::removePeer(TCPSocket* peerSocket) {
         );
         m_peerSockets.erase(it, m_peerSockets.end());
     }
-    // close the socket
+
     peerSocket->close();
 }
 
@@ -165,11 +165,9 @@ void NetworkEngine::broadcastDiscovery(unsigned short discoveryPort) {
 std::string NetworkEngine::constructDiscoveryMessage() {
     flatbuffers::FlatBufferBuilder builder;
 
-    // Create fields
     auto name = builder.CreateString(GlobalData::g_clientName);
     NetSim::Vec3 color{ GlobalData::g_clientColor.x, GlobalData::g_clientColor.y, GlobalData::g_clientColor.z };
 
-    // Create the DiscoveryBroadcast payload
     auto discovery = NetSim::CreateDiscoveryBroadcast(
         builder,
         PROTOCOL_VERSION,
@@ -179,7 +177,6 @@ std::string NetworkEngine::constructDiscoveryMessage() {
         &color
     );
 
-    // Wrap in a NetworkMessage
     auto msgType = builder.CreateString("DiscoveryBroadcast");
     NetSim::NetworkMessageBuilder msgBuilder(builder);
     msgBuilder.add_msg_type(msgType);
@@ -189,7 +186,6 @@ std::string NetworkEngine::constructDiscoveryMessage() {
     auto networkMessage = msgBuilder.Finish();
     builder.Finish(networkMessage);
 
-    // Return serialized buffer as string
     return std::string(reinterpret_cast<const char*>(builder.GetBufferPointer()), builder.GetSize());
 }
 
@@ -336,7 +332,6 @@ void NetworkEngine::assignOwnersAndBroadcastScenarioCreate(const std::vector<std
 			}
         }
         else {
-            // Static objects are always white
             colorVec3 = { 1.0f, 1.0f, 1.0f };
         }
 
@@ -582,10 +577,8 @@ void NetworkEngine::handlePeerList(const NetSim::PeerList* list) {
         std::string ip = peer->ip()->str();
         uint16_t port = peer->port();
 
-        // Don't connect to self
         if (peerId == GlobalData::g_clientId) continue;
 
-        // Already connected?
         if (!isPeerConnected(ip, port)) {
             connectToPeer(ip, port);
         }
@@ -634,7 +627,6 @@ void NetworkEngine::handleRecognize(const NetSim::Recognize* recognize) {
         return;
     }
 
-    // Store peer info
     PeerInfo info;
     info.socket = senderSocket->native();
     info.peer_id = recognize->peer_id();
@@ -705,13 +697,13 @@ void NetworkEngine::handleScenario(const NetSim::Scenario* scenario) {
 
 		auto physicsObject = std::make_shared<PhysicsObject>(objectType, objectMesh.get(), texture.get());
 		physicsObject->setCollider(collider);
-		physicsObject->setColor(color);
 		physicsObject->getTransform().SetPosition(position, 0, true);
 		physicsObject->getTransform().SetRotationQuaternion(rotation, 0, true);
 		physicsObject->getTransform().SetScale(scale, 0, true);
 		physicsObject->setStatic(objCreation->is_static());
         physicsObject->setMass(objCreation->mass());
         physicsObject->setPhysicsMaterial({ objCreation->material()->friction(), objCreation->material()->restitution() });
+        physicsObject->setColor(color);
 
 		auto networkedObject = std::make_shared<NetworkedObject>(objectId, ownerId, physicsObject);
 		physicsObject->setUserData(networkedObject.get());
@@ -722,7 +714,6 @@ void NetworkEngine::handleScenario(const NetSim::Scenario* scenario) {
     auto fenceValue = commandQueue->ExecuteCommandList(commandList);
     commandQueue->WaitForFenceValue(fenceValue);
 
-	// Notify the scenario listener
 	if (m_createScenario) {
 		m_createScenario(std::move(objects), scenario->gravity());
 	}
@@ -760,7 +751,7 @@ void NetworkEngine::handleDiscoveryDatagrams()
             if (WSAGetLastError() == WSAEWOULDBLOCK)
                 break;
             else
-                return; // real error – silently drop
+                return;
         }
 
         const NetSim::NetworkMessage* message = NetSim::GetNetworkMessage(buffer);

@@ -97,7 +97,6 @@ void SpheresScenario::drawImGui() {
 	if (ImGui::Button("Generate Spheres")) {
 		setReady(false);
 
-		// Keep planes
 		for (size_t i = 6; i < m_physicsObjects.size(); ++i) {
 			m_physicsObjects[i]->onUnload();
 		}

@@ -150,14 +150,12 @@ private:
     std::vector<std::shared_ptr<NetworkedObject>> m_allNetworkedObjects;
     std::array<NetworkedObject*, 40000> m_unownedObjects{ nullptr };
 
-	bool m_clientPrediction = false;
     bool m_simulationScheduled = false;
     double m_simulationStartTime;
 
 	RingBufferSPSC<Snapshot, 512> m_outgoingBuffer;
 	RingBufferSPSC<Snapshot, 512> m_incomingBuffer;
 
-    // Camera controller
     float m_Forward;
     float m_Backward;
     float m_Left;
@@ -168,7 +166,6 @@ private:
     float m_Pitch;
     float m_Yaw;
 
-    // Set to true if the Shift key is pressed.
     bool m_Shift;
 
     int m_Width;

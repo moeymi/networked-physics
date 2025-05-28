@@ -7,12 +7,11 @@ class CapsuleCollider : public Collider
 {
 private:
 	float m_radius;
-	float m_cylinderHeight; // Height of the cylindrical part
+	float m_cylinderHeight;
 
 public:
-	// Constructor takes radius and the height of the cylinder section
 	CapsuleCollider(const float& radius, const float& cylinderHeight);
-	~CapsuleCollider() = default; // Use default destructor
+	~CapsuleCollider() = default;
 
 	ColliderType getType() const override;
 	AABB getWorldAABB(Transform* transform) const override;
@@ -20,14 +19,11 @@ public:
 	DirectX::XMMATRIX getInertiaTensor(float mass) override;
 	DirectX::XMMATRIX getInverseInertiaTensor(float mass) override;
 
-	// Getters for dimensions
 	float getRadius() const { return m_radius; }
 	float getHeight() const { return m_cylinderHeight; }
 
-	// Helper to get the local-space endpoints of the capsule's central segment
 	void getLocalSegmentEndpoints(DirectX::XMVECTOR& out_p1, DirectX::XMVECTOR& out_p2) const;
 
-	// Closest point on capsule surface to a given point
 	DirectX::XMVECTOR closestPoint(Transform* transform, const DirectX::XMVECTOR& point) const;
 };
 

@@ -9,7 +9,7 @@ void BallToBallScenario::onLoad(CommandList& commandList)
 	commandList.LoadTextureFromFile(*m_defaultTexture, L"Assets/Textures/DefaultWhite.bmp");
 
 	PhysicsMaterial material = {
-		0.2f, // static friction
+		0.2f, // friction
 		1.0f,
 	};
 

@@ -27,7 +27,6 @@ std::optional<CollisionManifold> CollisionHandlers::SphereVsSphere(PhysicsObject
      manifold.objectA = a;
      manifold.objectB = b;
 
-     // Single contact point at midpoint
      manifold.contacts.push_back({
          DirectX::XMVectorAdd(posA, DirectX::XMVectorScale(delta, 0.5f)),
          DirectX::XMVector3Normalize(delta),
@@ -45,7 +44,6 @@ std::optional<CollisionManifold> CollisionHandlers::SphereVsSphere(PhysicsObject
 
      if(flip)
 	 {
-		 // Swap the objects in the manifold if flip is true
 		 std::swap(manifold.objectA, manifold.objectB);
          for (auto& contact : manifold.contacts) {
              contact.normal = DirectX::XMVectorNegate(contact.normal);
@@ -68,7 +66,6 @@ std::optional<CollisionManifold> CollisionHandlers::SphereVsBox(PhysicsObject* s
     const float sphereRadius = sphere->getRadius() * max(max(sphereScale.x, sphereScale.y), sphereScale.z);
     Transform& boxTransform = boxObj->getTransform();
 
-    // Get closest point on box surface and check containment
     const XMVECTOR closestPoint = box->closestPoint(&boxTransform, sphereCenter);
     const bool isInside = box->containsPoint(&boxTransform, sphereCenter);
     const XMVECTOR delta = XMVectorSubtract(sphereCenter, closestPoint);
@@ -81,7 +78,6 @@ std::optional<CollisionManifold> CollisionHandlers::SphereVsBox(PhysicsObject* s
     manifold.objectB = boxObj;
 
     if (isInside) {
-        // Calculate penetration using box's face normals
         const auto faceNormals = box->getFaceNormals(&boxTransform);
         const XMVECTOR boxCenter = boxTransform.GetPosition(1);
         const XMVECTOR halfSize = box->getHalfSize();
@@ -89,9 +85,7 @@ std::optional<CollisionManifold> CollisionHandlers::SphereVsBox(PhysicsObject* s
         XMVECTOR maxNormal = XMVectorZero();
         float maxPenetration = -FLT_MAX;
 
-        // Check all face normals (including negative directions)
         for (const XMVECTOR& normal : faceNormals) {
-            // Get positive and negative normals for each axis
             for (int sign = -1; sign <= 1; sign += 2) {
                 const XMVECTOR dir = XMVectorMultiply(normal, XMVectorReplicate((float)sign));
                 const XMVECTOR facePoint = XMVectorAdd(boxCenter,
@@ -118,7 +112,7 @@ std::optional<CollisionManifold> CollisionHandlers::SphereVsBox(PhysicsObject* s
         const float penetration = sphereRadius - distance;
 
         manifold.contacts.push_back({
-            closestPoint, // Contact point might be better as closestPoint - normal * penetration
+            closestPoint,
             normal,
             penetration
         });
@@ -148,14 +142,12 @@ std::optional<CollisionManifold> CollisionHandlers::SphereVsCapsule(PhysicsObjec
 {
     using namespace DirectX;
 
-    // 1. Get Colliders and Transforms
     const SphereCollider* sphereCollider = static_cast<SphereCollider*>(sphereObj->getCollider());
     const CapsuleCollider* capsuleCollider = static_cast<CapsuleCollider*>(capsuleObj->getCollider());
 
     Transform& sphereTransform = sphereObj->getTransform();
     Transform& capsuleTransform = capsuleObj->getTransform();
 
-    // 2. Get Collision Properties
     DirectX::XMFLOAT3 sphereScale;
     DirectX::XMStoreFloat3(&sphereScale, sphereObj->getTransform().GetScale(0));
 
@@ -163,29 +155,25 @@ std::optional<CollisionManifold> CollisionHandlers::SphereVsCapsule(PhysicsObjec
     const float capsuleRadius = capsuleCollider->getRadius();
     const float radiusSum = sphereRadius + capsuleRadius;
 
-    const XMVECTOR sphereCenter = sphereTransform.GetPosition(1); // Assuming state 1
+    const XMVECTOR sphereCenter = sphereTransform.GetPosition(1);
 
-    // 3. Get Capsule World Segment
     XMVECTOR localP1, localP2;
     capsuleCollider->getLocalSegmentEndpoints(localP1, localP2);
 
-    XMMATRIX capsuleWorldMatrix = capsuleTransform.GetWorldMatrix(1); // Assuming state 1
+    XMMATRIX capsuleWorldMatrix = capsuleTransform.GetWorldMatrix(1);
     XMVECTOR worldP1 = Math::LocalToWorld(capsuleWorldMatrix, localP1);
     XMVECTOR worldP2 = Math::LocalToWorld(capsuleWorldMatrix, localP2);
 
-    // 4. Find Closest Point on Capsule Segment to Sphere Center
     XMVECTOR closestPointOnSegment = Math::ClosestPointOnLineSegment(sphereCenter, worldP1, worldP2);
 
-    // 5. Calculate Distance and Check Collision
     XMVECTOR delta = XMVectorSubtract(closestPointOnSegment, sphereCenter);
     XMVECTOR distanceSq = XMVector3LengthSq(delta);
 
     if (XMVectorGetX(distanceSq) >= (radiusSum * radiusSum))
     {
-        return std::nullopt; // No collision
+        return std::nullopt;
     }
 
-    // 6. Collision Detected - Generate Manifold
     CollisionManifold manifold;
     manifold.objectA = sphereObj;
     manifold.objectB = capsuleObj;
@@ -193,29 +181,17 @@ std::optional<CollisionManifold> CollisionHandlers::SphereVsCapsule(PhysicsObjec
     float distance = sqrtf(XMVectorGetX(distanceSq));
     float penetration = radiusSum - distance;
 
-    // Normal points from capsule towards sphere
     XMVECTOR normal = Math::NormalizeSafe(delta);
-    // If distance is near zero, sphere center is on the segment. Choose an arbitrary normal?
-    // NormalizeSafe handles this, returning zero. Let's provide a fallback.
     if (XMVectorGetX(XMVector3LengthSq(normal)) < 1e-8f) {
-        // Fallback: Use the vector from capsule segment start to sphere center,
-        // or just an arbitrary axis like world Y if that also fails.
         normal = Math::NormalizeSafe(XMVectorSubtract(sphereCenter, worldP1));
         if (XMVectorGetX(XMVector3LengthSq(normal)) < 1e-8f) {
-            normal = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f); // World Y up
+            normal = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
         }
     }
 
-
-    // Calculate contact point (midpoint between surfaces along the normal)
-    // Point on capsule surface = closestPointOnSegment + normal * capsuleRadius
-    // Point on sphere surface = sphereCenter - normal * sphereRadius
     XMVECTOR contactPoint = XMVectorAdd(closestPointOnSegment, XMVectorScale(normal, capsuleRadius));
     contactPoint = XMVectorAdd(contactPoint, XMVectorSubtract(sphereCenter, XMVectorScale(normal, sphereRadius)));
     contactPoint = XMVectorScale(contactPoint, 0.5f);
-
-    // Alternative simpler contact point: Point on capsule surface
-    // XMVECTOR contactPoint = XMVectorAdd(closestPointOnSegment, XMVectorScale(normal, capsuleRadius));
 
     manifold.contacts.push_back({
         contactPoint,
@@ -233,7 +209,6 @@ std::optional<CollisionManifold> CollisionHandlers::SphereVsCapsule(PhysicsObjec
 //        XMVectorGetZ(normal) << " and penetration: " << penetration << std::endl;
 
 
-    // 7. Handle Flip
     if (flip)
     {
         std::swap(manifold.objectA, manifold.objectB);
@@ -259,14 +234,12 @@ std::optional<CollisionManifold> CollisionHandlers::CapsuleVsCapsule(PhysicsObje
     Transform& tA = aObj->getTransform();
     Transform& tB = bObj->getTransform();
 
-    // local segment endpoints (in collider space)
     XMVECTOR aLocal0, aLocal1;
     capA->getLocalSegmentEndpoints(aLocal0, aLocal1);
 
     XMVECTOR bLocal0, bLocal1;
     capB->getLocalSegmentEndpoints(bLocal0, bLocal1);
 
-    // world segment endpoints
     XMMATRIX mA = tA.GetWorldMatrix(1);
     XMMATRIX mB = tB.GetWorldMatrix(1);
 
@@ -275,36 +248,35 @@ std::optional<CollisionManifold> CollisionHandlers::CapsuleVsCapsule(PhysicsObje
     XMVECTOR b0 = Math::LocalToWorld(mB, bLocal0);
     XMVECTOR b1 = Math::LocalToWorld(mB, bLocal1);
 
-    const float rA = capA->getRadius();   // (scale already baked into segment)
+    const float rA = capA->getRadius();
     const float rB = capB->getRadius();
     const float rSum = rA + rB;
 
-    // (Dan Sunday's algorithm, adapted for XMVECTOR)
     auto ClosestPtsSegSeg = [](XMVECTOR p1, XMVECTOR q1,
         XMVECTOR p2, XMVECTOR q2,
         XMVECTOR& c1, XMVECTOR& c2)
         {
-            const XMVECTOR d1 = XMVectorSubtract(q1, p1);  // S1 = p1 + s * d1
-            const XMVECTOR d2 = XMVectorSubtract(q2, p2);  // S2 = p2 + t * d2
+            const XMVECTOR d1 = XMVectorSubtract(q1, p1);
+            const XMVECTOR d2 = XMVectorSubtract(q2, p2);
             const XMVECTOR r = XMVectorSubtract(p1, p2);
-            const float    a = XMVectorGetX(XMVector3Dot(d1, d1)); // |d1|^2
-            const float    e = XMVectorGetX(XMVector3Dot(d2, d2)); // |d2|^2
+            const float    a = XMVectorGetX(XMVector3Dot(d1, d1));
+            const float    e = XMVectorGetX(XMVector3Dot(d2, d2));
             const float    f = XMVectorGetX(XMVector3Dot(d2, r));
 
             float s, t;
 
-            if (a <= 1e-6f && e <= 1e-6f) {          // both segments degenerate
+            if (a <= 1e-6f && e <= 1e-6f) {
                 s = t = 0.0f;
                 c1 = p1;
                 c2 = p2;
             }
-            else if (a <= 1e-6f) {                   // first degenerate
+            else if (a <= 1e-6f) {
                 s = 0.0f;
                 t = std::clamp(f / e, 0.0f, 1.0f);
             }
             else {
                 const float c = XMVectorGetX(XMVector3Dot(d1, r));
-                if (e <= 1e-6f) {                    // second degenerate
+                if (e <= 1e-6f) {
                     t = 0.0f;
                     s = std::clamp(-c / a, 0.0f, 1.0f);
                 }
@@ -350,13 +322,12 @@ std::optional<CollisionManifold> CollisionHandlers::CapsuleVsCapsule(PhysicsObje
     float penetration = rSum - distance;
 
     XMVECTOR normal = (distance > 1e-6f)
-        ? XMVectorScale(delta, 1.0f / distance)   // delta / |delta|
-        : XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);    // fallback axis
+        ? XMVectorScale(delta, 1.0f / distance)
+        : XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
 
-    XMVECTOR contact = XMVectorScale(XMVectorAdd(pA, pB), 0.5f);  // midpoint
+    XMVECTOR contact = XMVectorScale(XMVectorAdd(pA, pB), 0.5f);
 
     m.contacts.push_back({ contact, normal, penetration });
-
 
 //    Log::Info() << "CapsuleVsCapsule: Collision detected with distance: " << distance << " at " <<
 //        XMVectorGetX(contact) << ", " <<
@@ -380,16 +351,12 @@ std::optional<CollisionManifold> CollisionHandlers::CapsuleVsCapsule(PhysicsObje
 std::optional<CollisionManifold> CollisionHandlers::BoxVsCapsule(PhysicsObject* boxObj, PhysicsObject* capsuleObj, const bool& flip) {
     using namespace DirectX;
 
-    // ------------------------------------------------------------------
-    // 1. Colliders & transforms
-    // ------------------------------------------------------------------
     const CapsuleCollider* cap = static_cast<CapsuleCollider*>(capsuleObj->getCollider());
     const BoxCollider* box = static_cast<BoxCollider*>(boxObj->getCollider());
 
     Transform& capT = capsuleObj->getTransform();
     Transform& boxT = boxObj->getTransform();
 
-    // radius enlarged by non-uniform X/Z scale
     auto scaledRadius = [](const CapsuleCollider* c, const Transform& t)
         {
             XMFLOAT3 s; XMStoreFloat3(&s, t.GetScale(0));
@@ -397,9 +364,6 @@ std::optional<CollisionManifold> CollisionHandlers::BoxVsCapsule(PhysicsObject* 
         };
     const float r = scaledRadius(cap, capT);
 
-    // ------------------------------------------------------------------
-    // 2. Capsule centre-line, contracted by ±r
-    // ------------------------------------------------------------------
     XMVECTOR localTip0, localTip1;
     cap->getLocalSegmentEndpoints(localTip0, localTip1);
 
@@ -409,17 +373,14 @@ std::optional<CollisionManifold> CollisionHandlers::BoxVsCapsule(PhysicsObject* 
 
     XMVECTOR axis = XMVectorSubtract(tip1, tip0);
     float    lenSq = XMVectorGetX(XMVector3LengthSq(axis));
-    if (lenSq < 1e-8f) return std::nullopt;               // degenerate capsule
+    if (lenSq < 1e-8f) return std::nullopt;
 
     XMVECTOR axisNorm = XMVectorScale(axis, 1.0f / std::sqrt(lenSq));
-    XMVECTOR cylP0 = XMVectorAdd(tip0, XMVectorScale(axisNorm, r)); // tip0 + r
-    XMVECTOR cylP1 = XMVectorAdd(tip1, XMVectorScale(axisNorm, -r)); // tip1 - r
+    XMVECTOR cylP0 = XMVectorAdd(tip0, XMVectorScale(axisNorm, r));
+    XMVECTOR cylP1 = XMVectorAdd(tip1, XMVectorScale(axisNorm, -r));
     XMVECTOR cylDir = XMVectorSubtract(cylP1, cylP0);
     float    cylLenSq = XMVectorGetX(XMVector3LengthSq(cylDir));
 
-    // ------------------------------------------------------------------
-    // 3. Pick sphere centre = closest point on contracted axis to box
-    // ------------------------------------------------------------------
     XMVECTOR boxCenter = boxT.GetPosition(1);
 
     float t = 0.0f;
@@ -430,9 +391,6 @@ std::optional<CollisionManifold> CollisionHandlers::BoxVsCapsule(PhysicsObject* 
     }
     XMVECTOR sphereCenter = XMVectorAdd(cylP0, XMVectorScale(cylDir, t));
 
-    // ------------------------------------------------------------------
-    // 4. Sphere–vs–box test (reuse existing helpers)
-    // ------------------------------------------------------------------
     const XMVECTOR closestPt = box->closestPoint(&boxT, sphereCenter);
     const bool     inside = box->containsPoint(&boxT, sphereCenter);
 
@@ -445,9 +403,6 @@ std::optional<CollisionManifold> CollisionHandlers::BoxVsCapsule(PhysicsObject* 
     m.objectA = capsuleObj;
     m.objectB = boxObj;
 
-    // ------------------------------------------------------------------
-    // 5. Build contact info
-    // ------------------------------------------------------------------
     if (inside)
     {
         const auto faceNormals = box->getFaceNormals(&boxT);
@@ -488,10 +443,6 @@ std::optional<CollisionManifold> CollisionHandlers::BoxVsCapsule(PhysicsObject* 
 		XMVectorGetY(m.contacts[0].normal) << ", " <<
 		XMVectorGetZ(m.contacts[0].normal) << " and penetration: " << m.contacts[0].penetration << std::endl;
 
-
-    // ------------------------------------------------------------------
-    // 6. Flip?
-    // ------------------------------------------------------------------
     if (flip)
     {
         std::swap(m.objectA, m.objectB);

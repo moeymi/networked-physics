@@ -18,12 +18,10 @@ struct LogEntry {
 
 class Log {
 public:
-    // Public entry points
     static Log& Info();
     static Log& Warn();
     static Log& Error();
 
-    // Streaming operator
     template<typename T>
     Log& operator<<(const T& value) {
         buffer_ << value;
@@ -32,7 +30,6 @@ public:
 
     Log& operator<<(std::ostream& (*manip)(std::ostream&));
 
-    // Access logs
     static const std::vector<LogEntry>& GetEntries();
     static void Clear();
 

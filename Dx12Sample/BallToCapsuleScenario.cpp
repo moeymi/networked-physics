@@ -19,8 +19,6 @@ void BallToCapsuleScenario::onLoad(CommandList& commandList)
 	m_particle->setPhysicsMaterial(material);
 	m_particle->onLoad();
 	m_particle->getTransform().SetPosition({ -3, 0.48, 1, 1 }, 0, true);
-	//particle->setVelocity({ 2, 0, 0, 0 }, 1);
-	//particle->setAngularVelocity({ 0, 0, 5, 0 }, 1);
 
 	m_capsule = std::make_shared<PhysicsObject>(MeshType::Capsule, m_CapsuleMesh.get(), GlobalData::g_customTexture.get());
 	auto capsuleCollider = std::make_shared<CapsuleCollider>(0.5f, 2.0f);

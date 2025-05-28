@@ -11,7 +11,7 @@ public:
     {
         const auto h = _head.load(std::memory_order_relaxed);
         const auto n = (h + 1) % Capacity;
-        if (n == _tail.load(std::memory_order_acquire))   // full
+        if (n == _tail.load(std::memory_order_acquire))
             return false;
         _data[h] = v;
         _head.store(n, std::memory_order_release);
@@ -21,7 +21,7 @@ public:
     bool pop(T& out) noexcept
     {
         const auto t = _tail.load(std::memory_order_relaxed);
-        if (t == _head.load(std::memory_order_acquire))   // empty
+        if (t == _head.load(std::memory_order_acquire))
             return false;
         out = _data[t];
         _tail.store((t + 1) % Capacity, std::memory_order_release);

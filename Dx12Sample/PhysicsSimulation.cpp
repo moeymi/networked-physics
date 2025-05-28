@@ -17,7 +17,7 @@ using namespace Microsoft::WRL;
 
 using namespace DirectX;
 
-#include <algorithm> // For std::min and std::max.
+#include <algorithm>
 #if defined(min)
 #undef min
 #endif
@@ -34,14 +34,12 @@ using namespace DirectX;
 #include "EmptyScenario.h"
 #include "GlobalData.h"
 
-// Clamp a value between a min and max range.
 template<typename T>
 constexpr const T& clamp(const T& val, const T& min, const T& max)
 {
     return val < min ? min : val > max ? max : val;
 }
 
-// Builds a look-at (world) matrix from a point, up and direction vectors.
 XMMATRIX XM_CALLCONV LookAtMatrix(FXMVECTOR Position, FXMVECTOR Direction, FXMVECTOR Up)
 {
     assert(!XMVector3Equal(Direction, XMVectorZero()));
@@ -81,7 +79,8 @@ PhysicsSimulation::PhysicsSimulation(const std::wstring& name, int width, int he
 	, m_simulationScheduled(false)
 	, m_simulationStartTime(0.0)
 {
-    //m_PhysicsEngine.setAffinity(1); // Core 1
+    m_PhysicsEngine.setAffinity(2); // Core 2
+	m_NetworkingEngine.setAffinity(3); // Core 3
     m_PhysicsEngine.setFrequency(GlobalData::g_physicsFreq); // 120 FPS
 	m_NetworkingEngine.setFrequency(GlobalData::g_networkFreq); // 60 FPS
 	m_NetworkingEngine.setScnearioListener(
@@ -121,10 +120,8 @@ bool PhysicsSimulation::LoadContent()
     std::srand(static_cast<unsigned int>(std::chrono::system_clock::now().time_since_epoch().count()));
     GlobalData::g_clientId = rand() % 5000;
 
-	// Load the rendering engine.
 	m_RenderingEngine.LoadContent(commandQueue, commandList, device, m_pWindow.get());
 
-    // Load shared textures
     GlobalData::g_customTexture = std::make_shared<Texture>();
     GlobalData::g_defaultTexture = std::make_shared<Texture>();
 	GlobalData::g_staticTexture = std::make_shared<Texture>();
@@ -133,7 +130,6 @@ bool PhysicsSimulation::LoadContent()
     commandList->LoadTextureFromFile(*GlobalData::g_staticTexture, L"Assets/Textures/static.dds");
     commandList->LoadTextureFromFile(*GlobalData::g_defaultTexture, L"Assets/Textures/DefaultWhite.bmp");
 
-	// Load the scenario meshes.
 	GlobalData::g_sphereMesh = Mesh::CreateSphere(*commandList, 1.0f, 16);
 	GlobalData::g_boxMesh = Mesh::CreateCube(*commandList, 1.0f, false);
 	GlobalData::g_planeMesh = Mesh::CreatePlane(*commandList);
@@ -219,7 +215,6 @@ void PhysicsSimulation::OnUpdate(UpdateEventArgs& e)
         totalTime = 0.0;
     }
 
-    // Update the camera.
     float speedMultipler = (m_Shift ? 16.0f : 4.0f);
 
     XMVECTOR cameraTranslate = XMVectorSet(m_Right - m_Left, 0.0f, m_Forward - m_Backward, 1.0f) * speedMultipler * static_cast<float>(e.ElapsedTime);
@@ -241,8 +236,7 @@ void XM_CALLCONV PhysicsSimulation::ComputeMatrices(FXMMATRIX model, CXMMATRIX v
 void PhysicsSimulation::OnRender(RenderEventArgs& e)
 {
     super::OnRender(e);
-
-    // Wrap the member function in a lambda to match the std::function signature.  
+ 
     auto renderCallback = [this](CommandList& commandList, const DirectX::XMMATRIX& viewMatrix, const DirectX::XMMATRIX& viewProjectionMatrix)
         {
 			std::lock_guard<std::mutex> lock(m_ScenarioMutex);
@@ -406,7 +400,6 @@ void PhysicsSimulation::OnGUI()
     static bool showNetworking = true;
     static bool showSimulationControl = true;
 
-    // Main Menu Bar
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("File")) {
             if (ImGui::MenuItem("Exit", "Esc"))
@@ -438,7 +431,6 @@ void PhysicsSimulation::OnGUI()
         ImGui::EndMainMenuBar();
     }
 
-    // Engine Stats
     if (showEngineStats) {
         ImGui::Begin("Engine Stats", &showEngineStats);
         ImGui::Text("FPS: %.2f (%.2f ms)", GlobalData::g_renderingFPS, 1000.0 / GlobalData::g_renderingFPS);
@@ -467,12 +459,10 @@ void PhysicsSimulation::OnGUI()
 
     ImGui::Begin("Main Panel Stats");
 
-    // Show simulation countdown
     if (m_simulationScheduled) {
         ImGui::Text("Simulation scheduled in: %.2f sec", m_simulationStartTime - GlobalData::getTimestamp());
     }
 
-    // First we should connect
     if (!m_NetworkingEngine.isRunning()) {
         ImGui::Text("Client ID: %d", GlobalData::g_clientId);
 
@@ -534,7 +524,6 @@ void PhysicsSimulation::OnGUI()
         }
 
         if (ImGui::CollapsingHeader("Network")) {
-            ImGui::Checkbox("Use better Prediction", &m_clientPrediction);
             ImGui::TextColored({GlobalData::g_clientColor.x, GlobalData::g_clientColor.y, GlobalData::g_clientColor.z, 1},
                 "Peer ID: %d, Client Name: %s", GlobalData::g_clientId, GlobalData::g_clientName.c_str());
 			ImGui::Spacing();
@@ -567,7 +556,7 @@ void PhysicsSimulation::OnGUI()
             ImGui::Text("Gravity:  %f", m_PhysicsEngine.getGravity());
             ImGui::SameLine();
 
-            if (ImGui::SliderFloat("##Gravity", &gravity, -20.0f, 20.0f, "%.5f m/s^2"));
+            if (ImGui::DragFloat("##Gravity", &gravity, -20.0f, 20.0f));
 			if (ImGui::Button("Set Gravity")) {
                 m_PhysicsEngine.setGravity(gravity);
                 m_NetworkingEngine.changeGravity(gravity);
@@ -575,7 +564,6 @@ void PhysicsSimulation::OnGUI()
 
             ImGui::SameLine();
         }
-
         {
             std::lock_guard<std::mutex> lock(m_ScenarioMutex);
             if (m_CurrentScenario && ImGui::CollapsingHeader("Simulation Info")) {
@@ -685,7 +673,6 @@ void PhysicsSimulation::CreateEmptyScenario(std::vector <std::shared_ptr<Network
 void PhysicsSimulation::BroadCastCurrentScenarioCreate()
 {
     if (m_PhysicsEngine.isRunning()) {
-		// m_lastError = "Cannot create scenario while physics engine is running.";
 		return;
     }
     {
@@ -734,7 +721,7 @@ void PhysicsSimulation::RenderFixedBottomLogConsole(const std::vector<LogEntry>&
 #if USE_LOGGER
 	if (!g_AllowConsoleToggle)
 		return;
-    const float consoleHeight = 200.0f;  // Fixed height
+    const float consoleHeight = 200.0f;
     const ImVec2 windowPadding = ImVec2(10, 10);
 
     ImGuiIO& io = ImGui::GetIO();

@@ -1,4 +1,3 @@
-// MulticastSocket.cpp
 #include "MulticastSocket.h"
 
 MulticastSocket::MulticastSocket(const IPAddress& group,
@@ -8,12 +7,10 @@ MulticastSocket::MulticastSocket(const IPAddress& group,
     if (sock_ == INVALID_SOCKET)
         throw std::runtime_error("socket() failed");
 
-    /* allow several sockets to share the same port */
     int reuse = 1;
     ::setsockopt(sock_, SOL_SOCKET, SO_REUSEADDR,
         reinterpret_cast<char*>(&reuse), sizeof(reuse));
 
-    /* bind 0.0.0.0:<group.port()> so we can *receive* */
     sockaddr_in any{};
     any.sin_family = AF_INET;
     any.sin_port = htons(group.port());
@@ -28,7 +25,7 @@ MulticastSocket::MulticastSocket(const IPAddress& group,
 	if (!groupAddr)
 		throw std::runtime_error("Invalid group address");
 
-	mreq.imr_multiaddr = groupAddr->sin_addr;           // 239.x.x.x
+	mreq.imr_multiaddr = groupAddr->sin_addr; // 239.x.x.x
 
 	auto ifaceAddr = iface.toSockAddr();
 	if (!ifaceAddr)
@@ -40,12 +37,10 @@ MulticastSocket::MulticastSocket(const IPAddress& group,
         reinterpret_cast<char*>(&mreq), sizeof(mreq)) != 0)
         throw std::runtime_error("IP_ADD_MEMBERSHIP failed");
 
-    /* never leaves the host.                                             */
     if (::setsockopt(sock_, IPPROTO_IP, IP_MULTICAST_IF,
         reinterpret_cast<char*>(&mreq.imr_interface),
         sizeof(mreq.imr_interface)) != 0)
         std::cerr << "IP_MULTICAST_IF failed: " << WSAGetLastError() << '\n';
-    /* ------------------------------------------------------------------ */
 
 	auto groupAdd = group.toSockAddr();
 	if (!groupAdd)

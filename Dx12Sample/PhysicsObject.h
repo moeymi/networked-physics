@@ -21,9 +21,9 @@ struct PhysicsMaterial {
 };
 
 struct ContactPoint {
-	DirectX::XMVECTOR position;    // World-space contact
-	DirectX::XMVECTOR normal;      // From A to B
-	float penetration;             // Overlap distance
+	DirectX::XMVECTOR position;
+	DirectX::XMVECTOR normal;
+	float penetration;
 
 	float normalMass = 0.0f;
 	float tangentMass = 0.0f;

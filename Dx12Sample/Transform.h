@@ -27,7 +27,6 @@ private:
 
     bool isStatic = false;
 
-    // Listeners for dirtifying changes
     std::vector<std::function<void()>> dirtyListeners;
 
     void CalculateWorldMatrix(const int& bufferIndex, const bool& bothBuffers);

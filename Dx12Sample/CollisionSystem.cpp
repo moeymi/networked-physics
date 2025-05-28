@@ -2,7 +2,6 @@
 
 CollisionSystem::CollisionSystem()
 {
-	// Initialize the collision system with default handlers
 	initializeCollisionSystem();
 }
 
@@ -10,7 +9,6 @@ void CollisionSystem::registerHandler(ColliderType a, ColliderType b, CollisionH
 {
     m_handlers[static_cast<size_t>(a)][static_cast<size_t>(b)] = handler;
     m_handlers[static_cast<size_t>(b)][static_cast<size_t>(a)] = [handler](PhysicsObject* objA, PhysicsObject* objB, const bool& flip) {
-		// Swap parameters for the reverse case
 		return handler(objB, objA, true);
 	};
 }

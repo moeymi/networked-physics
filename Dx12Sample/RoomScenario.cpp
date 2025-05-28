@@ -10,7 +10,6 @@
 
 void RoomScenario::createWalls(CommandList& commandList) {
 
-	// Create 6 planes to make a box
 	if (m_wallsObjects.size() > 0)
 	{
 		for (auto& wallsObject : m_wallsObjects)

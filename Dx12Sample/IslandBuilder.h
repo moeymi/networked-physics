@@ -1,6 +1,6 @@
 #pragma once  
 #include "pch.h"  
-#include <numeric> // Include this header for std::iota  
+#include <numeric>
 
 struct UnionFind {  
    std::vector<int> parent, rank;  

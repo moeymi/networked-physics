@@ -1,4 +1,3 @@
-// TCPSocket.hpp
 #pragma once
 #include "Socket.h"
 #include "IPAddress.h"
@@ -14,10 +13,8 @@ private:
         if (!saOpt)
             throw std::runtime_error("Invalid address");
 
-        // Extract the actual sockaddr_in out of the optional
         const sockaddr_in& sin = *saOpt;
 
-        // Cast to sockaddr* and use sizeof(sockaddr_in)
         if (::bind(sock_,
             reinterpret_cast<const sockaddr*>(&sin),
             static_cast<int>(sizeof(sin))) != 0)
@@ -48,7 +45,6 @@ public:
         setBlocking(blocking);
     }
 
-    /// Server: bind + listen
     void listen(const IPAddress& addr, int backlog = SOMAXCONN) {
         bind(addr);
         if (::listen(sock_, backlog) != 0) {
@@ -96,7 +92,6 @@ public:
             if (sent == SOCKET_ERROR) {
                 int ec = WSAGetLastError();
                 if (ec == WSAEWOULDBLOCK) {
-                    // caller must wait for writability
                     break;
                 }
 				std::string err = "send() failed: " + std::to_string(ec);

@@ -14,7 +14,6 @@ enum class ColliderType : UINT16
 };
 
 
-// Specialize std::hash for ColliderType
 namespace std {
 	template <>
 	struct hash<ColliderType> {

@@ -9,7 +9,7 @@ struct TupleHash {
 		auto [x, y] = key;
 		std::size_t h1 = std::hash<float>{}(x);
 		std::size_t h2 = std::hash<float>{}(y);
-		return h1 ^ (h2 << 1); // Combine hashes
+		return h1 ^ (h2 << 1);
 	}
 };
 

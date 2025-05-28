@@ -178,11 +178,9 @@ void PhysicsEngine::detectAndResolveCollisions(const float& deltaTime) {
     for (const auto& b : m_ownedBodies)     if (!b->isStatic()) bodies.push_back(b.get());
     for (const auto& b : m_nonOwnedBodies)  if (!b->isStatic()) bodies.push_back(b.get());
 
-    // Map body* -> its slot in 'bodies'  (pointer->index)
     std::unordered_map<PhysicsObject*, int> bodyIndex;
     for (int i = 0; i < (int)bodies.size(); ++i) bodyIndex[bodies[i]] = i;
 
-    // --- 3b  Union–Find on contact graph -----------------------------------
     UnionFind uf(bodies.size());
     for (auto& [_, manifold] : m_contactManifolds) {
         int a = bodyIndex[manifold.objectA];
@@ -190,10 +188,9 @@ void PhysicsEngine::detectAndResolveCollisions(const float& deltaTime) {
         uf.unite(a, b);
     }
 
-    // --- 3c  Bucket manifolds by island id ---------------------------------
     std::unordered_map<int, std::vector<CollisionManifold*>> islandTable;
     for (auto& [key, manifold] : m_contactManifolds) {
-        int root = uf.find(bodyIndex[manifold.objectA]);   // either body works
+        int root = uf.find(bodyIndex[manifold.objectA]);
         islandTable[root].push_back(&manifold);
     }
 
@@ -315,26 +312,23 @@ void PhysicsEngine::prestepCollisionManifolds(std::map<PairKey, CollisionManifol
             float penetrationErr = max(c.penetration - m_kPenetrationSlop, 0.0f);
             float baumgarteBias = (m_kBaumgarte / dt) * penetrationErr;
 
-            float vn = XMVectorGetX(XMVector3Dot(relVel, n));        // closing speed
+            float vn = XMVectorGetX(XMVector3Dot(relVel, n));
             float restitutionBias = 0.0f;
 
             const PhysicsMaterial& matA = A->getPhysicsMaterial();
             const PhysicsMaterial& matB = B->getPhysicsMaterial();
             float combinedRestitution = 0.5f * std::abs(matA.restitution + matB.restitution);
 
-            if (vn < -m_kRestitutionThreshold)              // *fast* incoming impact
+            if (vn < -m_kRestitutionThreshold)
             {
-                // apply restitution only
                 restitutionBias = -combinedRestitution * vn;
                 c.velocityBias = restitutionBias;
             }
-            else                                             // slow / resting contact
+            else
             {
-                // apply Baumgarte only
                 c.velocityBias = baumgarteBias;
             }
 
-            // Optional safety clamp so bias can’t exceed 0.2 m/s
             c.velocityBias = min(c.velocityBias, 0.20f / dt);
         }
     }
@@ -379,7 +373,7 @@ void PhysicsEngine::resolveCollisionVelocity(
 
         float relVelNormal = XMVectorGetX(XMVector3Dot(relVelLinear, n));
 
-        float dVN = -relVelNormal + c.velocityBias;   // bias is constant
+        float dVN = -relVelNormal + c.velocityBias;
         if (dVN < 0.0f) dVN = 0.0f;
 
         float lambdaN = dVN * c.normalMass;
