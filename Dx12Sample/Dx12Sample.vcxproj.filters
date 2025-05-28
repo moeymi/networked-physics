@@ -72,9 +72,6 @@
     <ClCompile Include="BallToBallScenario.cpp">
       <Filter>Source Files\Scenarios</Filter>
     </ClCompile>
-    <ClCompile Include="BallToWallScenario.cpp">
-      <Filter>Source Files\Scenarios</Filter>
-    </ClCompile>
     <ClCompile Include="CapsuleCollider.h">
       <Filter>Header Files\Colliders</Filter>
     </ClCompile>
@@ -90,7 +87,7 @@
     <ClCompile Include="SpheresScenario.cpp">
       <Filter>Source Files\Scenarios</Filter>
     </ClCompile>
-    <ClCompile Include="ScenarioB.cpp">
+    <ClCompile Include="SpheresCapsulesScenario.cpp">
       <Filter>Source Files\Scenarios</Filter>
     </ClCompile>
     <ClCompile Include="Transform.cpp">
@@ -153,6 +150,15 @@
     <ClCompile Include="IslandBuilder.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="SandboxScenario.cpp">
+      <Filter>Source Files\Scenarios</Filter>
+    </ClCompile>
+    <ClCompile Include="SpheresCapsulesBoxesScenario.h">
+      <Filter>Header Files\Scenarios</Filter>
+    </ClCompile>
+    <ClCompile Include="SpheresCapsulesBoxesScenario.cpp">
+      <Filter>Source Files\Scenarios</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Camera.h">
@@ -188,9 +194,6 @@
     <ClInclude Include="BallToBallScenario.h">
       <Filter>Header Files\Scenarios</Filter>
     </ClInclude>
-    <ClInclude Include="BallToWallScenario.h">
-      <Filter>Header Files\Scenarios</Filter>
-    </ClInclude>
     <ClInclude Include="BoxCollider.h">
       <Filter>Header Files\Colliders</Filter>
     </ClInclude>
@@ -203,7 +206,7 @@
     <ClInclude Include="SpheresScenario.h">
       <Filter>Header Files\Scenarios</Filter>
     </ClInclude>
-    <ClInclude Include="ScenarioB.h">
+    <ClInclude Include="SpheresCapsulesScenario.h">
       <Filter>Header Files\Scenarios</Filter>
     </ClInclude>
     <ClInclude Include="Transform.h">
@@ -270,6 +273,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="IslandBuilder.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="SandboxScenario.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

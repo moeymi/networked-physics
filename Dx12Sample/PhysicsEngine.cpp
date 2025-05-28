@@ -236,9 +236,7 @@ void PhysicsEngine::detectAndResolveCollisions(const float& deltaTime) {
 std::vector<std::pair<PhysicsObject*, PhysicsObject*>> PhysicsEngine::broadPhase() {
     m_spatialGrid.updateDynamicBodies();
 
-    auto candidates = m_spatialGrid.computePairs();
-
-	return candidates;
+	return m_spatialGrid.computePairs();
 }
 
 void PhysicsEngine::prestepCollisionManifolds(std::map<PairKey, CollisionManifold>& contactManifolds, const float& dt) {

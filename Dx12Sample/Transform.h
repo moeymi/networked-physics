@@ -1,5 +1,6 @@
 #pragma once
 #include "pch.h"
+
 #include <DirectXMath.h>
 #include <memory>
 #include <vector>
@@ -46,30 +47,16 @@ public:
     void SetPosition(const DirectX::XMFLOAT3& pos, const int& bufferIndex, const bool& bothBuffers = false);
     void SetPosition(const DirectX::XMVECTOR& pos, const int& bufferIndex, const bool& bothBuffers = false);
 
-    const DirectX::XMVECTOR& GetLocalPosition(const int& bufferIndex) const;
-    void SetLocalPosition(const DirectX::XMFLOAT3& pos, const int& bufferIndex, const bool& bothBuffers = false);
-    void SetLocalPosition(const DirectX::XMVECTOR& pos, const int& bufferIndex, const bool& bothBuffers = false);
-
     DirectX::XMVECTOR GetScale(const int& bufferIndex) const;
     void SetScale(const DirectX::XMFLOAT3& s, const int& bufferIndex, const bool& bothBuffers = false);
     void SetScale(const DirectX::XMVECTOR& s, const int& bufferIndex, const bool& bothBuffers = false);
-
-    const DirectX::XMVECTOR& GetLocalScale(const int& bufferIndex) const;
-    void SetLocalScale(const DirectX::XMFLOAT3& s, const int& bufferIndex, const bool& bothBuffers = false);
-    void SetLocalScale(const DirectX::XMVECTOR& s, const int& bufferIndex, const bool& bothBuffers = false);
 
     DirectX::XMVECTOR GetRotationQuaternion(const int& bufferIndex) const;
     void SetRotationQuaternion(const DirectX::XMVECTOR& rot, const int& bufferIndex, const bool& bothBuffers = false);
     void SetRotationQuaternion(const DirectX::XMFLOAT4& rot, const int& bufferIndex, const bool& bothBuffers = false);
 
-    const DirectX::XMVECTOR& GetLocalRotationQuaternion(const int& bufferIndex) const;
-    void SetLocalRotationQuaternion(const DirectX::XMVECTOR& rot, const int& bufferIndex, const bool& bothBuffers = false);
-
     [[nodiscard]] DirectX::XMFLOAT3 GetRotationEulerAngles(const int& bufferIndex) const;
     void SetRotationEulerAngles(const DirectX::XMFLOAT3& rot, const int& bufferIndex, const bool& bothBuffers = false);
-
-    [[nodiscard]] DirectX::XMFLOAT3 GetLocalRotationEulerAngles(const int& bufferIndex) const;
-    void SetLocalRotationEulerAngles(const DirectX::XMFLOAT3& rot, const int& bufferIndex, const bool& bothBuffers = false);
 
     const DirectX::XMVECTOR& GetLookDirection(const int& bufferIndex) const;
     const DirectX::XMVECTOR& GetUpDirection(const int& bufferIndex) const;

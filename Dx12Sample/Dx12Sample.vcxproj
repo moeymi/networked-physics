@@ -172,7 +172,6 @@
   <ItemGroup>
     <ClCompile Include="BallToBallScenario.cpp" />
     <ClCompile Include="BallToCapsuleScenario.cpp" />
-    <ClCompile Include="BallToWallScenario.cpp" />
     <ClCompile Include="BoxCollider.cpp" />
     <ClCompile Include="Camera.cpp" />
     <ClCompile Include="CapsuleCollider.cpp" />
@@ -199,11 +198,14 @@
     <ClCompile Include="PhysicsSimulation.cpp" />
     <ClCompile Include="RenderingEngine.cpp" />
     <ClCompile Include="RingBufferSPSC.cpp" />
+    <ClCompile Include="SandboxScenario.cpp" />
     <ClCompile Include="Scenario.cpp" />
     <ClCompile Include="Socket.cpp" />
     <ClCompile Include="SpatialHashGrid.cpp" />
+    <ClCompile Include="SpheresCapsulesBoxesScenario.h" />
+    <ClCompile Include="SpheresCapsulesBoxesScenario.cpp" />
     <ClCompile Include="SpheresScenario.cpp" />
-    <ClCompile Include="ScenarioB.cpp" />
+    <ClCompile Include="SpheresCapsulesScenario.cpp" />
     <ClCompile Include="SphereCollider.cpp" />
     <ClCompile Include="TCPSocket.cpp" />
     <ClCompile Include="ThreadAffinity.cpp" />
@@ -215,7 +217,6 @@
   <ItemGroup>
     <ClInclude Include="BallToBallScenario.h" />
     <ClInclude Include="BallToCapsuleScenario.h" />
-    <ClInclude Include="BallToWallScenario.h" />
     <ClInclude Include="BoxCollider.h" />
     <ClInclude Include="Camera.h" />
     <ClInclude Include="Collider.h" />
@@ -238,11 +239,12 @@
     <ClInclude Include="RenderingEngine.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="RingBufferSPSC.h" />
+    <ClInclude Include="SandboxScenario.h" />
     <ClInclude Include="Scenario.h" />
     <ClInclude Include="Socket.h" />
     <ClInclude Include="SpatialHashGrid.h" />
     <ClInclude Include="SpheresScenario.h" />
-    <ClInclude Include="ScenarioB.h" />
+    <ClInclude Include="SpheresCapsulesScenario.h" />
     <ClInclude Include="SphereCollider.h" />
     <ClInclude Include="GlobalData.h" />
     <ClInclude Include="TCPSocket.h" />

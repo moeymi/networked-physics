@@ -80,6 +80,7 @@ void Transform::SetPosition(const DirectX::XMFLOAT3& pos, const int& bufferIndex
 		SetPosition(pos, (bufferIndex + 1) % 2, false);
 	}
 }
+
 void Transform::SetPosition(const DirectX::XMVECTOR& pos, const int& bufferIndex, const bool& bothBuffers) {
 	if (isStatic) return;
 
@@ -89,28 +90,6 @@ void Transform::SetPosition(const DirectX::XMVECTOR& pos, const int& bufferIndex
 
 	if (bothBuffers) {
 		SetPosition(pos, (bufferIndex + 1) % 2, false);
-	}
-}
-
-const DirectX::XMVECTOR& Transform::GetLocalPosition(const int& bufferIndex) const { return m_states[bufferIndex].position; }
-void Transform::SetLocalPosition(const DirectX::XMFLOAT3& pos, const int& bufferIndex, const bool& bothBuffers) {
-	if (isStatic) return;
-	m_states[bufferIndex].position = DirectX::XMLoadFloat3(&pos);
-
-	m_states[bufferIndex].positionScaleDirty = true;
-
-	if (bothBuffers) {
-		SetLocalPosition(pos, (bufferIndex + 1) % 2, false);
-	}
-}
-void Transform::SetLocalPosition(const DirectX::XMVECTOR& pos, const int& bufferIndex, const bool& bothBuffers) {
-	if (isStatic) return;
-	m_states[bufferIndex].position = pos;
-
-	m_states[bufferIndex].positionScaleDirty = true;
-
-	if (bothBuffers) {
-		SetLocalPosition(pos, (bufferIndex + 1) % 2, false);
 	}
 }
 
@@ -137,25 +116,6 @@ void Transform::SetScale(const DirectX::XMVECTOR& s, const int& bufferIndex, con
 	}
 }
 
-const DirectX::XMVECTOR& Transform::GetLocalScale(const int& bufferIndex) const { return m_states[bufferIndex].scale; }
-void Transform::SetLocalScale(const DirectX::XMFLOAT3& s, const int& bufferIndex, const bool& bothBuffers) {
-	if (isStatic) return;
-	m_states[bufferIndex].scale = DirectX::XMLoadFloat3(&s);
-
-	m_states[bufferIndex].positionScaleDirty = true;
-
-	if (bothBuffers) {
-		SetLocalScale(s, (bufferIndex + 1) % 2, false);
-	}
-}
-void Transform::SetLocalScale(const DirectX::XMVECTOR& s, const int& bufferIndex, const bool& bothBuffers) {
-	if (isStatic) return;
-	m_states[bufferIndex].scale = s;
-
-	m_states[bufferIndex].positionScaleDirty = true;
-}
-
-
 DirectX::XMVECTOR Transform::GetRotationQuaternion(const int& bufferIndex) const {
 	return m_states[bufferIndex].rotationQuaternion;
 }
@@ -175,19 +135,10 @@ void Transform::SetRotationQuaternion(const DirectX::XMFLOAT4& rot, const int& b
 	SetRotationQuaternion(DirectX::XMLoadFloat4(&rot), bufferIndex, bothBuffers);
 }
 
-const DirectX::XMVECTOR& Transform::GetLocalRotationQuaternion(const int& bufferIndex) const { return m_states[bufferIndex].rotationQuaternion; }
-void Transform::SetLocalRotationQuaternion(const DirectX::XMVECTOR& rot, const int& bufferIndex, const bool& bothBuffers) {
-	if (isStatic) return;
-	m_states[bufferIndex].rotationQuaternion = rot;
-
-	if (bothBuffers) {
-		SetLocalRotationQuaternion(rot, (bufferIndex + 1) % 2, false);
-	}
-}
-
 DirectX::XMFLOAT3 Transform::GetRotationEulerAngles(const int& bufferIndex) const {
 	return Math::QuaternionToEuler(m_states[bufferIndex].rotationQuaternion);
 }
+
 void Transform::SetRotationEulerAngles(const DirectX::XMFLOAT3& rot, const int& bufferIndex, const bool& bothBuffers) {
 	if (isStatic) return;
 	m_states[bufferIndex].rotationQuaternion = DirectX::XMQuaternionRotationRollPitchYaw(rot.x, rot.y, rot.z);
@@ -196,21 +147,6 @@ void Transform::SetRotationEulerAngles(const DirectX::XMFLOAT3& rot, const int& 
 
 	if (bothBuffers) {
 		SetRotationEulerAngles(rot, (bufferIndex + 1) % 2, false);
-	}
-}
-
-DirectX::XMFLOAT3 Transform::GetLocalRotationEulerAngles(const int& bufferIndex) const {
-	return Math::QuaternionToEuler(m_states[bufferIndex].rotationQuaternion);
-}
-
-void Transform::SetLocalRotationEulerAngles(const DirectX::XMFLOAT3& rot, const int& bufferIndex, const bool& bothBuffers) {
-	if (isStatic) return;
-	m_states[bufferIndex].rotationQuaternion = DirectX::XMQuaternionRotationRollPitchYaw(rot.x, rot.y, rot.z);
-
-	m_states[bufferIndex].rotationDirty = true;
-
-	if (bothBuffers) {
-		SetLocalRotationEulerAngles(rot, (bufferIndex + 1) % 2, false);
 	}
 }
 

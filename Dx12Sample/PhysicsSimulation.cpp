@@ -26,13 +26,14 @@ using namespace DirectX;
 #if defined(max)
 #undef max
 #endif
-#include "BallToWallScenario.h"
 #include "BallToCapsuleScenario.h"
 #include "SpheresScenario.h"
-#include "ScenarioB.h"
+#include "SpheresCapsulesScenario.h"
 #include <omp.h>
 #include "EmptyScenario.h"
 #include "GlobalData.h"
+#include "SandboxScenario.h"
+#include "SpheresCapsulesBoxesScenario.h"
 
 template<typename T>
 constexpr const T& clamp(const T& val, const T& min, const T& max)
@@ -181,6 +182,7 @@ void PhysicsSimulation::UnloadContent()
     GlobalData::g_sphereMesh.reset();
 	GlobalData::g_boxMesh.reset();
 	GlobalData::g_planeMesh.reset();
+	GlobalData::g_capsuleMeshes.clear();
 
     auto fenceValue = commandQueue->ExecuteCommandList(commandList);
     commandQueue->WaitForFenceValue(fenceValue);
@@ -487,14 +489,22 @@ void PhysicsSimulation::OnGUI()
             if (ImGui::CollapsingHeader("Simulation")) {
                 if (ImGui::TreeNode("Scenarios List")) {
                     ImGui::BeginChild("Child2", ImVec2(0, 0), true);
-                    if (ImGui::Button("Spheres Scenario", ImVec2(-1.0f, 0.0f))) {
+                    if (ImGui::Button("Spheres", ImVec2(-1.0f, 0.0f))) {
                         ChangeScenario(0);
                     }
-                    if (ImGui::Button("Scenario B", ImVec2(-1.0f, 0.0f)))
+                    if (ImGui::Button("Spheres Capsules", ImVec2(-1.0f, 0.0f)))
                         ChangeScenario(1);
 
 					if (ImGui::Button("Ball To Capsule Scenario", ImVec2(-1.0f, 0.0f))) {
 						ChangeScenario(2);
+					}
+
+                    if (ImGui::Button("Spheres Capsules Boxes", ImVec2(-1.0f, 0.0f))) {
+                        ChangeScenario(3);
+                    }
+
+					if (ImGui::Button("Sandbox Scenario", ImVec2(-1.0f, 0.0f))) {
+						ChangeScenario(4);
 					}
 
                     ImGui::EndChild();
@@ -607,10 +617,16 @@ void PhysicsSimulation::ChangeScenario(int index)
         m_CurrentScenario = std::make_unique<SpheresScenario>();
         break;
     case 1:
-        m_CurrentScenario = std::make_unique<ScenarioB>();
+        m_CurrentScenario = std::make_unique<SpheresCapsulesScenario>();
         break;
 	case 2:
 		m_CurrentScenario = std::make_unique<BallToCapsuleScenario>();
+		break;
+    case 3:
+		m_CurrentScenario = std::make_unique<SpheresCapsulesBoxesScenario>();
+        break;
+	case 4:
+		m_CurrentScenario = std::make_unique<SandboxScenario>();
 		break;
     default:
         break;
@@ -762,7 +778,11 @@ void PhysicsSimulation::RenderFixedBottomLogConsole(const std::vector<LogEntry>&
             }
 
             ImGui::PushStyleColor(ImGuiCol_Text, color);
-            ImGui::TextWrapped("%s", entry.message.c_str());
+            try {
+                // Sometimes weird characters can cause issues
+                ImGui::TextWrapped("%s", entry.message.c_str());
+            }
+            catch (...) {}
             ImGui::PopStyleColor();
         }
 

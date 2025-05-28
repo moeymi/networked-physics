@@ -14,7 +14,7 @@ public:
     inline DirectX::XMMATRIX getInverseInertiaTensor(float mass);
 
     float getRadius() const { return m_radius; }
-
+	void setRadius(float radius) { m_radius = radius; }
 private:
     float m_radius;
     DirectX::XMVECTOR m_radiusVec;

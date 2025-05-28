@@ -3,35 +3,6 @@
 
 void BallToBallScenario::onLoad(CommandList& commandList)
 {
-	m_SphereMesh = Mesh::CreateSphere(commandList, 1.0f, 16, false);
-
-	commandList.LoadTextureFromFile(*m_customTexture, L"Assets/Textures/earth.dds");
-	commandList.LoadTextureFromFile(*m_defaultTexture, L"Assets/Textures/DefaultWhite.bmp");
-
-	PhysicsMaterial material = {
-		0.2f, // friction
-		1.0f,
-	};
-
-	auto particle1 = std::make_shared<PhysicsObject>( MeshType::Sphere, GlobalData::g_sphereMesh.get(), GlobalData::g_customTexture.get());
-	auto sphereCollider = std::make_shared<SphereCollider>(.5f);
-	particle1->setCollider(sphereCollider);
-	particle1->setPhysicsMaterial(material);
-	particle1->onLoad();
-	particle1->getTransform().SetPosition({ -2, 0, 2, 1 }, 0, true);
-	particle1->setVelocity({ 3, 0, 0, 0 }, 0);
-	particle1->setVelocity({ 3, 0, 0, 0 }, 1);
-	particle1->setAngularVelocity({ 0, 0, 5, 0 }, 0);
-	particle1->setAngularVelocity({ 0, 0, 5, 0 }, 1);
-
-	auto particle2 = std::make_shared<PhysicsObject>(MeshType::Sphere, GlobalData::g_sphereMesh.get(), GlobalData::g_customTexture.get());
-	particle2->setCollider(sphereCollider);
-	particle2->setPhysicsMaterial(material);
-	particle2->onLoad();
-	particle2->getTransform().SetPosition({ 3, 0, 2, 1 }, 0, true);
-
-	m_physicsObjects.push_back(particle1);
-	m_physicsObjects.push_back(particle2);
 }
 
 

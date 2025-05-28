@@ -16,6 +16,9 @@ public:
 	DirectX::XMMATRIX getInverseInertiaTensor(float mass) override;
 
     DirectX::XMVECTOR getHalfSize() const { return m_halfSize; }
+	void setHalfSize(const DirectX::XMVECTOR& halfSize) {
+		m_halfSize = halfSize;
+	}
 
     std::vector<DirectX::XMVECTOR> getWorldVertices(Transform* transform) const;
     std::vector<DirectX::XMVECTOR> getFaceNormals(Transform* transform) const;
